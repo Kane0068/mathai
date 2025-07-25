@@ -12,6 +12,8 @@ import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
 import { mathRenderer } from '../modules/mathRenderer.js';
+import { visualizationIntegration } from '../modules/visualizationIntegration.js';
+
 
 // --- Yardımcı Fonksiyonlar ---
 function escapeHtml(text) {
@@ -28,97 +30,50 @@ const stateManager = new StateManager();
 // --- Sabitler ---
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-const masterSolutionPrompt = `Solve the math problem and respond in the following JSON format.
+const masterSolutionPrompt = `Matematik problemini çöz ve sadece JSON formatında yanıt ver.
 
-CRITICAL: ALL RESPONSES MUST BE IN TURKISH LANGUAGE. Mathematical expressions must follow the exact LaTeX format compatible with KaTeX renderer.
+ÖNEMLİ: Tüm matematiksel ifadeleri LaTeX formatında yaz. Düz metin olarak matematiksel ifade yazma.
 
-MATHRENDERER.JS COMPATIBILITY RULES (DÜZELTME):
-1. Mixed content (text + math): Use $LaTeX$ for inline math within Turkish text - ALWAYS single $ not double $
-2. Pure LaTeX expressions: Use clean LaTeX without $ delimiters for cozum_lateks field
-3. Simple text: Plain Turkish text without any math symbols
-4. NO double escaping: Use \\frac NOT \\\\frac
-5. NO HTML entities: Use LaTeX symbols, not HTML codes
-
-CONTENT FORMATTING EXAMPLES (FIXED):
-✅ CORRECT EXAMPLES:
-- Simple text: "Bu durumda cevap 5 olur"
-- Mixed content: "Değer $x = 5$ olduğu için sonuç $\\frac{10}{2} = 5$ bulunur"
-- Pure LaTeX for cozum_lateks: "\\frac{x^2 + 3x - 4}{2x + 1} = 0" (NO $ delimiters)
-
-❌ WRONG EXAMPLES (AVOID THESE):
-- Double escaping: "\\\\frac{a}{b}"
-- Double dollars in mixed content: "Değer $x = 5$ olur"
-- Plain text math: "x^2 + 3x - 4 = 0" (should be LaTeX)
-- $ in cozum_lateks: "$\\frac{a}{b}$" (should be clean: "\\frac{a}{b}")
-
-JSON SCHEMA:
+Yanıt formatı:
 {
-  "problemOzeti": {
-    "verilenler": [
-      "Turkish explanation with inline math: $\\frac{a}{b} = 5$",
-      "Another data in Turkish: $\\sqrt{x^2 + y^2}$"
-    ],
-    "istenen": "What is requested in Turkish with math: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$"
+  "problemOzeti": { 
+    "verilenler": ["metin (matematiksel ifadeler LaTeX formatında olmalı)"], 
+    "istenen": "metin (matematiksel ifadeler LaTeX formatında olmalı)" 
   },
-  "adimlar": [
-    {
-      "adimAciklamasi": "Turkish step explanation with inline math: $x = 5$ değerini yerine koyalım",
-      "cozum_lateks": "x^2 + 3x - 4 = 5^2 + 3(5) - 4 = 25 + 15 - 4 = 36",
-      "ipucu": "Turkish helpful hint with math: $x$ değerini dikkatli yerine koyun",
-      "yanlisSecenekler": [
-        {
-          "metin": "x^2 + 3x - 4 = 25 - 15 - 4 = 6",
-          "yanlisGeriBildirimi": "Turkish explanation: $3 \\times 5$ işlemini yanlış yaptınız"
-        }
-      ]
-    }
+  "adimlar": [ 
+    { 
+      "adimAciklamasi": "metin (matematiksel ifadeler LaTeX formatında olmalı)", 
+      "cozum_lateks": "LaTeX formatında matematiksel ifade (\\frac{1}{2}, x^2, \\sqrt{a+b} gibi)", 
+      "ipucu": "metin (matematiksel ifadeler LaTeX formatında olmalı)", 
+      "yanlisSecenekler": [ 
+        {"metin": "LaTeX formatında yanlış seçenek", "yanlisGeriBildirimi": "metin"}, 
+        {"metin": "LaTeX formatında yanlış seçenek", "yanlisGeriBildirimi": "metin"} 
+      ] 
+    } 
   ],
-  "tamCozumLateks": [
-    "x^2 + 3x - 4 = 0",
-    "x = \\frac{-3 \\pm \\sqrt{9 + 16}}{2}",
-    "x = \\frac{-3 \\pm 5}{2}",
-    "x_1 = 1, x_2 = -4"
-  ]
+  "tamCozumLateks": ["LaTeX formatında matematiksel ifadeler listesi"]
 }
 
-KATEX COMPATIBLE LATEX REFERENCE:
-- Fractions: \\frac{a}{b}, \\frac{x^2+1}{2x-3}
-- Exponents: x^2, (a+b)^{3}, e^{-x}
-- Roots: \\sqrt{x}, \\sqrt[3]{8}, \\sqrt{x^2+y^2}
-- Trigonometric: \\sin(x), \\cos(2\\theta), \\tan^{-1}(x)
-- Logarithms: \\log_{10}(x), \\ln(e^x), \\log(x)
-- Derivatives: \\frac{d}{dx}(x^2) = 2x, f'(x)
-- Integrals: \\int x^2 dx = \\frac{x^3}{3} + C
-- Limits: \\lim_{x \\to 0} \\frac{\\sin(x)}{x} = 1
-- Summations: \\sum_{n=1}^{\\infty} \\frac{1}{n^2}
-- Matrices: \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}
-- Systems: \\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}
-- Inequalities: x > 0, a \\leq b, -\\infty < x < \\infty
+LaTeX ÖRNEKLERİ:
+- Kesir: \\frac{a}{b}
+- Üs: x^2, (a+b)^3
+- Kök: \\sqrt{x}, \\sqrt[3]{x}
+- Türev: \\frac{d}{dx}(x^2) = 2x
+- İntegral: \\int x^2 dx = \\frac{x^3}{3} + C
+- Limit: \\lim_{x \\to 0} \\frac{\\sin(x)}{x} = 1
+- Toplam: \\sum_{n=1}^{\\infty} \\frac{1}{n^2}
+- Trigonometrik: \\sin(x), \\cos(x), \\tan(x)
+- Logaritma: \\log(x), \\ln(x)
+- Eşitlik: a = b, x + y = 10
+- Eşitsizlik: x > 0, a \\leq b
 
-MIXED CONTENT RULES:
-- Turkish text with inline math: "Değer $x = 5$ olduğuna göre $y = x^2 = 25$ bulunur"
-- Step explanations: "İlk olarak $\\frac{d}{dx}(x^2)$ türevini alırız"
-- Problem summaries: "Verilen: $a = 3$, $b = 4$, İstenen: $c = \\sqrt{a^2 + b^2}$"
+ÖRNEK KULLANIM:
+- Problem özeti: "Bir kenar uzunluğu: $\\sqrt{8}$ cm"
+- Adım açıklaması: "$\\sqrt{8}$'i sadeleştir"
+- Çözüm: "\\sqrt{8} = \\sqrt{4 \\times 2} = 2\\sqrt{2}"
 
-PURE LATEX RULES (for cozum_lateks and tamCozumLateks):
-- NO $ delimiters, clean LaTeX only
-- Single backslash escaping: \\frac not \\\\frac
-- Proper spacing: x^2 + 3x - 4 = 0
-- Function notation: \\sin(x), \\log(x), \\sqrt{x}
-
-QUALITY ASSURANCE:
-- All text in Turkish except mathematical LaTeX expressions
-- JSON syntax must be error-free
-- All LaTeX expressions must be KaTeX compatible
-- Mixed content properly formatted for MathRenderer.js
-- Consistent escaping (single backslash only)
-- No $ delimiters in pure LaTeX fields
-
-RESPONSE LANGUAGE: ALL TEXT MUST BE IN TURKISH except LaTeX mathematical expressions.
-
-Problem: {PROBLEM_CONTEXT}
-
-RESPOND ONLY IN JSON FORMAT, NO OTHER TEXT.`;
+Sadece JSON yanıt ver, başka hiçbir metin yazma.
+Problem: {PROBLEM_CONTEXT}`;
 
 // --- Global DOM Önbelleği ---
 const elements = {};
@@ -137,6 +92,26 @@ function initializeApp(userData) {
         
         // Akıllı Rehber sistemini başlat
         smartGuide.setCanvasManager(canvasManager);
+    } else {
+        document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
+    }
+}
+
+// initializeApp fonksiyonunun sonuna ekleyin:
+async function initializeApp(userData) {
+    if (userData) {
+        cacheDOMElements();
+        setupEventListeners();
+        stateManager.subscribe(renderApp);
+        stateManager.setUser(userData);
+        
+        // Akıllı Rehber sistemini başlat
+        smartGuide.setCanvasManager(canvasManager);
+        
+        // *** YENİ: Görselleştirme entegrasyonunu başlat ***
+        await visualizationIntegration.enhanceMathRenderer();
+        console.log('3D Görselleştirme sistemi aktif!');
+        
     } else {
         document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
     }
@@ -165,6 +140,40 @@ function cacheDOMElements() {
     canvasManager.initCanvas('handwritingCanvas');
 }
 
+function updateHeaderWithVisualization() {
+    const headerSubtitle = document.getElementById('header-subtitle');
+    if (headerSubtitle) {
+        // Başlık altına 3D kontrol butonları ekle
+        const visualControls = document.createElement('div');
+        visualControls.className = 'mt-2 space-x-2';
+        visualControls.innerHTML = `
+            <button id="toggle-3d-btn" class="btn btn-primary text-xs">
+                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                </svg>
+                3D Aktif
+            </button>
+            <button id="visualization-demo-btn" class="btn btn-tertiary text-xs">
+                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Demo
+            </button>
+        `;
+        
+        headerSubtitle.parentNode.insertBefore(visualControls, headerSubtitle.nextSibling);
+    }
+}
+
+// YENİ: Cleanup fonksiyonu
+window.addEventListener('beforeunload', () => {
+    // Sayfa kapatılırken 3D kaynakları temizle
+    if (visualizationIntegration) {
+        visualizationIntegration.dispose();
+    }
+});
+
 function setupEventListeners() {
     window.addEventListener('show-error-message', (event) => {
         stateManager.setError(event.detail.message);
@@ -179,6 +188,17 @@ function setupEventListeners() {
             stateManager.setError(message);
         }
     });
+
+    // 3D Görselleştirme kontrolleri
+    const toggle3DBtn = document.getElementById('toggle-3d-btn');
+    if (toggle3DBtn) {
+        toggle3DBtn.addEventListener('click', toggle3DVisualization);
+    }
+    
+    const demoBtn = document.getElementById('visualization-demo-btn');
+    if (demoBtn) {
+        demoBtn.addEventListener('click', openVisualizationDemo);
+    }
 
     const add = (id, event, handler) => { 
         if (elements[id]) {
@@ -724,8 +744,7 @@ function renderSmartGuideStep() {
             <!-- Adım Açıklaması -->
             <div class="step-description mb-6 p-4 bg-blue-50 rounded-lg">
                 <h4 class="font-semibold text-blue-800 mb-2">Bu Adımda Yapılacak:</h4>
-                <div class="text-blue-700 smart-content" data-content="${escapeHtml(stepInfo.description)}"></div>
-            </div>
+                <p class="text-blue-700">${stepInfo.description}</p>
                 ${stepInfo.difficulty > 3 ? `
                     <div class="mt-2 text-sm text-orange-600">
                         ⚠️ Bu adım biraz zor olabilir, dikkatli olun!
@@ -818,43 +837,64 @@ function renderSmartGuideStep() {
         </div>
     `;
     
-    // YENİ VE KRİTİK ADIM: Render motorunu tetikle
-    setTimeout(() => {
+    // *** YENİ: Render motorunu tetikle + 3D desteği ***
+    setTimeout(async () => {
         const smartElements = container.querySelectorAll('.smart-content');
         console.log(`Found ${smartElements.length} smart-content elements to render`);
         
-        smartElements.forEach((element, index) => {
+        for (const element of smartElements) {
             const content = element.getAttribute('data-content');
-            console.log(`Rendering smart content ${index + 1}:`, content);
+            console.log(`Rendering smart content:`, content);
             
             if (content) {
-                // DÜZELTME: mathRenderer.render fonksiyonunu kullan
-                const success = mathRenderer.render(content, element, false);
-                console.log(`Render result for element ${index + 1}:`, success);
+                const success = await mathRenderer.render(content, element, false);
+                console.log(`Render result:`, success);
+                // 3D görselleştirme otomatik kontrol edilecek
             }
-        });
+        }
         
         // Eksik kalan elementleri de kontrol et
         const allMathElements = container.querySelectorAll('[data-latex], .latex-content, .math-content');
         console.log(`Found ${allMathElements.length} additional math elements to render`);
         
-        allMathElements.forEach((element, index) => {
+        for (const element of allMathElements) {
             const content = element.getAttribute('data-latex') || 
                         element.getAttribute('data-content') || 
                         element.textContent || 
                         element.innerHTML;
             
             if (content && content.trim() && !element.querySelector('.katex')) {
-                console.log(`Rendering additional math element ${index + 1}:`, content);
-                const success = mathRenderer.render(content, element, false);
-                console.log(`Additional render result ${index + 1}:`, success);
+                console.log(`Rendering additional math element:`, content);
+                const success = await mathRenderer.render(content, element, false);
+                console.log(`Additional render result:`, success);
+                // 3D görselleştirme otomatik kontrol edilecek
             }
-        });
-    }, 100); // 100ms gecikme, HTML'in DOM'a tam yerleşmesini garantiler
+        }
+    }, 100);
     
     // Event listener'ları yeniden bağla
     setupGuideEventListeners();
 }
+
+    // YENİ: 3D Görselleştirme kontrol fonksiyonları
+function toggle3DVisualization() {
+        const isEnabled = visualizationIntegration.isEnabled;
+        visualizationIntegration.setEnabled(!isEnabled);
+        
+        // UI durumunu güncelle
+        const toggle3DBtn = document.getElementById('toggle-3d-btn');
+        if (toggle3DBtn) {
+            toggle3DBtn.textContent = isEnabled ? 'Aktif' : 'Pasif';
+            toggle3DBtn.className = isEnabled ? 'btn btn-primary' : 'btn btn-secondary';
+        }
+        
+        showSuccess(`3D Görselleştirme ${isEnabled ? 'aktif' : 'pasif'} edildi!`);
+    }
+
+    // YENİ: Görselleştirme demo sayfasına yönlendirme
+    function openVisualizationDemo() {
+        window.open('visualization-demo.html', '_blank');
+    }
 
 function setupGuideEventListeners() {
     const submitBtn = document.getElementById('guide-submit-btn');
@@ -1180,7 +1220,7 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 
-// --- PROBLEM ÖZETİ ---
+// displayQuestionSummary fonksiyonunu güncelleyin:
 function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
     
@@ -1192,7 +1232,7 @@ function displayQuestionSummary(problemOzeti) {
     if (verilenler && verilenler.length > 0) {
         summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
         verilenler.forEach(veri => {
-            // Her veri için akıllı render
+            // Her veri için akıllı render (şimdi 3D desteği ile)
             summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}"></li>`;
         });
         summaryHTML += '</ul></div>';
@@ -1205,18 +1245,20 @@ function displayQuestionSummary(problemOzeti) {
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
     
-    // Akıllı içerik render işlemi
-    setTimeout(() => {
+    // *** YENİ: Akıllı içerik render işlemi + 3D desteği ***
+    setTimeout(async () => {
         const smartElements = elements['question'].querySelectorAll('.smart-content');
-        smartElements.forEach(element => {
+        for (const element of smartElements) {
             const content = element.getAttribute('data-content');
             if (content) {
-                mathRenderer.render(content, element, false);
+                await mathRenderer.render(content, element, false);
+                // 3D görselleştirme otomatik olarak kontrol edilecek
             }
-        });
+        }
     }, 50);
 }
 
+// renderFullSolution fonksiyonunu güncelleyin:
 function renderFullSolution(solution) {
     console.log('renderFullSolution called with:', solution);
     if (!solution) {
@@ -1261,35 +1303,37 @@ function renderFullSolution(solution) {
     console.log('Setting solution-output HTML:', html.substring(0, 200) + '...');
     elements['solution-output'].innerHTML = html;
     
-    // Geliştirilmiş LaTeX render işlemi
-    setTimeout(() => {
-        // MathRenderer'ın container render özelliğini kullan
+    // *** YENİ: Geliştirilmiş LaTeX render işlemi + 3D desteği ***
+    setTimeout(async () => {
+        // MathRenderer'ın container render özelliğini kullan (şimdi 3D desteği ile)
         mathRenderer.renderContainer(elements['solution-output'], true);
         
         // Akıllı içerik elementlerini render et
         const smartElements = elements['solution-output'].querySelectorAll('.smart-content');
-        smartElements.forEach((element, index) => {
+        for (const element of smartElements) {
             const content = element.getAttribute('data-content');
-            console.log(`Rendering smart content ${index + 1}:`, content);
+            console.log(`Rendering smart content:`, content);
             
             if (content && content.trim()) {
-                mathRenderer.render(content, element, false);
+                await mathRenderer.render(content, element, false);
+                // 3D görselleştirme otomatik olarak kontrol edilecek
             }
-        });
+        }
         
-        // Eksik kalan elementleri kontrol et
-        const unrenderedElements = elements['solution-output'].querySelectorAll('.latex-content:not(.katex)');
-        unrenderedElements.forEach((element, index) => {
+        // LaTeX içeriklerini render et
+        const latexElements = elements['solution-output'].querySelectorAll('.latex-content');
+        for (const element of latexElements) {
             const content = element.getAttribute('data-latex') || element.textContent || element.innerHTML;
-            console.log(`Rendering unrendered element ${index + 1}:`, content);
+            console.log(`Rendering latex content:`, content);
             
             if (content && content.trim()) {
-                mathRenderer.render(content, element, true);
+                await mathRenderer.render(content, element, true);
+                // 3D görselleştirme otomatik olarak kontrol edilecek
             }
-        });
+        }
     }, 100);
     
-    console.log('renderFullSolution completed');
+    console.log('renderFullSolution completed with 3D support');
 }
 
 function renderInteractiveSolution(solution, currentStep = 0) {
@@ -1352,8 +1396,8 @@ function renderInteractiveSolution(solution, currentStep = 0) {
                                 ${String.fromCharCode(65 + index)}
                             </div>
                             <div class="option-content flex-1">
-                                <p class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}"></p>
-                                ${option.latex ? `<div class="text-sm text-gray-600 mt-1 smart-content" data-content="${escapeHtml(option.latex)}"></div>` : ''}
+                                <p class="text-gray-800 font-medium">${option.text}</p>
+                                ${option.latex ? `<p class="text-sm text-gray-600 mt-1">${option.latex}</p>` : ''}
                             </div>
                         </label>
                     `).join('')}
@@ -1694,6 +1738,9 @@ window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
+window.visualizationIntegration = visualizationIntegration;
+window.toggle3DVisualization = toggle3DVisualization;
+window.openVisualizationDemo = openVisualizationDemo;
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide };
+export { canvasManager, errorHandler, stateManager, smartGuide, visualizationIntegration };
