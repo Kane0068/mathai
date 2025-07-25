@@ -1,25 +1,28 @@
 // =================================================================================
-//  MathAi - Matematiksel İfade Render Modülü
-//  Tutarlı LaTeX render işlemi için gelişmiş sistem - KARIŞIK İÇERİK SORUNU ÇÖZÜMLENDİ
+//  MathAi - Matematiksel İfade Render Modülü (DÜZELTME)
+//  Karışık İçerik Sorunu Çözülmüş Versiyon
 // =================================================================================
 
-/**
- * Matematiksel ifadeleri tutarlı bir şekilde render eden gelişmiş sistem
- */
 export class MathRenderer {
     constructor() {
         this.latexPatterns = {
             // Temel matematiksel operatörler
             basicMath: /[+\-*/=<>≤≥≠≈]/,
             
-            // LaTeX komutları
-            latexCommands: /\\[a-zA-Z]+/,
+            // LaTeX komutları - DÜZELTME: Daha kapsamlı pattern
+            latexCommands: /\\[a-zA-Z]+(\{[^}]*\})?/,
             
             // LaTeX sembolleri
             latexSymbols: /[\{\}^_]/,
             
             // Matematiksel semboller
             mathSymbols: /[∑∏∫√π∞±∝∴∵∈∉⊂⊃∪∩∧∨¬∀∃]/,
+            
+            // DÜZELTME: Daha doğru LaTeX blok tespiti
+            latexBlocks: /(\$[^$]+\$|\\\([^\\)]+\\\)|\\begin\{[^}]+\}.*?\\end\{[^}]+\})/gs,
+            
+            // DÜZELTME: Çift escape'li LaTeX komutları
+            doubleEscapedLatex: /\\\\([a-zA-Z]+)/g,
             
             // Kesir formatları
             fractions: /(\d+)\/(\d+)/,
@@ -43,107 +46,321 @@ export class MathRenderer {
             integrals: /int_(\w+)\^(\w+)\(([^)]+)\)/,
             
             // Toplam
-            sums: /sum_(\w+=\w+)\^(\w+)\(([^)]+)\)/,
-            
-            // LaTeX blokları ($...$ veya \(...\))
-            latexBlocks: /(\$[^$]*\$|\\\([^)]*\\\))/g
+            sums: /sum_(\w+=\w+)\^(\w+)\(([^)]+)\)/
         };
         
         this.textPatterns = {
             // Düz metin göstergeleri
             plainText: /^(açıklama|adım|çözüm|sonuç|cevap|bul|hesapla|çıkar|ekle|çarp|böl)/i,
             
-            // Türkçe kelimeler
-            turkishWords: /(bir|iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yüz|bin|milyon|katı|kez|defa|adet|tane|uzunluğu|kenar|alan|hacim|çevre|yükseklik|genişlik|boy|en|cm|mm|m|km|derece|açı|nokta|doğru|çember|daire|üçgen|kare|dikdörtgen|paralelkenar|yamuk|prizma|küp|küre)/i,
+            // Türkçe kelimeler - DÜZELTME: Daha kapsamlı
+            turkishWords: /(bir|iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yüz|bin|milyon|katı|kez|defa|adet|tane|uzunluğu|kenar|alan|hacim|çevre|yükseklik|genişlik|boy|en|cm|mm|m|km|derece|açı|nokta|doğru|çember|daire|üçgen|kare|dikdörtgen|paralelkenar|yamuk|prizma|küp|küre|değer|sonuç|durumda|olur|olduğu|göre|için|çünkü|bu|şu|o)/i,
             
             // Açıklama cümleleri
             explanation: /(olduğuna|göre|için|bu|şu|o|bunun|şunun|onun|olur|olacak|olmuş|oluyor|olacak|ise|eğer|ancak|sadece|yalnız|hem|de|da|ile|den|dan|e|a|i|ı|u|ü|ö)/i,
             
             // Türkçe karakterler
             turkishChars: /[ğüşıöçĞÜŞİÖÇ]/,
-            // YENİ EKLEME: Basit matematik ifadesi
-            simpleExpression: /^[a-zA-ZğüşıöçĞÜŞİÖÇ\s\d\+\-=<>.,!?]+$/,
+            
+            // DÜZELTME: Daha akıllı basit ifade tespiti
+            simpleExpression: /^[a-zA-ZğüşıöçĞÜŞİÖÇ\s\d\+\-=<>.,!?:()]+$/,
     
-            // YENİ EKLEME: Karmaşık matematik göstergeleri (bunlar YOKSA basit metin)
-            complexMathIndicators: /[\{\}\^\\_\$\\]|\\[a-zA-Z]+|sqrt|log|sin|cos|tan|int|sum|lim|frac/
-
+            // Karmaşık matematik göstergeleri
+            complexMathIndicators: /[\{\}\^\\_]|\\[a-zA-Z]+|sqrt|log|sin|cos|tan|int|sum|lim|frac|\$.*\$/
         };
     }
 
     /**
-     * Ana render fonksiyonu - tüm matematiksel ifadeleri tutarlı şekilde render eder
-     * @param {string} content - Render edilecek içerik
-     * @param {HTMLElement} element - Hedef element
-     * @param {boolean} displayMode - Display modu
-     * @returns {boolean} Render başarılı mı?
+     * DÜZELTME: Ana render fonksiyonu - iyileştirilmiş logic
      */
     render(content, element, displayMode = false) {
         if (!content || !element) return false;
         
-        // İçeriği analiz et ve uygun render stratejisini seç
-        const analysis = this.analyzeContent(content);
+        // DÜZELTME: Önce çift escape'li LaTeX'leri temizle
+        const cleanedContent = this.cleanDoubleEscapedLatex(content);
         
-        // Debug log
-        console.log('Content Analysis:', {
-            content: content,
+        // İçeriği analiz et
+        const analysis = this.analyzeContent(cleanedContent);
+        
+        console.log('Content Analysis (Fixed):', {
+            originalContent: content,
+            cleanedContent: cleanedContent,
             analysis: analysis
         });
         
-        // KARIŞIK İÇERİK ÖNCELİKLİ KONTROL
+        // DÜZELTME: Öncelik sırası değiştirildi
         if (analysis.isMixed) {
-            return this.renderMixedContent(content, element, displayMode);
+            return this.renderMixedContent(cleanedContent, element, displayMode);
         } else if (analysis.isPureLatex) {
-            return this.renderLatex(content, element, displayMode);
+            return this.renderLatex(cleanedContent, element, displayMode);
         } else if (analysis.isMathExpression) {
-            return this.renderMathExpression(content, element, displayMode);
+            return this.renderMathExpression(cleanedContent, element, displayMode);
         } else {
-            return this.renderPlainText(content, element);
+            return this.renderPlainText(cleanedContent, element);
         }
     }
-        /**
-     * Basit metin olup olmadığını kontrol eder
-     * @param {string} content - İçerik
-     * @returns {boolean} Basit metin mi?
+
+    /**
+     * DÜZELTME: Çift escape'li LaTeX komutlarını temizle
+     */
+    cleanDoubleEscapedLatex(content) {
+        // \\\\frac -> \\frac
+        return content.replace(this.latexPatterns.doubleEscapedLatex, '\\$1');
+    }
+
+    /**
+     * DÜZELTME: Geliştirilmiş basit metin tespiti
      */
     isSimpleText(content) {
+        // Eğer $ işaretleri varsa karışık içerik olabilir
+        if (/\$[^$]*\$/.test(content)) {
+            return false;
+        }
+        
+        // LaTeX komutları varsa basit değil
+        if (this.latexPatterns.latexCommands.test(content)) {
+            return false;
+        }
+        
         // Karmaşık matematik göstergeleri varsa basit değil
         if (this.textPatterns.complexMathIndicators.test(content)) {
             return false;
         }
         
-        // $ ile sarılmış LaTeX blokları varsa basit değil
-        if (/\$[^$]+\$/.test(content)) {
-            return false;
-        }
-        
-        // \( \) ile sarılmış LaTeX blokları varsa basit değil
-        if (/\\\([^)]+\\\)/.test(content)) {
-            return false;
-        }
-        
-        // Sadece basit karakterler, sayılar, temel operatörler ve Türkçe kelimeler içeriyorsa basit
+        // Türkçe kelime + basit matematiksel ifade kombinasyonu
+        const hasTurkishWords = this.textPatterns.turkishWords.test(content);
         const isSimplePattern = this.textPatterns.simpleExpression.test(content);
         
-        // Türkçe açıklama kelimeleri varsa kesinlikle basit metin
-        const hasTurkishExplanation = this.textPatterns.explanation.test(content) || 
-                                    this.textPatterns.turkishWords.test(content) ||
-                                    this.textPatterns.turkishChars.test(content);
-        
         // "Bu durumda x = 3 olur" gibi ifadeleri yakala
-        const isSimpleStatement = /^(bu|şu|o|bunun|sonuç|cevap|durumda|halde).*(olur|olacak|oluyor|=|\d+).*$/i.test(content);
+        const isSimpleStatement = /^(bu|şu|o|bunun|sonuç|cevap|durumda|halde|değer).*(olur|olacak|oluyor|=|\d+).*$/i.test(content);
         
-        return isSimplePattern && (hasTurkishExplanation || isSimpleStatement);
+        return isSimplePattern && (hasTurkishWords || isSimpleStatement);
     }
 
     /**
-     * İçeriği analiz eder ve uygun render stratejisini belirler
-     * @param {string} content - Analiz edilecek içerik
-     * @returns {Object} Analiz sonucu
+     * DÜZELTME: Geliştirilmiş karışık içerik tespiti
+     */
+    detectMixedContent(content) {
+        // DÜZELTME: Daha doğru LaTeX blok tespiti
+        const latexBlocks = this.findLatexBlocks(content);
+        
+        if (!latexBlocks || latexBlocks.length === 0) {
+            return { isMixed: false, hasLatexBlocks: false };
+        }
+        
+        // LaTeX bloklarını geçici olarak kaldır
+        let contentWithoutLatex = content;
+        latexBlocks.forEach((block, idx) => {
+            contentWithoutLatex = contentWithoutLatex.replace(block.content, `__LATEX_BLOCK_${idx}__`);
+        });
+        
+        // Kalan içerikte Türkçe metin var mı?
+        const hasTurkishText = this.textPatterns.turkishWords.test(contentWithoutLatex) ||
+                              this.textPatterns.explanation.test(contentWithoutLatex) ||
+                              this.textPatterns.turkishChars.test(contentWithoutLatex);
+        
+        // Alfabe karakteri var mı (placeholder'lar hariç)?
+        const hasAlphaText = /[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(contentWithoutLatex.replace(/__LATEX_BLOCK_\d+__/g, ''));
+        
+        // Karışık içerik var mı?
+        const isMixed = latexBlocks.length > 0 && (hasTurkishText || hasAlphaText);
+        
+        return {
+            isMixed: isMixed,
+            hasLatexBlocks: latexBlocks.length > 0,
+            hasTurkishText: hasTurkishText,
+            hasAlphaText: hasAlphaText,
+            latexBlockCount: latexBlocks.length,
+            latexBlocks: latexBlocks
+        };
+    }
+
+    /**
+     * DÜZELTME: Geliştirilmiş LaTeX blok finder
+     */
+    findLatexBlocks(content) {
+        const blocks = [];
+        
+        // $...$ formatını ara
+        const dollarMatches = content.matchAll(/\$([^$]+)\$/g);
+        for (const match of dollarMatches) {
+            blocks.push({
+                content: match[0],
+                inner: match[1],
+                type: 'dollar',
+                start: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        
+        // \(...\) formatını ara
+        const parenMatches = content.matchAll(/\\\(([^)]+)\\\)/g);
+        for (const match of parenMatches) {
+            blocks.push({
+                content: match[0],
+                inner: match[1],
+                type: 'paren',
+                start: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        
+        // $$...$$ formatını ara (display mode)
+        const displayMatches = content.matchAll(/\$\$([^$]+)\$\$/g);
+        for (const match of displayMatches) {
+            blocks.push({
+                content: match[0],
+                inner: match[1],
+                type: 'display',
+                start: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        
+        // Pozisyona göre sırala
+        return blocks.sort((a, b) => a.start - b.start);
+    }
+
+    /**
+     * DÜZELTME: Geliştirilmiş karışık içerik render
+     */
+    renderMixedContent(content, element, displayMode = false) {
+        try {
+            const parts = this.splitMixedContentSmart(content);
+            element.innerHTML = '';
+            
+            console.log('Mixed content parts:', parts);
+            
+            // Her parçayı ayrı ayrı render et
+            parts.forEach((part, idx) => {
+                if (part.type === 'latex') {
+                    // LaTeX parçası için span oluştur
+                    const latexElement = document.createElement('span');
+                    latexElement.className = 'latex-inline';
+                    latexElement.style.display = 'inline-block';
+                    latexElement.style.verticalAlign = 'middle';
+                    latexElement.style.margin = '0 2px';
+                    
+                    // LaTeX'i render et
+                    this.renderLatex(part.content, latexElement, false);
+                    element.appendChild(latexElement);
+                } else {
+                    // Düz metin parçası için span oluştur
+                    const textElement = document.createElement('span');
+                    textElement.className = 'text-inline';
+                    textElement.style.display = 'inline';
+                    textElement.style.verticalAlign = 'baseline';
+                    textElement.textContent = part.content;
+                    element.appendChild(textElement);
+                }
+            });
+            
+            // Genel stil uygula
+            this.applyStyles(element, displayMode);
+            return true;
+            
+        } catch (error) {
+            console.error('Karışık içerik render hatası:', error);
+            element.textContent = content;
+            return false;
+        }
+    }
+
+    /**
+     * DÜZELTME: Geliştirilmiş karışık içerik ayırma
+     */
+    splitMixedContentSmart(content) {
+        const parts = [];
+        const latexBlocks = this.findLatexBlocks(content);
+        
+        if (latexBlocks.length === 0) {
+            // LaTeX blok yok, düz metin
+            if (content.trim()) {
+                parts.push({ type: 'text', content: content.trim() });
+            }
+            return parts;
+        }
+        
+        let lastIndex = 0;
+        
+        for (const block of latexBlocks) {
+            // Önceki düz metin parçası
+            if (block.start > lastIndex) {
+                const textContent = content.slice(lastIndex, block.start).trim();
+                if (textContent) {
+                    parts.push({ type: 'text', content: textContent });
+                }
+            }
+            
+            // LaTeX parçası (temizlenmiş)
+            const latexContent = block.inner.trim();
+            if (latexContent) {
+                parts.push({ type: 'latex', content: latexContent });
+            }
+            
+            lastIndex = block.end;
+        }
+        
+        // Kalan düz metin
+        if (lastIndex < content.length) {
+            const remainingText = content.slice(lastIndex).trim();
+            if (remainingText) {
+                parts.push({ type: 'text', content: remainingText });
+            }
+        }
+        
+        return parts.filter(part => part.content && part.content.trim());
+    }
+
+    /**
+     * DÜZELTME: İyileştirilmiş LaTeX render
+     */
+    renderLatex(content, element, displayMode = false) {
+        try {
+            if (typeof katex === 'undefined') {
+                element.textContent = content;
+                return false;
+            }
+            
+            // LaTeX'i temizle
+            const cleanedLatex = this.cleanLatex(content);
+            
+            console.log('Rendering LaTeX:', {
+                original: content,
+                cleaned: cleanedLatex,
+                displayMode: displayMode
+            });
+            
+            katex.render(cleanedLatex, element, {
+                throwOnError: false,
+                displayMode: displayMode,
+                output: "html",
+                trust: true,
+                strict: false,
+                macros: {
+                    "\\T": "\\text{#1}",
+                    "\\text": "\\text{#1}"
+                }
+            });
+            
+            this.applyStyles(element, displayMode);
+            return true;
+            
+        } catch (error) {
+            console.error('LaTeX render hatası:', error);
+            element.textContent = content;
+            element.classList.add('katex-error');
+            return false;
+        }
+    }
+
+    /**
+     * Geri kalan fonksiyonlar aynı kalabilir...
      */
     analyzeContent(content) {
         const trimmed = content.trim();
 
-            // 0. BASİT METİN KONTROLÜ (YENİ EKLEME)
+        // 0. BASİT METİN KONTROLÜ
         if (this.isSimpleText(trimmed)) {
             return {
                 isMixed: false,
@@ -204,51 +421,6 @@ export class MathRenderer {
         };
     }
 
-    /**
-     * Karışık içeriği tespit eder (metin + matematiksel ifade)
-     * @param {string} content - İçerik
-     * @returns {Object} Karışık içerik analizi
-     */
-    detectMixedContent(content) {
-        // LaTeX blokları var mı?
-        const latexBlocks = content.match(this.latexPatterns.latexBlocks);
-        
-        if (!latexBlocks || latexBlocks.length === 0) {
-            return { isMixed: false, hasLatexBlocks: false };
-        }
-        
-        // LaTeX bloklarını geçici olarak kaldır
-        let contentWithoutLatex = content;
-        latexBlocks.forEach((block, idx) => {
-            contentWithoutLatex = contentWithoutLatex.replace(block, `__LATEX_BLOCK_${idx}__`);
-        });
-        
-        // Kalan içerikte Türkçe metin var mı?
-        const hasTurkishText = this.textPatterns.turkishWords.test(contentWithoutLatex) ||
-                              this.textPatterns.explanation.test(contentWithoutLatex) ||
-                              this.textPatterns.turkishChars.test(contentWithoutLatex);
-        
-        // Alfabe karakteri var mı (placeholder'lar hariç)?
-        const hasAlphaText = /[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(contentWithoutLatex.replace(/__LATEX_BLOCK_\d+__/g, ''));
-        
-        // Karışık içerik var mı?
-        const isMixed = latexBlocks.length > 0 && (hasTurkishText || hasAlphaText);
-        
-        return {
-            isMixed: isMixed,
-            hasLatexBlocks: latexBlocks.length > 0,
-            hasTurkishText: hasTurkishText,
-            hasAlphaText: hasAlphaText,
-            latexBlockCount: latexBlocks.length,
-            latexBlocks: latexBlocks
-        };
-    }
-
-    /**
-     * Sadece LaTeX içeriği analiz eder
-     * @param {string} content - İçerik
-     * @returns {Object} LaTeX analizi
-     */
     analyzePureLatex(content) {
         // LaTeX komutları var mı?
         const hasLatexCommands = this.latexPatterns.latexCommands.test(content);
@@ -276,7 +448,7 @@ export class MathRenderer {
         if (hasLatexSymbols) confidence += 0.3;
         if (hasMathSymbols) confidence += 0.3;
         if (isDollarWrapped || isParenWrapped) confidence += 0.2;
-        if (hasTurkishChars) confidence -= 0.3; // Türkçe karakter varsa karışık olabilir
+        if (hasTurkishChars) confidence -= 0.3;
         
         return {
             isPureLatex: isPureLatex,
@@ -290,11 +462,6 @@ export class MathRenderer {
         };
     }
 
-    /**
-     * Matematiksel ifade analiz eder
-     * @param {string} content - İçerik
-     * @returns {Object} Matematiksel ifade analizi
-     */
     analyzeMathExpression(content) {
         // Temel matematik operatörleri
         const hasBasicMath = this.latexPatterns.basicMath.test(content);
@@ -353,59 +520,10 @@ export class MathRenderer {
         };
     }
 
-    /**
-     * LaTeX içeriğini render eder
-     * @param {string} content - LaTeX içeriği
-     * @param {HTMLElement} element - Hedef element
-     * @param {boolean} displayMode - Display modu
-     * @returns {boolean} Başarılı mı?
-     */
-    renderLatex(content, element, displayMode = false) {
-        try {
-            if (typeof katex === 'undefined') {
-                element.textContent = content;
-                return false;
-            }
-            
-            // LaTeX'i temizle ve hazırla
-            const cleanedLatex = this.cleanLatex(content);
-            
-            katex.render(cleanedLatex, element, {
-                throwOnError: false,
-                displayMode: displayMode,
-                output: "html",
-                trust: true,
-                strict: false,
-                macros: {
-                    "\\T": "\\text{#1}",
-                    "\\text": "\\text{#1}"
-                }
-            });
-            
-            this.applyStyles(element, displayMode);
-            return true;
-            
-        } catch (error) {
-            console.error('LaTeX render hatası:', error);
-            element.textContent = content;
-            element.classList.add('katex-error');
-            return false;
-        }
-    }
-
-    /**
-     * Matematiksel ifadeyi LaTeX'e çevirir ve render eder
-     * @param {string} content - Matematiksel ifade
-     * @param {HTMLElement} element - Hedef element
-     * @param {boolean} displayMode - Display modu
-     * @returns {boolean} Başarılı mı?
-     */
     renderMathExpression(content, element, displayMode = false) {
         try {
-            // Matematiksel ifadeyi LaTeX'e çevir
             const latex = this.convertToLatex(content);
             return this.renderLatex(latex, element, displayMode);
-            
         } catch (error) {
             console.error('Matematiksel ifade render hatası:', error);
             element.textContent = content;
@@ -413,119 +531,12 @@ export class MathRenderer {
         }
     }
 
-    /**
-     * Karışık içeriği render eder (LaTeX + metin)
-     * @param {string} content - Karışık içerik
-     * @param {HTMLElement} element - Hedef element
-     * @param {boolean} displayMode - KaTeX render'ında displayMode parametresi
-     * @returns {boolean} Başarılı mı?
-     */
-    renderMixedContent(content, element, displayMode = false) {
-        try {
-            const parts = this.splitMixedContentSmart(content);
-            element.innerHTML = '';
-            
-            // Her parçayı ayrı ayrı render et
-            parts.forEach((part, idx) => {
-                if (part.type === 'latex') {
-                    // LaTeX parçası için span oluştur
-                    const latexElement = document.createElement('span');
-                    latexElement.className = 'latex-inline';
-                    latexElement.style.display = 'inline-block';
-                    latexElement.style.verticalAlign = 'middle';
-                    latexElement.style.margin = '0 2px';
-                    
-                    // LaTeX'i render et
-                    this.renderLatex(part.content, latexElement, false);
-                    element.appendChild(latexElement);
-                } else {
-                    // Düz metin parçası için span oluştur
-                    const textElement = document.createElement('span');
-                    textElement.className = 'text-inline';
-                    textElement.style.display = 'inline';
-                    textElement.style.verticalAlign = 'baseline';
-                    textElement.textContent = part.content;
-                    element.appendChild(textElement);
-                }
-            });
-            
-            // Genel stil uygula
-            this.applyStyles(element, displayMode);
-            return true;
-            
-        } catch (error) {
-            console.error('Karışık içerik render hatası:', error);
-            element.textContent = content;
-            return false;
-        }
-    }
-
-    /**
-     * Karışık içeriği akıllıca parçalara ayırır (LaTeX blokları ve düz metin)
-     * @param {string} content
-     * @returns {Array<{type: 'latex'|'text', content: string}>}
-     */
-    splitMixedContentSmart(content) {
-        const parts = [];
-        let lastIndex = 0;
-        
-        // LaTeX blokları için gelişmiş regex
-        const latexRegex = /(\$[^$]+\$|\\\([^)]+\\\))/g;
-        let match;
-        
-        while ((match = latexRegex.exec(content)) !== null) {
-            // Önceki düz metin parçası
-            if (match.index > lastIndex) {
-                const textContent = content.slice(lastIndex, match.index).trim();
-                if (textContent) {
-                    parts.push({ type: 'text', content: textContent });
-                }
-            }
-            
-            // LaTeX parçası (dış işaretleri temizle)
-            let latexContent = match[0];
-            if (latexContent.startsWith('$') && latexContent.endsWith('$')) {
-                latexContent = latexContent.slice(1, -1);
-            } else if (latexContent.startsWith('\\(') && latexContent.endsWith('\\)')) {
-                latexContent = latexContent.slice(2, -2);
-            }
-            
-            if (latexContent.trim()) {
-                parts.push({ type: 'latex', content: latexContent.trim() });
-            }
-            
-            lastIndex = latexRegex.lastIndex;
-        }
-        
-        // Kalan düz metin
-        if (lastIndex < content.length) {
-            const remainingText = content.slice(lastIndex).trim();
-            if (remainingText) {
-                parts.push({ type: 'text', content: remainingText });
-            }
-        }
-        
-        // Boş parçaları filtrele
-        return parts.filter(part => part.content && part.content.trim());
-    }
-
-    /**
-     * Düz metni render eder
-     * @param {string} content - Düz metin
-     * @param {HTMLElement} element - Hedef element
-     * @returns {boolean} Başarılı mı?
-     */
     renderPlainText(content, element) {
         element.textContent = content;
         element.classList.add('math-text');
         return true;
     }
 
-    /**
-     * LaTeX içeriğini temizler
-     * @param {string} latex - LaTeX içeriği
-     * @returns {string} Temizlenmiş LaTeX
-     */
     cleanLatex(latex) {
         return latex
             .replace(/^\\\(|\\\)$/g, '')
@@ -534,11 +545,6 @@ export class MathRenderer {
             .trim();
     }
 
-    /**
-     * Matematiksel ifadeyi LaTeX'e çevirir
-     * @param {string} expression - Matematiksel ifade
-     * @returns {string} LaTeX formatı
-     */
     convertToLatex(expression) {
         let latex = expression;
         
@@ -569,22 +575,12 @@ export class MathRenderer {
         return latex;
     }
 
-    /**
-     * HTML karakterlerini escape eder
-     * @param {string} text - Metin
-     * @returns {string} Escape edilmiş metin
-     */
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
-    /**
-     * Element stillerini uygular
-     * @param {HTMLElement} element - Element
-     * @param {boolean} displayMode - Display modu
-     */
     applyStyles(element, displayMode) {
         element.style.textAlign = 'left';
         element.style.lineHeight = '1.8';
@@ -612,11 +608,6 @@ export class MathRenderer {
         });
     }
 
-    /**
-     * Toplu render işlemi - bir container içindeki tüm matematiksel ifadeleri render eder
-     * @param {HTMLElement} container - Container element
-     * @param {boolean} displayMode - Display modu
-     */
     renderContainer(container, displayMode = false) {
         if (!container) return;
         
@@ -642,6 +633,15 @@ export class MathRenderer {
         const mathContentElements = container.querySelectorAll('.math-content');
         mathContentElements.forEach(element => {
             const content = element.textContent || element.innerHTML;
+            if (content) {
+                this.render(content, element, displayMode);
+            }
+        });
+        
+        // .smart-content sınıfı olan elementleri render et
+        const smartContentElements = container.querySelectorAll('.smart-content');
+        smartContentElements.forEach(element => {
+            const content = element.getAttribute('data-content') || element.textContent || element.innerHTML;
             if (content) {
                 this.render(content, element, displayMode);
             }

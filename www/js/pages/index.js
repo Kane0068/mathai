@@ -32,101 +32,87 @@ const masterSolutionPrompt = `Solve the math problem and respond in the followin
 
 CRITICAL: ALL RESPONSES MUST BE IN TURKISH LANGUAGE. Mathematical expressions must follow the exact LaTeX format compatible with KaTeX renderer.
 
-MATHRENDERER.JS COMPATIBILITY RULES:
-1. Mixed content (text + math): Use $LaTeX$ for inline math within Turkish text
-2. Pure LaTeX blocks: Use $$LaTeX$$ for standalone mathematical expressions
+MATHRENDERER.JS COMPATIBILITY RULES (DÜZELTME):
+1. Mixed content (text + math): Use $LaTeX$ for inline math within Turkish text - ALWAYS single $ not double $
+2. Pure LaTeX expressions: Use clean LaTeX without $ delimiters for cozum_lateks field
 3. Simple text: Plain Turkish text without any math symbols
-4. NO escaped LaTeX: Avoid \\\\frac, use \\frac instead
+4. NO double escaping: Use \\frac NOT \\\\frac
 5. NO HTML entities: Use LaTeX symbols, not HTML codes
 
-CONTENT TYPE DETECTION (Based on MathRenderer.js):
-- Simple Text: "Bu durumda sonuç 5 olur" (Turkish explanation without complex math)
-- Mixed Content: "Değer $x = 5$ olduğu için sonuç $\\frac{10}{2}$ olur" (Turkish + inline LaTeX)
-- Pure LaTeX: "$$\\frac{x^2 + 3x - 4}{2x + 1} = 0$$" (Only mathematical expression)
+CONTENT FORMATTING EXAMPLES (FIXED):
+✅ CORRECT EXAMPLES:
+- Simple text: "Bu durumda cevap 5 olur"
+- Mixed content: "Değer $x = 5$ olduğu için sonuç $\\frac{10}{2} = 5$ bulunur"
+- Pure LaTeX for cozum_lateks: "\\frac{x^2 + 3x - 4}{2x + 1} = 0" (NO $ delimiters)
+
+❌ WRONG EXAMPLES (AVOID THESE):
+- Double escaping: "\\\\frac{a}{b}"
+- Double dollars in mixed content: "Değer $x = 5$ olur"
+- Plain text math: "x^2 + 3x - 4 = 0" (should be LaTeX)
+- $ in cozum_lateks: "$\\frac{a}{b}$" (should be clean: "\\frac{a}{b}")
 
 JSON SCHEMA:
 {
   "problemOzeti": {
     "verilenler": [
-      "Turkish explanation text with math: $LaTeX_inline$",
-      "Another data in Turkish: $\\\\frac{a}{b} = 5$"
+      "Turkish explanation with inline math: $\\frac{a}{b} = 5$",
+      "Another data in Turkish: $\\sqrt{x^2 + y^2}$"
     ],
-    "istenen": "What is requested in Turkish: $\\\\sqrt{x^2 + y^2}$"
+    "istenen": "What is requested in Turkish with math: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$"
   },
   "adimlar": [
     {
-      "adimAciklamasi": "Turkish step explanation with math: $LaTeX_inline$",
-      "cozum_lateks": "$$pure_latex_expression$$",
-      "ipucu": "Turkish helpful hint with math: $LaTeX_inline$",
+      "adimAciklamasi": "Turkish step explanation with inline math: $x = 5$ değerini yerine koyalım",
+      "cozum_lateks": "x^2 + 3x - 4 = 5^2 + 3(5) - 4 = 25 + 15 - 4 = 36",
+      "ipucu": "Turkish helpful hint with math: $x$ değerini dikkatli yerine koyun",
       "yanlisSecenekler": [
         {
-          "metin": "$$wrong_latex_expression$$",
-          "yanlisGeriBildirimi": "Turkish explanation why it's wrong with math: $LaTeX_inline$"
-        },
-        {
-          "metin": "$$another_wrong_latex$$",
-          "yanlisGeriBildirimi": "Turkish wrong explanation with math: $LaTeX_inline$"
+          "metin": "x^2 + 3x - 4 = 25 - 15 - 4 = 6",
+          "yanlisGeriBildirimi": "Turkish explanation: $3 \\times 5$ işlemini yanlış yaptınız"
         }
       ]
     }
   ],
   "tamCozumLateks": [
-    "$$step_1_pure_latex$$",
-    "$$step_2_pure_latex$$",
-    "$$final_answer_pure_latex$$"
+    "x^2 + 3x - 4 = 0",
+    "x = \\frac{-3 \\pm \\sqrt{9 + 16}}{2}",
+    "x = \\frac{-3 \\pm 5}{2}",
+    "x_1 = 1, x_2 = -4"
   ]
 }
 
 KATEX COMPATIBLE LATEX REFERENCE:
-- Fractions: $\\\\frac{a}{b}$, $\\\\frac{x^2+1}{2x-3}$
-- Exponents: $x^2$, $(a+b)^{3}$, $e^{-x}$
-- Roots: $\\\\sqrt{x}$, $\\\\sqrt[3]{8}$, $\\\\sqrt{x^2+y^2}$
-- Trigonometric: $\\\\sin(x)$, $\\\\cos(2\\\\theta)$, $\\\\tan^{-1}(x)$
-- Logarithms: $\\\\log_{10}(x)$, $\\\\ln(e^x)$, $\\\\log(x)$
-- Derivatives: $\\\\frac{d}{dx}(x^2) = 2x$, $f'(x)$
-- Integrals: $\\\\int x^2 dx = \\\\frac{x^3}{3} + C$
-- Limits: $\\\\lim_{x \\\\to 0} \\\\frac{\\\\sin(x)}{x} = 1$
-- Summations: $\\\\sum_{n=1}^{\\\\infty} \\\\frac{1}{n^2}$
-- Matrices: $\\\\begin{pmatrix} a & b \\\\\\\\ c & d \\\\end{pmatrix}$
-- Systems: $\\\\begin{cases} x + y = 5 \\\\\\\\ 2x - y = 1 \\\\end{cases}$
-- Inequalities: $x > 0$, $a \\\\leq b$, $-\\\\infty < x < \\\\infty$
+- Fractions: \\frac{a}{b}, \\frac{x^2+1}{2x-3}
+- Exponents: x^2, (a+b)^{3}, e^{-x}
+- Roots: \\sqrt{x}, \\sqrt[3]{8}, \\sqrt{x^2+y^2}
+- Trigonometric: \\sin(x), \\cos(2\\theta), \\tan^{-1}(x)
+- Logarithms: \\log_{10}(x), \\ln(e^x), \\log(x)
+- Derivatives: \\frac{d}{dx}(x^2) = 2x, f'(x)
+- Integrals: \\int x^2 dx = \\frac{x^3}{3} + C
+- Limits: \\lim_{x \\to 0} \\frac{\\sin(x)}{x} = 1
+- Summations: \\sum_{n=1}^{\\infty} \\frac{1}{n^2}
+- Matrices: \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}
+- Systems: \\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}
+- Inequalities: x > 0, a \\leq b, -\\infty < x < \\infty
 
-MATHRENDERER.JS PATTERN MATCHING:
-- Turkish words will be detected as plain text
-- Mathematical symbols (+, -, *, /, =, <, >) will trigger math expression detection
-- LaTeX commands (\\\\frac, \\\\sqrt, etc.) will trigger LaTeX detection
-- Mixed content will be properly split and rendered separately
+MIXED CONTENT RULES:
+- Turkish text with inline math: "Değer $x = 5$ olduğuna göre $y = x^2 = 25$ bulunur"
+- Step explanations: "İlk olarak $\\frac{d}{dx}(x^2)$ türevini alırız"
+- Problem summaries: "Verilen: $a = 3$, $b = 4$, İstenen: $c = \\sqrt{a^2 + b^2}$"
 
-CONTENT FORMATTING RULES:
-✅ CORRECT EXAMPLES:
-- Simple text: "Bu durumda cevap 5 olur"
-- Mixed content: "Değer $x = 5$ olduğu için $\\\\frac{10}{2} = 5$ bulunur"
-- Pure LaTeX: "$$\\\\frac{x^2 + 3x - 4}{2x + 1} = 0$$"
-
-❌ PROHIBITED FORMATS:
-- Plain text math: "x^2 + 3x - 4 = 0"
-- HTML entities: "&lt;", "&gt;", "&amp;"
-- Escaped LaTeX: "\\\\\\\\frac{a}{b}"
-- Mixed symbols: "x=5 değeri sqrt(8) = 2sqrt(2)"
-
-RESPONSE STRUCTURE FOR INTERACTIVE FEATURES:
-1. Step explanations (adimAciklamasi): Turkish text with inline math $LaTeX$
-2. Solution LaTeX (cozum_lateks): Pure LaTeX block $$LaTeX$$
-3. Hints (ipucu): Turkish text with inline math $LaTeX$
-4. Wrong options (yanlisSecenekler): Pure LaTeX blocks $$LaTeX$$
-5. Feedback (yanlisGeriBildirimi): Turkish text with inline math $LaTeX$
-
-CANVAS WRITING COMPATIBILITY:
-- Ensure all mathematical expressions can be written step by step
-- Use standard mathematical notation in LaTeX
-- Avoid complex nested structures for user input validation
+PURE LATEX RULES (for cozum_lateks and tamCozumLateks):
+- NO $ delimiters, clean LaTeX only
+- Single backslash escaping: \\frac not \\\\frac
+- Proper spacing: x^2 + 3x - 4 = 0
+- Function notation: \\sin(x), \\log(x), \\sqrt{x}
 
 QUALITY ASSURANCE:
 - All text in Turkish except mathematical LaTeX expressions
 - JSON syntax must be error-free
 - All LaTeX expressions must be KaTeX compatible
-- Mixed content must be properly formatted for splitMixedContentSmart() function
-- Simple text detection must work with isSimpleText() function
+- Mixed content properly formatted for MathRenderer.js
+- Consistent escaping (single backslash only)
+- No $ delimiters in pure LaTeX fields
 
 RESPONSE LANGUAGE: ALL TEXT MUST BE IN TURKISH except LaTeX mathematical expressions.
 
@@ -835,14 +821,36 @@ function renderSmartGuideStep() {
     // YENİ VE KRİTİK ADIM: Render motorunu tetikle
     setTimeout(() => {
         const smartElements = container.querySelectorAll('.smart-content');
-        smartElements.forEach(element => {
+        console.log(`Found ${smartElements.length} smart-content elements to render`);
+        
+        smartElements.forEach((element, index) => {
             const content = element.getAttribute('data-content');
+            console.log(`Rendering smart content ${index + 1}:`, content);
+            
             if (content) {
-                // mathRenderer.render fonksiyonunu her bir element için çağır
-                mathRenderer.render(content, element, false);
+                // DÜZELTME: mathRenderer.render fonksiyonunu kullan
+                const success = mathRenderer.render(content, element, false);
+                console.log(`Render result for element ${index + 1}:`, success);
             }
         });
-    }, 50); // 50ms gecikme, HTML'in DOM'a yerleşmesini garantiler
+        
+        // Eksik kalan elementleri de kontrol et
+        const allMathElements = container.querySelectorAll('[data-latex], .latex-content, .math-content');
+        console.log(`Found ${allMathElements.length} additional math elements to render`);
+        
+        allMathElements.forEach((element, index) => {
+            const content = element.getAttribute('data-latex') || 
+                        element.getAttribute('data-content') || 
+                        element.textContent || 
+                        element.innerHTML;
+            
+            if (content && content.trim() && !element.querySelector('.katex')) {
+                console.log(`Rendering additional math element ${index + 1}:`, content);
+                const success = mathRenderer.render(content, element, false);
+                console.log(`Additional render result ${index + 1}:`, success);
+            }
+        });
+    }, 100); // 100ms gecikme, HTML'in DOM'a tam yerleşmesini garantiler
     
     // Event listener'ları yeniden bağla
     setupGuideEventListeners();
