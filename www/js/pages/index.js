@@ -28,49 +28,55 @@ const stateManager = new StateManager();
 // --- Sabitler ---
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-const masterSolutionPrompt = `Matematik problemini çöz ve sadece JSON formatında yanıt ver.
+const masterSolutionPrompt = `Matematik problemini coz ve sadece JSON formatinda yanit ver.
 
-ÖNEMLİ: Tüm matematiksel ifadeleri LaTeX formatında yaz. Düz metin olarak matematiksel ifade yazma.
+ONEMLI:
+1. Tum matematiksel ifadeleri LaTeX formatinda yaz. Duz metin olarak matematiksel ifade yazma.
+2. JSON icindeki anahtar (key) isimlerinde ve metinlerde kesinlikle Turkce karakter (ç, ğ, ı, ö, ş, ü) KULLANMA. Bunlarin yerine Ingilizce alfabe karsiliklarini kullan (c, g, i, o, s, u).
 
-Yanıt formatı:
+Yanit formati (Turkce karakter olmadan):
 {
-  "problemOzeti": { 
-    "verilenler": ["metin (matematiksel ifadeler LaTeX formatında olmalı)"], 
-    "istenen": "metin (matematiksel ifadeler LaTeX formatında olmalı)" 
+  "problemOzeti": {
+    "verilenler": ["metin (matematiksel ifadeler LaTeX formatinda olmali)"],
+    "istenen": "metin (matematiksel ifadeler LaTeX formatinda olmali)"
   },
-  "adimlar": [ 
-    { 
-      "adimAciklamasi": "metin (matematiksel ifadeler LaTeX formatında olmalı)", 
-      "cozum_lateks": "LaTeX formatında matematiksel ifade (\\frac{1}{2}, x^2, \\sqrt{a+b} gibi)", 
-      "ipucu": "metin (matematiksel ifadeler LaTeX formatında olmalı)", 
-      "yanlisSecenekler": [ 
-        {"metin": "LaTeX formatında yanlış seçenek", "yanlisGeriBildirimi": "metin"}, 
-        {"metin": "LaTeX formatında yanlış seçenek", "yanlisGeriBildirimi": "metin"} 
-      ] 
-    } 
+  "adimlar": [
+    {
+      "adimAciklamasi": "metin (matematiksel ifadeler LaTeX formatinda olmali)",
+      "cozumLateks": "LaTeX formatinda matematiksel ifade (\\frac{1}{2}, x^2, \\sqrt{a+b} gibi)",
+      "ipucu": "metin (matematiksel ifadeler LaTeX formatinda olmali)",
+      "yanlisSecenekler": [
+        {"metin": "LaTeX formatinda yanlis secenek", "yanlisGeriBildirimi": "metin"},
+        {"metin": "LaTeX formatinda yanlis secenek", "yanlisGeriBildirimi": "metin"}
+      ]
+    }
   ],
-  "tamCozumLateks": ["LaTeX formatında matematiksel ifadeler listesi"]
+  "tamCozumLateks": ["LaTeX formatinda matematiksel ifadeler listesi"]
 }
 
-LaTeX ÖRNEKLERİ:
+TURKCE KARAKTER KULLANIMI (YAPILMAMASI GEREKENLER):
+- YANLIS: "problemÖzeti", "adımAçıklaması", "çözüm_lateks"
+- DOGRU: "problemOzeti", "adimAciklamasi", "cozumLateks"
+
+LaTeX ORNEKLERI:
 - Kesir: \\frac{a}{b}
-- Üs: x^2, (a+b)^3
-- Kök: \\sqrt{x}, \\sqrt[3]{x}
-- Türev: \\frac{d}{dx}(x^2) = 2x
-- İntegral: \\int x^2 dx = \\frac{x^3}{3} + C
+- Us: x^2, (a+b)^3
+- Kok: \\sqrt{x}, \\sqrt[3]{x}
+- Turev: \\frac{d}{dx}(x^2) = 2x
+- Integral: \\int x^2 dx = \\frac{x^3}{3} + C
 - Limit: \\lim_{x \\to 0} \\frac{\\sin(x)}{x} = 1
 - Toplam: \\sum_{n=1}^{\\infty} \\frac{1}{n^2}
 - Trigonometrik: \\sin(x), \\cos(x), \\tan(x)
 - Logaritma: \\log(x), \\ln(x)
-- Eşitlik: a = b, x + y = 10
-- Eşitsizlik: x > 0, a \\leq b
+- Esitlik: a = b, x + y = 10
+- Esitsizlik: x > 0, a \\leq b
 
-ÖRNEK KULLANIM:
-- Problem özeti: "Bir kenar uzunluğu: $\\sqrt{8}$ cm"
-- Adım açıklaması: "$\\sqrt{8}$'i sadeleştir"
-- Çözüm: "\\sqrt{8} = \\sqrt{4 \\times 2} = 2\\sqrt{2}"
+ORNEK KULLANIM:
+- Problem ozeti: "Bir kenar uzunlugu: $\\sqrt{8}$ cm"
+- Adim aciklamasi: "$\\sqrt{8}$'i sadelestir"
+- Cozum: "\\sqrt{8} = \\sqrt{4 \\times 2} = 2\\sqrt{2}"
 
-Sadece JSON yanıt ver, başka hiçbir metin yazma.
+Sadece JSON yanit ver, baska hicbir metin yazma.
 Problem: {PROBLEM_CONTEXT}`;
 
 // --- Global DOM Önbelleği ---

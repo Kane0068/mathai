@@ -468,43 +468,77 @@ export class MathRenderer {
     splitMixedContentSmart(content) {
         const parts = [];
         let lastIndex = 0;
-        
-        // LaTeX blokları için gelişmiş regex
-        const latexRegex = /(\$[^$]+\$|\\\([^)]+\\\))/g;
+        // 1. Önce $...$ ve \(...\) bloklarını bul
+        const latexBlockRegex = /(\$[^$]+\$|\\\([^)]+\\\))/g;
+        // 2. Sonra çıplak LaTeX komutlarını bul (ör: \\sqrt{...}, \\frac{...}{...}, \\int, \\sum, x^2, a_b, vs.)
+        // Not: Bu regex, LaTeX komutlarını ve bazı temel matematiksel ifadeleri kapsar
+        const bareLatexRegex = /(\\[a-zA-Z]+\{[^}]+\}(?:\{[^}]+\})?|[a-zA-Z0-9]+_[a-zA-Z0-9]+|[a-zA-Z0-9]+\^[a-zA-Z0-9]+|\\[a-zA-Z]+|\\frac\{[^}]+\}\{[^}]+\}|\\sqrt\{[^}]+\})/g;
+
+        // Önce $...$ ve \(...\) bloklarını ayır
         let match;
-        
-        while ((match = latexRegex.exec(content)) !== null) {
-            // Önceki düz metin parçası
-            if (match.index > lastIndex) {
-                const textContent = content.slice(lastIndex, match.index).trim();
-                if (textContent) {
+        let tempContent = content;
+        let blockMatches = [];
+        while ((match = latexBlockRegex.exec(content)) !== null) {
+            blockMatches.push({
+                type: 'latex',
+                content: match[0],
+                start: match.index,
+                end: latexBlockRegex.lastIndex
+            });
+        }
+        // Şimdi çıplak LaTeX komutlarını bul (ama $...$ veya \(...\) içindekileri hariç tut)
+        let bareMatches = [];
+        let skipRanges = blockMatches.map(b => [b.start, b.end]);
+        while ((match = bareLatexRegex.exec(content)) !== null) {
+            // Bu match, bir $...$ veya \(...\) bloğu içinde mi?
+            let inBlock = skipRanges.some(([start, end]) => match.index >= start && match.index < end);
+            if (!inBlock) {
+                bareMatches.push({
+                    type: 'barelatex',
+                    content: match[0],
+                    start: match.index,
+                    end: bareLatexRegex.lastIndex
+                });
+            }
+        }
+        // Tüm blokları ve çıplak latexleri birleştir, sırala
+        let allMatches = [...blockMatches, ...bareMatches].sort((a, b) => a.start - b.start);
+        let cursor = 0;
+        for (let i = 0; i < allMatches.length; i++) {
+            let m = allMatches[i];
+            // Önceki düz metin
+            if (m.start > cursor) {
+                const textContent = content.slice(cursor, m.start);
+                if (textContent.trim()) {
                     parts.push({ type: 'text', content: textContent });
                 }
             }
-            
-            // LaTeX parçası (dış işaretleri temizle)
-            let latexContent = match[0];
-            if (latexContent.startsWith('$') && latexContent.endsWith('$')) {
-                latexContent = latexContent.slice(1, -1);
-            } else if (latexContent.startsWith('\\(') && latexContent.endsWith('\\)')) {
-                latexContent = latexContent.slice(2, -2);
+            // LaTeX parçası
+            let latexContent = m.content;
+            if (m.type === 'latex') {
+                // $...$ veya \(...\) işaretlerini temizle
+                if (latexContent.startsWith('$') && latexContent.endsWith('$')) {
+                    latexContent = latexContent.slice(1, -1);
+                } else if (latexContent.startsWith('\\(') && latexContent.endsWith('\\)')) {
+                    latexContent = latexContent.slice(2, -2);
+                }
+            } else if (m.type === 'barelatex') {
+                // Çıplak latex ise, olduğu gibi al
+                // Gerekirse $...$ ile sarmala (KaTeX için daha güvenli)
+                latexContent = latexContent.trim();
             }
-            
             if (latexContent.trim()) {
                 parts.push({ type: 'latex', content: latexContent.trim() });
             }
-            
-            lastIndex = latexRegex.lastIndex;
+            cursor = m.end;
         }
-        
         // Kalan düz metin
-        if (lastIndex < content.length) {
-            const remainingText = content.slice(lastIndex).trim();
-            if (remainingText) {
+        if (cursor < content.length) {
+            const remainingText = content.slice(cursor);
+            if (remainingText.trim()) {
                 parts.push({ type: 'text', content: remainingText });
             }
         }
-        
         // Boş parçaları filtrele
         return parts.filter(part => part.content && part.content.trim());
     }
