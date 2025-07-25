@@ -12,8 +12,6 @@ import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
 import { mathRenderer } from '../modules/mathRenderer.js';
-import { visualizationIntegration } from '../modules/visualizationIntegration.js';
-
 
 // --- Yardımcı Fonksiyonlar ---
 function escapeHtml(text) {
@@ -97,26 +95,6 @@ function initializeApp(userData) {
     }
 }
 
-// initializeApp fonksiyonunun sonuna ekleyin:
-async function initializeApp(userData) {
-    if (userData) {
-        cacheDOMElements();
-        setupEventListeners();
-        stateManager.subscribe(renderApp);
-        stateManager.setUser(userData);
-        
-        // Akıllı Rehber sistemini başlat
-        smartGuide.setCanvasManager(canvasManager);
-        
-        // *** YENİ: Görselleştirme entegrasyonunu başlat ***
-        await visualizationIntegration.enhanceMathRenderer();
-        console.log('3D Görselleştirme sistemi aktif!');
-        
-    } else {
-        document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
-    }
-}
-
 // --- KURULUM FONKSİYONLARI ---
 function cacheDOMElements() {
     const ids = [
@@ -140,40 +118,6 @@ function cacheDOMElements() {
     canvasManager.initCanvas('handwritingCanvas');
 }
 
-function updateHeaderWithVisualization() {
-    const headerSubtitle = document.getElementById('header-subtitle');
-    if (headerSubtitle) {
-        // Başlık altına 3D kontrol butonları ekle
-        const visualControls = document.createElement('div');
-        visualControls.className = 'mt-2 space-x-2';
-        visualControls.innerHTML = `
-            <button id="toggle-3d-btn" class="btn btn-primary text-xs">
-                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
-                </svg>
-                3D Aktif
-            </button>
-            <button id="visualization-demo-btn" class="btn btn-tertiary text-xs">
-                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                Demo
-            </button>
-        `;
-        
-        headerSubtitle.parentNode.insertBefore(visualControls, headerSubtitle.nextSibling);
-    }
-}
-
-// YENİ: Cleanup fonksiyonu
-window.addEventListener('beforeunload', () => {
-    // Sayfa kapatılırken 3D kaynakları temizle
-    if (visualizationIntegration) {
-        visualizationIntegration.dispose();
-    }
-});
-
 function setupEventListeners() {
     window.addEventListener('show-error-message', (event) => {
         stateManager.setError(event.detail.message);
@@ -188,17 +132,6 @@ function setupEventListeners() {
             stateManager.setError(message);
         }
     });
-
-    // 3D Görselleştirme kontrolleri
-    const toggle3DBtn = document.getElementById('toggle-3d-btn');
-    if (toggle3DBtn) {
-        toggle3DBtn.addEventListener('click', toggle3DVisualization);
-    }
-    
-    const demoBtn = document.getElementById('visualization-demo-btn');
-    if (demoBtn) {
-        demoBtn.addEventListener('click', openVisualizationDemo);
-    }
 
     const add = (id, event, handler) => { 
         if (elements[id]) {
@@ -837,64 +770,9 @@ function renderSmartGuideStep() {
         </div>
     `;
     
-    // *** YENİ: Render motorunu tetikle + 3D desteği ***
-    setTimeout(async () => {
-        const smartElements = container.querySelectorAll('.smart-content');
-        console.log(`Found ${smartElements.length} smart-content elements to render`);
-        
-        for (const element of smartElements) {
-            const content = element.getAttribute('data-content');
-            console.log(`Rendering smart content:`, content);
-            
-            if (content) {
-                const success = await mathRenderer.render(content, element, false);
-                console.log(`Render result:`, success);
-                // 3D görselleştirme otomatik kontrol edilecek
-            }
-        }
-        
-        // Eksik kalan elementleri de kontrol et
-        const allMathElements = container.querySelectorAll('[data-latex], .latex-content, .math-content');
-        console.log(`Found ${allMathElements.length} additional math elements to render`);
-        
-        for (const element of allMathElements) {
-            const content = element.getAttribute('data-latex') || 
-                        element.getAttribute('data-content') || 
-                        element.textContent || 
-                        element.innerHTML;
-            
-            if (content && content.trim() && !element.querySelector('.katex')) {
-                console.log(`Rendering additional math element:`, content);
-                const success = await mathRenderer.render(content, element, false);
-                console.log(`Additional render result:`, success);
-                // 3D görselleştirme otomatik kontrol edilecek
-            }
-        }
-    }, 100);
-    
     // Event listener'ları yeniden bağla
     setupGuideEventListeners();
 }
-
-    // YENİ: 3D Görselleştirme kontrol fonksiyonları
-function toggle3DVisualization() {
-        const isEnabled = visualizationIntegration.isEnabled;
-        visualizationIntegration.setEnabled(!isEnabled);
-        
-        // UI durumunu güncelle
-        const toggle3DBtn = document.getElementById('toggle-3d-btn');
-        if (toggle3DBtn) {
-            toggle3DBtn.textContent = isEnabled ? 'Aktif' : 'Pasif';
-            toggle3DBtn.className = isEnabled ? 'btn btn-primary' : 'btn btn-secondary';
-        }
-        
-        showSuccess(`3D Görselleştirme ${isEnabled ? 'aktif' : 'pasif'} edildi!`);
-    }
-
-    // YENİ: Görselleştirme demo sayfasına yönlendirme
-    function openVisualizationDemo() {
-        window.open('visualization-demo.html', '_blank');
-    }
 
 function setupGuideEventListeners() {
     const submitBtn = document.getElementById('guide-submit-btn');
@@ -1220,7 +1098,7 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 
-// displayQuestionSummary fonksiyonunu güncelleyin:
+// --- PROBLEM ÖZETİ ---
 function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
     
@@ -1232,7 +1110,7 @@ function displayQuestionSummary(problemOzeti) {
     if (verilenler && verilenler.length > 0) {
         summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
         verilenler.forEach(veri => {
-            // Her veri için akıllı render (şimdi 3D desteği ile)
+            // Her veri için akıllı render
             summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}"></li>`;
         });
         summaryHTML += '</ul></div>';
@@ -1245,20 +1123,18 @@ function displayQuestionSummary(problemOzeti) {
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
     
-    // *** YENİ: Akıllı içerik render işlemi + 3D desteği ***
-    setTimeout(async () => {
+    // Akıllı içerik render işlemi
+    setTimeout(() => {
         const smartElements = elements['question'].querySelectorAll('.smart-content');
-        for (const element of smartElements) {
+        smartElements.forEach(element => {
             const content = element.getAttribute('data-content');
             if (content) {
-                await mathRenderer.render(content, element, false);
-                // 3D görselleştirme otomatik olarak kontrol edilecek
+                mathRenderer.render(content, element, false);
             }
-        }
+        });
     }, 50);
 }
 
-// renderFullSolution fonksiyonunu güncelleyin:
 function renderFullSolution(solution) {
     console.log('renderFullSolution called with:', solution);
     if (!solution) {
@@ -1303,37 +1179,35 @@ function renderFullSolution(solution) {
     console.log('Setting solution-output HTML:', html.substring(0, 200) + '...');
     elements['solution-output'].innerHTML = html;
     
-    // *** YENİ: Geliştirilmiş LaTeX render işlemi + 3D desteği ***
-    setTimeout(async () => {
-        // MathRenderer'ın container render özelliğini kullan (şimdi 3D desteği ile)
+    // Geliştirilmiş LaTeX render işlemi
+    setTimeout(() => {
+        // MathRenderer'ın container render özelliğini kullan
         mathRenderer.renderContainer(elements['solution-output'], true);
         
         // Akıllı içerik elementlerini render et
         const smartElements = elements['solution-output'].querySelectorAll('.smart-content');
-        for (const element of smartElements) {
+        smartElements.forEach((element, index) => {
             const content = element.getAttribute('data-content');
-            console.log(`Rendering smart content:`, content);
+            console.log(`Rendering smart content ${index + 1}:`, content);
             
             if (content && content.trim()) {
-                await mathRenderer.render(content, element, false);
-                // 3D görselleştirme otomatik olarak kontrol edilecek
+                mathRenderer.render(content, element, false);
             }
-        }
+        });
         
-        // LaTeX içeriklerini render et
-        const latexElements = elements['solution-output'].querySelectorAll('.latex-content');
-        for (const element of latexElements) {
+        // Eksik kalan elementleri kontrol et
+        const unrenderedElements = elements['solution-output'].querySelectorAll('.latex-content:not(.katex)');
+        unrenderedElements.forEach((element, index) => {
             const content = element.getAttribute('data-latex') || element.textContent || element.innerHTML;
-            console.log(`Rendering latex content:`, content);
+            console.log(`Rendering unrendered element ${index + 1}:`, content);
             
             if (content && content.trim()) {
-                await mathRenderer.render(content, element, true);
-                // 3D görselleştirme otomatik olarak kontrol edilecek
+                mathRenderer.render(content, element, true);
             }
-        }
+        });
     }, 100);
     
-    console.log('renderFullSolution completed with 3D support');
+    console.log('renderFullSolution completed');
 }
 
 function renderInteractiveSolution(solution, currentStep = 0) {
@@ -1738,9 +1612,6 @@ window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
-window.visualizationIntegration = visualizationIntegration;
-window.toggle3DVisualization = toggle3DVisualization;
-window.openVisualizationDemo = openVisualizationDemo;
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide, visualizationIntegration };
+export { canvasManager, errorHandler, stateManager, smartGuide };
