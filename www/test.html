@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test</title>
+</head>
+<body>
+    <h1>Test Sayfası</h1>
+    <p>Uygulama çalışıyor mu kontrol ediliyor...</p>
+    <div id="result"></div>
+    
+    <script type="module">
+        const resultDiv = document.getElementById('result');
+        
+        try {
+            console.log('Test başlıyor...');
+            
+            // Modülleri tek tek test et
+            const modules = [
+                { name: 'auth.js', path: './js/modules/auth.js' },
+                { name: 'firestore.js', path: './js/modules/firestore.js' },
+                { name: 'ui.js', path: './js/modules/ui.js' },
+                { name: 'canvasManager.js', path: './js/modules/canvasManager.js' },
+                { name: 'errorHandler.js', path: './js/modules/errorHandler.js' },
+                { name: 'stateManager.js', path: './js/modules/stateManager.js' },
+                { name: 'smartGuide.js', path: './js/modules/smartGuide.js' },
+                { name: 'index.js', path: './js/pages/index.js' }
+            ];
+            
+            for (const module of modules) {
+                try {
+                    await import(module.path);
+                    console.log(`✅ ${module.name} başarıyla yüklendi`);
+                    resultDiv.innerHTML += `<p style="color: green;">✅ ${module.name} başarıyla yüklendi</p>`;
+                } catch (error) {
+                    console.error(`❌ ${module.name} yüklenirken hata:`, error);
+                    resultDiv.innerHTML += `<p style="color: red;">❌ ${module.name} yüklenirken hata: ${error.message}</p>`;
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Genel hata:', error);
+            resultDiv.innerHTML += `<p style="color: red;">❌ Genel hata: ${error.message}</p>`;
+        }
+    </script>
+</body>
+</html> 

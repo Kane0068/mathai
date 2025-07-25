@@ -1,0 +1,684 @@
+/* =================================================================== */
+/* ===                MathAi - ANA STİL DOSYASI (FİNAL)            === */
+/* =================================================================== */
+
+/* --- Test Sistemi Stilleri --- */
+.test-category {
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.test-item {
+    transition: all 0.3s ease;
+}
+
+.test-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.test-success {
+    border-left: 4px solid #10b981;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
+.test-failure {
+    border-left: 4px solid #ef4444;
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.test-latex-input {
+    font-family: 'Courier New', monospace;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+}
+
+.test-result {
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.test-statistics {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+
+.test-status-indicator {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.test-status-running {
+    background-color: #f59e0b;
+    animation: pulse 1.5s infinite;
+}
+
+.test-status-success {
+    background-color: #10b981;
+}
+
+.test-status-error {
+    background-color: #ef4444;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Test kontrol paneli animasyonları */
+.test-control-panel {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border: 1px solid #93c5fd;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.test-control-panel button {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.test-control-panel button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Özel test alanı stilleri */
+.custom-test-area {
+    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+    border: 1px solid #c084fc;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.custom-test-area textarea {
+    font-family: 'Courier New', monospace;
+    resize: vertical;
+    min-height: 8rem;
+}
+
+.custom-test-area .result-display {
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    min-height: 8rem;
+    overflow-y: auto;
+}
+
+/* Test sonuç animasyonları */
+.test-result-animation {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive test sistemi */
+@media (max-width: 768px) {
+    .test-control-panel {
+        padding: 1rem;
+    }
+    
+    .test-control-panel .grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .custom-test-area .grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .test-item .grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* MathRenderer için özel stiller */
+.math-text {
+    font-family: 'Inter', sans-serif;
+    color: #374151;
+    line-height: 1.6;
+}
+
+.math-content {
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+
+.latex-content {
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    background-color: #f0f9ff;
+    border: 1px solid #bae6fd;
+}
+
+.katex-error {
+    color: #ef4444;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-family: 'Courier New', monospace;
+}
+
+/* Akıllı içerik stilleri */
+.smart-content {
+    display: inline;
+    line-height: 1.6;
+}
+
+.smart-content .katex {
+    font-size: 1em;
+    line-height: 1.2;
+}
+
+/* Problem özeti ve adım açıklamaları için özel stiller */
+.problem-summary .smart-content {
+    color: #1f2937;
+}
+
+.step-description .smart-content {
+    color: #374151;
+}
+
+/* İnteraktif çözüm için özel stiller */
+.interactive-solution-workspace .smart-content {
+    color: #1e40af;
+}
+
+/* --- Global Stiller ve Sayfa Arka Planı --- */
+html {
+    height: 100%;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f1f5f9; /* bg-slate-100 */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%23e2e8f0'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+}
+
+/* --- Auth Ekranları (Login, Register) için Form Stilleri --- */
+.form-input {
+    @apply shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 bg-slate-50/70;
+}
+.form-input-error {
+    @apply border-red-500 ring-red-500;
+}
+.form-input-success {
+    @apply border-green-500 ring-green-500;
+}
+.error-message {
+    @apply text-red-600 text-xs italic mt-1 h-4;
+}
+
+/* --- Ana Uygulama Komponent Stilleri (Butonlar, Yükleyici vb.) --- */
+.loader { 
+    border-top-color: #6366f1; 
+    animation: spin 1s ease-in-out infinite; 
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.btn { 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 0.6rem; 
+    font-weight: 600; 
+    padding: 0.7rem 1.2rem; 
+    border-radius: 0.75rem; 
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
+    border: 1px solid transparent; 
+    font-size: 0.9rem; 
+    cursor: pointer; 
+}
+.btn:disabled { 
+    opacity: 0.6; 
+    cursor: not-allowed; 
+    transform: none; 
+    box-shadow: none; 
+}
+.btn-primary { 
+    background-image: linear-gradient(to right, #4f46e5 0%, #818cf8 100%); 
+    color: white; 
+    box-shadow: 0 4px 15px -5px rgba(79, 70, 229, 0.5); 
+}
+.btn-primary:hover:not(:disabled) { 
+    transform: translateY(-3px); 
+    box-shadow: 0 7px 20px -5px rgba(79, 70, 229, 0.6); 
+}
+.btn-secondary { 
+    background-color: #374151; 
+    color: white; 
+}
+.btn-secondary:hover:not(:disabled) { 
+    background-color: #1f2937; 
+    transform: translateY(-2px); 
+}
+.btn-tertiary { 
+    background-color: #e5e7eb; 
+    color: #1f2937; 
+    border-color: #d1d5db; 
+}
+.btn-tertiary:hover:not(:disabled) { 
+    background-color: #d1d5db; 
+    border-color: #9ca3af; 
+}
+
+/* --- Mod ve Araç Butonları --- */
+.mode-btn-active { 
+    background-image: linear-gradient(to right, #4f46e5, #7c3aed); 
+    color: white; 
+    box-shadow: 0 2px 8px -1px rgba(0,0,0,0.2); 
+    transform: scale(1.05); 
+}
+.tool-btn-active { 
+    background-color: #4f46e5; 
+    color: white; 
+    transform: scale(1.1); 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15); 
+}
+
+/* --- Kanvas ve Diğer Alanlar --- */
+.canvas-container { 
+    border: 2px dashed #d1d5db; 
+    background-color: #ffffff; 
+    background-image: linear-gradient(to right, #f3f4f6 1px, transparent 1px), linear-gradient(to bottom, #f3f4f6 1px, transparent 1px); 
+    background-size: 20px 20px; 
+}
+/* Ana soru sorma canvas'ı */
+#handwritingCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* İnteraktif çözüm canvas'ı */
+#guide-handwriting-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* --- Akıllı Rehber Canvas Araçları --- */
+.canvas-tool-active {
+    background-color: #4f46e5 !important;
+    color: white !important;
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+/* --- Çoktan Seçmeli Seçenekler --- */
+.option-label {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.option-label:hover {
+    background-color: #f8fafc;
+    border-color: #6366f1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.option-label input[type="radio"]:checked + .option-label {
+    border-color: #6366f1;
+    background-color: #eef2ff;
+}
+
+.option-letter {
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.option-label:hover .option-letter {
+    background-color: #6366f1;
+    color: white;
+}
+
+.option-label.border-blue-500 {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+}
+
+.option-label.border-green-500 {
+    border-color: #10b981 !important;
+    background-color: #ecfdf5 !important;
+}
+
+.option-label.border-red-500 {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+}
+
+/* İnteraktif çözüm navigasyon butonları */
+.navigation-section button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.navigation-section button:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.disabled-area { 
+    opacity: 0.6; 
+    pointer-events: none; 
+    filter: grayscale(30%);
+}
+
+.disabled-area input,
+.disabled-area textarea,
+.disabled-area canvas {
+    pointer-events: none;
+}
+
+.disabled-area button:not(.always-enabled) {
+    pointer-events: none;
+}
+
+/* --- "Kendim Çözeceğim" Adım Blokları --- */
+.step-block.inactive .step-content {
+    display: none;
+}
+.step-block.inactive {
+    max-height: 50px;
+    cursor: not-allowed;
+    background-color: #f8fafc;
+}
+.step-block.inactive h3 {
+    opacity: 0.6;
+}
+.step-block.active {
+    max-height: 500px;
+}
+
+.step-block.step-correct {
+    background-color: #e6f9ed !important;
+    border-color: #22c55e !important;
+    box-shadow: 0 0 0 2px #bbf7d0;
+}
+.step-block.step-correct .step-content {
+    opacity: 1 !important;
+    pointer-events: none;
+}
+.step-block.step-correct h3 {
+    color: #15803d !important;
+}
+
+.step-block.inactive.step-correct .step-content {
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: none;
+}
+
+/* =================================================================== */
+/* ===         METİN GÖRÜNÜMÜ VE TAŞMA İÇİN NİHAİ ÇÖZÜMLER         === */
+/* =================================================================== */
+
+/* 1. FLEXBOX YERLEŞİM DÜZELTMESİ (EN ÖNEMLİ KURAL)
+   Bu kural, "Tüm Çözümü Göster" ve "Kendim Çözeceğim" gibi modüllerdeki
+   metin kutularının doğru genişliğe sahip olmasını sağlar. */
+.step-content {
+    min-width: 0;
+    max-width: 100%;
+}
+
+
+
+/* 3. İNTERAKTİF ÇÖZÜM ALANI STİLLERİ */
+#solution-output > p {
+    padding: 0 1rem;
+    overflow-wrap: break-word;
+    color: #1e293b; 
+    font-weight: 600;
+}
+.option-btn {
+    white-space: normal; 
+    text-align: center;
+    line-height: 1.4;
+    min-height: 5rem; 
+    padding: 1rem;
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+}
+
+/* 4. İPUCU KUTUSU STİLLERİ */
+.hint-area {
+    width: 100%;
+    min-width: 200px;
+    max-width: 100%;
+    white-space: normal;   /* pre-line yerine normal */
+    word-break: break-word;
+    overflow-x: auto;
+    display: block;
+}
+.hint-area.text-red-700 {
+    color: #b91c1c !important; 
+    font-weight: 600 !important; 
+    background-color: #fee2e2 !important;
+    border-left: 4px solid #ef4444; 
+}
+
+.step-block, .step-content, .hint-area {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.hint-area {
+    display: block !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-x: auto !important;
+    font-size: 1rem !important;
+    line-height: 1.7 !important;
+}
+
+
+/* Math Renderer CSS Düzeltmeleri */
+
+/* Genel KaTeX container düzeltmeleri */
+.katex {
+    font-size: inherit !important;
+    line-height: 1.5 !important;
+}
+
+/* Display mode için merkez hizalama */
+.katex-display {
+    text-align: center !important;
+    margin: 1rem auto !important;
+    padding: 0.5rem 0 !important;
+}
+
+/* Inline math için düzeltmeler */
+.katex:not(.katex-display) {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    margin: 0 2px !important;
+}
+
+/* Metin elementleri için hizalama */
+.katex .mord.text {
+    vertical-align: baseline !important;
+}
+
+/* Fraction düzeltmeleri */
+.katex .mfrac {
+    vertical-align: middle !important;
+}
+
+/* Square root düzeltmeleri */
+.katex .sqrt {
+    vertical-align: middle !important;
+}
+
+/* Math container için responsive tasarım */
+.math-container {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    padding: 0.25rem 0 !important;
+}
+
+/* Çözüm adımları için özel stiller */
+.solution-step {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    transition: all 0.2s ease;
+}
+
+.solution-step:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* Adım numarası stili */
+.step-number {
+    background: #e2e8f0;
+    color: #475569;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+    margin-right: 1rem;
+}
+
+/* Responsive düzeltmeler */
+@media (max-width: 768px) {
+    .katex {
+        font-size: 0.9em !important;
+    }
+    
+    .math-container {
+        padding: 0.125rem 0 !important;
+    }
+    
+    .solution-step {
+        padding: 0.75rem;
+        margin: 0.375rem 0;
+    }
+    
+    .step-number {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.75rem;
+        margin-right: 0.75rem;
+    }
+}
+
+/* Hata durumu için stiller */
+.katex-error {
+    color: #dc2626 !important;
+    background: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    padding: 0.25rem 0.5rem !important;
+    border-radius: 0.25rem !important;
+    font-family: monospace !important;
+}
+
+/* Scroll bar düzeltmeleri */
+.math-container::-webkit-scrollbar {
+    height: 4px;
+}
+
+.math-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.math-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+}
+
+.math-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Özel Türkçe karakter desteği */
+.katex .mord.text {
+    font-family: "Computer Modern", "Latin Modern Math", "Times New Roman", serif !important;
+    font-weight: normal !important;
+}
+
+/* style.css dosyanızda bu bölümün olduğundan emin olun */
+
+/* Çözüm adımları için özel stiller */
+.solution-step {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    transition: all 0.2s ease;
+}
+
+.solution-step:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+/* Adım numarası stili */
+.step-number {
+    background: #e2e8f0;
+    color: #475569;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+    margin-right: 1rem;
+}

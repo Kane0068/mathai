@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karışık İçerik Test</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- KaTeX Kütüphaneleri -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+</head>
+
+<body class="p-8 bg-gray-100">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Karışık İçerik Render Test</h1>
+        
+        <div class="space-y-6">
+            <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Test 1: Basit Karışık İçerik</h3>
+                <div class="text-sm text-gray-600 mb-2">Orijinal: "Bir kenar uzunluğu: $\sqrt{8}$ cm"</div>
+                <div id="test1" class="p-3 bg-gray-50 rounded border min-h-[40px]"></div>
+            </div>
+            
+            <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Test 2: Karmaşık Karışık İçerik</h3>
+                <div class="text-sm text-gray-600 mb-2">Orijinal: "Çözüm: $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$ formülü kullanılır"</div>
+                <div id="test2" class="p-3 bg-gray-50 rounded border min-h-[40px]"></div>
+            </div>
+            
+            <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Test 3: Sadece LaTeX</h3>
+                <div class="text-sm text-gray-600 mb-2">Orijinal: "$\sqrt{8}$"</div>
+                <div id="test3" class="p-3 bg-gray-50 rounded border min-h-[40px]"></div>
+            </div>
+            
+            <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Test 4: Sadece Metin</h3>
+                <div class="text-sm text-gray-600 mb-2">Orijinal: "Bu bir test metnidir"</div>
+                <div id="test4" class="p-3 bg-gray-50 rounded border min-h-[40px]"></div>
+            </div>
+            
+            <div class="border border-gray-200 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-800 mb-2">Test 5: Çoklu LaTeX Blokları</h3>
+                <div class="text-sm text-gray-600 mb-2">Orijinal: "İlk değer: $x = 5$, ikinci değer: $y = \frac{1}{2}$"</div>
+                <div id="test5" class="p-3 bg-gray-50 rounded border min-h-[40px]"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { MathRenderer } from './www/js/modules/mathRenderer.js';
+        
+        const mathRenderer = new MathRenderer();
+        
+        // Test verileri
+        const tests = [
+            { id: 'test1', content: 'Bir kenar uzunluğu: $\\sqrt{8}$ cm' },
+            { id: 'test2', content: 'Çözüm: $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$ formülü kullanılır' },
+            { id: 'test3', content: '$\\sqrt{8}$' },
+            { id: 'test4', content: 'Bu bir test metnidir' },
+            { id: 'test5', content: 'İlk değer: $x = 5$, ikinci değer: $y = \\frac{1}{2}$' }
+        ];
+        
+        // Testleri çalıştır
+        tests.forEach(test => {
+            const element = document.getElementById(test.id);
+            if (element) {
+                const analysis = mathRenderer.analyzeContent(test.content);
+                const success = mathRenderer.render(test.content, element, false);
+                
+                // Sonuç bilgisi ekle
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'text-xs text-gray-500 mt-2';
+                infoDiv.innerHTML = `
+                    <strong>Strateji:</strong> ${getStrategyName(analysis)} | 
+                    <strong>Başarı:</strong> ${success ? '✓' : '✗'} | 
+                    <strong>Güven:</strong> ${Math.round(analysis.confidence * 100)}%
+                `;
+                element.appendChild(infoDiv);
+            }
+        });
+        
+        function getStrategyName(analysis) {
+            if (analysis.isMixed) return 'Karışık İçerik';
+            if (analysis.isLatex && !analysis.isPlainText) return 'LaTeX';
+            if (analysis.isMathExpression && !analysis.isPlainText) return 'Matematiksel';
+            if (analysis.isPlainText && !analysis.isLatex && !analysis.isMathExpression) return 'Düz Metin';
+            return 'Belirsiz';
+        }
+    </script>
+</body>
+</html> 

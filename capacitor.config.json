@@ -1,0 +1,22 @@
+{
+  "appId": "com.example.mathai",
+  "appName": "mathai",
+  "webDir": "www",
+  "server": {
+    "hostname": "localhost",
+    "cleartext": true
+  },
+
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "launchAutoHide": true,
+      "backgroundColor": "#f0f4f8",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    }
+  }
+}
