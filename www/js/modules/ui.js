@@ -1,8 +1,13 @@
-// www/js/modules/ui.js
+// =================================================================================
+//  MathAi - UI Modülü (Güncellenmiş - Advanced Math Renderer ile)
+//  Gelişmiş render sistemi entegrasyonu
+// =================================================================================
+
+import { advancedMathRenderer } from './advancedMathRenderer.js';
 
 /**
  * Ekranda bir yükleme mesajı gösterir.
- * @param {string} message - Gösterilecek mesaj.
+ * @param {string|false} message - Gösterilecek mesaj. false ise gizler.
  */
 export function showLoading(message) {
     const resultContainer = document.getElementById('result-container');
@@ -16,6 +21,7 @@ export function showLoading(message) {
         resultContainer.classList.add('hidden');
         return;
     }
+    
     // Önceki hata mesajını ve butonları temizle
     statusMessage.innerHTML = `
          <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 animate-spin"></div>
@@ -133,119 +139,225 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
     solutionOutput.classList.add('hidden');
 }
 
-function isMathExpression(str) {
-    // Sadece matematiksel LaTeX ifadelerini tespit eden bir kontrol
-    return /\\(frac|sqrt|sum|int|leq|geq|cdot|times|div|pm|neq|infty|lim|log|sin|cos|tan|text)/.test(str) || /\$.*\$/.test(str) || /[=+\-*/^_]/.test(str);
-}
-
-function autoWrapTextForKaTeX(str) {
-    // LaTeX bloklarını tespit et ve düz metin kısımlarını T{...} ile sarmala
-    // Bu regex, LaTeX komutları ve matematiksel operatörler dışındaki düz metinleri bulur
-    // ve onları T{...} ile sarar
-    return str.replace(/([^\\$=+\-*/^_]*)(?=(\\frac|\\sqrt|\\sum|\\int|\\leq|\\geq|\\cdot|\\times|\\div|\\pm|\\neq|\\infty|\\lim|\\log|\\sin|\\cos|\\tan|\$|=|\+|-|\*|\/|\^|_))/g, (match, p1) => {
-        if (p1.trim() === '') return '';
-        return `T{${p1}}`;
-    });
-}
-
-function isLatex(str) {
-    // LaTeX olup olmadığını anlamak için temel bir kontrol
-    return /\\\\|\\frac|\\sqrt|\\sum|\\int|\\leq|\\geq|\\cdot|\\times|\\div|\\pm|\\neq|\\infty|\\lim|\\log|\\sin|\\cos|\\tan|\\^|\\{|\\}|\\$|_/g.test(str);
-}
-
-function convertTtoText(str) {
-    // T{...} formatını \text{...} ile değiştir
-    return str.replace(/T\{([^}]*)\}/g, '\\\\text{$1}');
-}
-
-function convertSimpleExponent(str) {
-    // 12^4, x^2, (a+b)^3 gibi ifadeleri LaTeX formatına çevirir
-    return str.replace(/(\\w+|\\([^\\)]+\\))\\^(\\w+|\\d+|\\([^\\)]+\\))/g, '$1^{ $2 }');
-}
-
-
-
-// www/js/modules/ui.js dosyasındaki renderMath fonksiyonunu bununla değiştirin.
-
-import { mathRenderer } from './mathRenderer.js';
-
 /**
- * Geliştirilmiş matematiksel ifade render fonksiyonu
- * @param {string} stringToRender - Render edilecek metin.
- * @param {HTMLElement} element - Metnin render edileceği HTML elementi.
- * @param {boolean} displayMode - KaTeX render'ında displayMode parametresi.
+ * Gelişmiş matematiksel ifade render fonksiyonu
+ * Advanced Math Renderer kullanır - MathJax v3 + KaTeX Hybrid
+ * @param {string} content - Render edilecek içerik.
+ * @param {HTMLElement} element - Hedef HTML elementi.
+ * @param {boolean} displayMode - Display modu (blok/inline).
  */
-export function renderMath(stringToRender, element, displayMode = false) {
-    // Yeni MathRenderer kullan
-    return mathRenderer.render(stringToRender, element, displayMode);
-}
-
-/**
- * Özel karakterleri escape et
- */
-function escapeSpecialCharacters(str) {
-    // Eğer string zaten \text{} içindeyse, içindeki özel karakterleri escape et
-    return str.replace(/\\text\{([^}]*)\}/g, (match, content) => {
-        const escapedContent = content
-            .replace(/&/g, '\\&')
-            .replace(/%/g, '\\%')
-            .replace(/\$/g, '\\$')
-            .replace(/#/g, '\\#');
-        return `\\text{${escapedContent}}`;
-    });
-}
-
-/**
- * Alternatif render denemesi
- */
-function tryAlternativeRender(originalString, element, displayMode) {
+export async function renderMath(content, element, displayMode = false) {
+    if (!content || !element) {
+        console.warn('renderMath: İçerik veya element eksik');
+        return false;
+    }
+    
     try {
-        // Basit metin olarak render et
-        katex.render(`\\text{${originalString.replace(/[{}\\]/g, '')}}`, element, {
-            throwOnError: false,
-            displayMode: displayMode,
-            output: "html",
-            trust: true,
-            strict: false
-        });
-    } catch (e2) {
-        // Son çare olarak düz metin göster
-        element.textContent = originalString;
-        element.classList.add('katex-error');
+        // Gelişmiş render sistemini kullan
+        const result = await advancedMathRenderer.render(content, element, displayMode);
+        
+        if (!result) {
+            console.warn('Render başarısız, fallback uygulanıyor:', content);
+            // Fallback: plain text
+            element.textContent = content;
+            element.classList.add('render-fallback');
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('renderMath hatası:', error);
+        element.textContent = content;
+        element.classList.add('render-error');
+        return false;
     }
 }
 
 /**
- * Element stillerini ayarla
+ * Container içindeki tüm matematik içeriğini render eder
+ * @param {HTMLElement} container - Render edilecek container
+ * @param {boolean} displayMode - Display modu
  */
-function setupElementStyles(element, displayMode) {
-    element.style.textAlign = 'left';
-    element.style.lineHeight = '1.8';
-    element.style.padding = '2px 0';
+export async function renderMathInContainer(container, displayMode = false) {
+    if (!container) {
+        console.warn('renderMathInContainer: Container eksik');
+        return;
+    }
     
-    const fontSize = displayMode ? '1.2rem' : '1.1rem';
-    element.style.fontSize = fontSize;
-    
-    element.classList.remove('katex-error');
+    try {
+        await advancedMathRenderer.renderContainer(container, displayMode);
+        console.log('Container render tamamlandı');
+    } catch (error) {
+        console.error('Container render hatası:', error);
+    }
 }
 
 /**
- * Render sonrası düzeltmeler
+ * Smart content elementlerini render eder (özel attribute ile)
+ * @param {HTMLElement} container - İçerik container'ı
  */
-function postRenderAdjustments(element, displayMode) {
-    const katexElements = element.querySelectorAll('.katex');
+export async function renderSmartContent(container) {
+    if (!container) return;
     
-    katexElements.forEach(katexEl => {
-        katexEl.style.overflowX = 'auto';
-        katexEl.style.overflowY = 'hidden';
-        katexEl.style.paddingBottom = '4px';
-        
-        if (displayMode) {
-            katexEl.style.display = 'block';
-            katexEl.style.textAlign = 'center';
-        } else {
-            katexEl.style.display = 'inline-block';
-            katexEl.style.verticalAlign = 'middle';
+    const smartElements = container.querySelectorAll('.smart-content[data-content]');
+    
+    for (const element of smartElements) {
+        const content = element.getAttribute('data-content');
+        if (content) {
+            try {
+                await renderMath(content, element, false);
+            } catch (error) {
+                console.warn('Smart content render hatası:', error);
+                element.textContent = content;
+            }
         }
+    }
+}
+
+/**
+ * LaTeX content elementlerini render eder
+ * @param {HTMLElement} container - İçerik container'ı
+ */
+export async function renderLatexContent(container) {
+    if (!container) return;
+    
+    const latexElements = container.querySelectorAll('.latex-content[data-latex]');
+    
+    for (const element of latexElements) {
+        const latex = element.getAttribute('data-latex');
+        if (latex) {
+            try {
+                await renderMath(latex, element, true); // Display mode için true
+            } catch (error) {
+                console.warn('LaTeX content render hatası:', error);
+                element.textContent = latex;
+            }
+        }
+    }
+}
+
+/**
+ * Render performans monitörü
+ */
+export function getRenderStats() {
+    return advancedMathRenderer.getStats();
+}
+
+/**
+ * Render cache temizleme
+ */
+export function clearRenderCache() {
+    advancedMathRenderer.clearCache();
+}
+
+/**
+ * HTML karakterlerini escape eder
+ * @param {string} text - Escape edilecek metin
+ * @returns {string} Escape edilmiş metin
+ */
+export function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Render sistemi hazır olup olmadığını kontrol eder
+ * @returns {Promise<boolean>} Sistem hazır mı?
+ */
+export async function waitForRenderSystem() {
+    return new Promise((resolve) => {
+        const checkReady = () => {
+            const stats = getRenderStats();
+            if (stats.mathJaxReady || stats.katexReady) {
+                resolve(true);
+            } else {
+                setTimeout(checkReady, 100);
+            }
+        };
+        checkReady();
     });
+}
+
+/**
+ * Gelişmiş render fonksiyonu - otomatik tip algılama ile
+ * @param {string} content - İçerik
+ * @param {HTMLElement} element - Hedef element
+ * @param {Object} options - Render seçenekleri
+ */
+export async function smartRender(content, element, options = {}) {
+    const {
+        displayMode = false,
+        fallbackToText = true,
+        enableCache = true,
+        timeout = 5000
+    } = options;
+    
+    if (!enableCache) {
+        clearRenderCache();
+    }
+    
+    // Timeout ile render
+    const renderPromise = renderMath(content, element, displayMode);
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Render timeout')), timeout);
+    });
+    
+    try {
+        return await Promise.race([renderPromise, timeoutPromise]);
+    } catch (error) {
+        if (fallbackToText) {
+            element.textContent = content;
+            element.classList.add('render-timeout');
+            return false;
+        }
+        throw error;
+    }
+}
+
+/**
+ * Batch render - çoklu elementi aynı anda render eder
+ * @param {Array} renderTasks - Render görevleri [{content, element, displayMode}]
+ * @param {number} batchSize - Aynı anda işlenecek görev sayısı
+ */
+export async function batchRender(renderTasks, batchSize = 5) {
+    const results = [];
+    
+    for (let i = 0; i < renderTasks.length; i += batchSize) {
+        const batch = renderTasks.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (task) => {
+            try {
+                return await renderMath(task.content, task.element, task.displayMode);
+            } catch (error) {
+                console.warn('Batch render hatası:', error);
+                return false;
+            }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        
+        // Batch'ler arası kısa bekleme
+        if (i + batchSize < renderTasks.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    
+    return results;
+}
+
+// Debug amaçlı global export
+if (typeof window !== 'undefined') {
+    window.mathUI = {
+        renderMath,
+        renderMathInContainer,
+        renderSmartContent,
+        renderLatexContent,
+        smartRender,
+        batchRender,
+        getRenderStats,
+        clearRenderCache,
+        waitForRenderSystem
+    };
 }

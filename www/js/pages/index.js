@@ -1,17 +1,21 @@
-// =================================================================================
-//  Math Solver - index.js (Akıllı Rehber Sistemi ile Güncellenmiş)
-//  Version: 4.0.0 (Akıllı Rehber Entegrasyonu)
-// =================================================================================
-
 // --- Gerekli Modülleri Import Et ---
 import { AuthManager } from '../modules/auth.js';
 import { FirestoreManager } from '../modules/firestore.js';
-import { showLoading, showError, showSuccess, renderMath, showAnimatedLoading } from '../modules/ui.js';
+import { 
+    showLoading, 
+    showError, 
+    showSuccess, 
+    renderMath, 
+    renderMathInContainer, 
+    renderSmartContent,
+    waitForRenderSystem,
+    showAnimatedLoading 
+} from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
-import { mathRenderer } from '../modules/mathRenderer.js';
+import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 
 // --- Yardımcı Fonksiyonlar ---
 function escapeHtml(text) {
@@ -28,56 +32,97 @@ const stateManager = new StateManager();
 // --- Sabitler ---
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-const masterSolutionPrompt = `Matematik problemini coz ve sadece JSON formatinda yanit ver.
 
-ONEMLI:
-1. Tum matematiksel ifadeleri LaTeX formatinda yaz. Duz metin olarak matematiksel ifade yazma.
-2. JSON icindeki anahtar (key) isimlerinde ve metinlerde kesinlikle Turkce karakter (ç, ğ, ı, ö, ş, ü) KULLANMA. Bunlarin yerine Ingilizce alfabe karsiliklarini kullan (c, g, i, o, s, u).
+const masterSolutionPrompt = `Solve the math problem and respond in the following JSON format.
 
-Yanit formati (Turkce karakter olmadan):
+CRITICAL: ALL RESPONSES MUST BE IN TURKISH LANGUAGE. Mathematical expressions must follow the exact LaTeX format compatible with MathJax v3 and KaTeX renderer.
+
+ADVANCED MATH RENDERER COMPATIBILITY RULES:
+1. Mixed content (text + math): Use $LaTeX$ for inline math within Turkish text
+2. Pure LaTeX blocks: Use $$LaTeX$$ for standalone mathematical expressions
+3. Simple text: Plain Turkish text without any math symbols
+4. Complex LaTeX: Full LaTeX commands for advanced expressions
+5. Turkish text compatibility: Ensure Turkish characters work correctly
+
+CONTENT TYPE DETECTION (Based on Advanced Math Renderer):
+- Simple Text: "Bu durumda sonuç 5 olur" (Turkish explanation without complex math)
+- Mixed Content: "Değer $x = 5$ olduğu için sonuç $\\frac{10}{2}$ olur" (Turkish + inline LaTeX)
+- Pure LaTeX: "$$\\frac{x^2 + 3x - 4}{2x + 1} = 0$$" (Only mathematical expression)
+- Complex Math: Advanced LaTeX with environments, matrices, etc.
+
+JSON SCHEMA:
 {
   "problemOzeti": {
-    "verilenler": ["metin (matematiksel ifadeler LaTeX formatinda olmali)"],
-    "istenen": "metin (matematiksel ifadeler LaTeX formatinda olmali)"
+    "verilenler": [
+      "Turkish explanation text with math: $LaTeX_inline$",
+      "Another data in Turkish: $\\\\frac{a}{b} = 5$"
+    ],
+    "istenen": "What is requested in Turkish: $\\\\sqrt{x^2 + y^2}$"
   },
   "adimlar": [
     {
-      "adimAciklamasi": "metin (matematiksel ifadeler LaTeX formatinda olmali)",
-      "cozumLateks": "LaTeX formatinda matematiksel ifade (\\frac{1}{2}, x^2, \\sqrt{a+b} gibi)",
-      "ipucu": "metin (matematiksel ifadeler LaTeX formatinda olmali)",
+      "adimAciklamasi": "Turkish step explanation with math: $LaTeX_inline$",
+      "cozum_lateks": "$$pure_latex_expression$$",
+      "ipucu": "Turkish helpful hint with math: $LaTeX_inline$",
       "yanlisSecenekler": [
-        {"metin": "LaTeX formatinda yanlis secenek", "yanlisGeriBildirimi": "metin"},
-        {"metin": "LaTeX formatinda yanlis secenek", "yanlisGeriBildirimi": "metin"}
+        {
+          "metin": "$$wrong_latex_expression$$",
+          "yanlisGeriBildirimi": "Turkish explanation why it's wrong with math: $LaTeX_inline$"
+        }
       ]
     }
   ],
-  "tamCozumLateks": ["LaTeX formatinda matematiksel ifadeler listesi"]
+  "tamCozumLateks": [
+    "$$step_1_pure_latex$$",
+    "$$step_2_pure_latex$$",
+    "$$final_answer_pure_latex$$"
+  ]
 }
 
-TURKCE KARAKTER KULLANIMI (YAPILMAMASI GEREKENLER):
-- YANLIS: "problemÖzeti", "adımAçıklaması", "çözüm_lateks"
-- DOGRU: "problemOzeti", "adimAciklamasi", "cozumLateks"
+MATHJAX v3 + KATEX COMPATIBLE LATEX REFERENCE:
+- Fractions: $\\\\frac{a}{b}$, $\\\\frac{x^2+1}{2x-3}$
+- Exponents: $x^2$, $(a+b)^{3}$, $e^{-x}$
+- Roots: $\\\\sqrt{x}$, $\\\\sqrt[3]{8}$, $\\\\sqrt{x^2+y^2}$
+- Trigonometric: $\\\\sin(x)$, $\\\\cos(2\\\\theta)$, $\\\\tan^{-1}(x)$
+- Logarithms: $\\\\log_{10}(x)$, $\\\\ln(e^x)$, $\\\\log(x)$
+- Derivatives: $\\\\frac{d}{dx}(x^2) = 2x$, $f'(x)$
+- Integrals: $\\\\int x^2 dx = \\\\frac{x^3}{3} + C$
+- Limits: $\\\\lim_{x \\\\to 0} \\\\frac{\\\\sin(x)}{x} = 1$
+- Summations: $\\\\sum_{n=1}^{\\\\infty} \\\\frac{1}{n^2}$
+- Matrices: $\\\\begin{pmatrix} a & b \\\\\\\\ c & d \\\\end{pmatrix}$
+- Systems: $\\\\begin{cases} x + y = 5 \\\\\\\\ 2x - y = 1 \\\\end{cases}$
 
-LaTeX ORNEKLERI:
-- Kesir: \\frac{a}{b}
-- Us: x^2, (a+b)^3
-- Kok: \\sqrt{x}, \\sqrt[3]{x}
-- Turev: \\frac{d}{dx}(x^2) = 2x
-- Integral: \\int x^2 dx = \\frac{x^3}{3} + C
-- Limit: \\lim_{x \\to 0} \\frac{\\sin(x)}{x} = 1
-- Toplam: \\sum_{n=1}^{\\infty} \\frac{1}{n^2}
-- Trigonometrik: \\sin(x), \\cos(x), \\tan(x)
-- Logaritma: \\log(x), \\ln(x)
-- Esitlik: a = b, x + y = 10
-- Esitsizlik: x > 0, a \\leq b
+ADVANCED MATH RENDERER PATTERN MATCHING:
+- Turkish words will be detected as plain text
+- Mathematical symbols with proper delimiters will trigger math rendering
+- Mixed content will be intelligently split and rendered separately
+- Complex LaTeX will use MathJax v3 for reliability
+- Simple math will use KaTeX for speed
 
-ORNEK KULLANIM:
-- Problem ozeti: "Bir kenar uzunlugu: $\\sqrt{8}$ cm"
-- Adim aciklamasi: "$\\sqrt{8}$'i sadelestir"
-- Cozum: "\\sqrt{8} = \\sqrt{4 \\times 2} = 2\\sqrt{2}"
+CONTENT FORMATTING RULES:
+✅ CORRECT EXAMPLES:
+- Simple text: "Bu durumda cevap 5 olur"
+- Mixed content: "Değer $x = 5$ olduğu için $\\\\frac{10}{2} = 5$ bulunur"
+- Pure LaTeX: "$$\\\\frac{x^2 + 3x - 4}{2x + 1} = 0$$"
+- Complex math: "$$\\\\begin{align} x^2 + 2x + 1 &= 0 \\\\\\\\ (x+1)^2 &= 0 \\\\end{align}$$"
 
-Sadece JSON yanit ver, baska hicbir metin yazma.
-Problem: {PROBLEM_CONTEXT}`;
+❌ PROHIBITED FORMATS:
+- Plain text math: "x^2 + 3x - 4 = 0"
+- HTML entities: "&lt;", "&gt;", "&amp;"
+- Malformed LaTeX: "\\\\\\\\frac{a}{b}"
+- Mixed symbols: "x=5 değeri sqrt(8) = 2sqrt(2)"
+
+TURKISH CHARACTER SUPPORT:
+- Ensure ğ, ü, ş, ı, ö, ç characters work in text portions
+- Use \\text{} for Turkish text within LaTeX expressions
+- Example: $\\\\text{değeri } x = 5 \\\\text{ olur}$
+
+RESPONSE LANGUAGE: ALL TEXT MUST BE IN TURKISH except LaTeX mathematical expressions.
+
+Problem: {PROBLEM_CONTEXT}
+
+RESPOND ONLY IN JSON FORMAT, NO OTHER TEXT.`;
+
 
 // --- Global DOM Önbelleği ---
 const elements = {};
@@ -87,8 +132,12 @@ window.addEventListener('load', () => {
     AuthManager.initProtectedPage(initializeApp);
 });
 
-function initializeApp(userData) {
+async function initializeApp(userData) {
     if (userData) {
+        // Render sisteminin hazır olmasını bekle
+        showLoading("Matematik render sistemi başlatılıyor...");
+        await waitForRenderSystem();
+        
         cacheDOMElements();
         setupEventListeners();
         stateManager.subscribe(renderApp);
@@ -96,6 +145,9 @@ function initializeApp(userData) {
         
         // Akıllı Rehber sistemini başlat
         smartGuide.setCanvasManager(canvasManager);
+        
+        showLoading(false);
+        console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
     } else {
         document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
     }
@@ -116,13 +168,13 @@ function cacheDOMElements() {
         'goBackBtn', 'logout-btn', 'solving-workspace', 'result-container', 'status-message',
         'solution-output', 'question-summary-container', 'show-full-solution-btn',
         'step-by-step-container'
-        // Akıllı Rehber elementleri dinamik olarak oluşturulduğu için burada cache'lenmiyor
     ];
     ids.forEach(id => { elements[id] = document.getElementById(id); });
     
     // Ana soru sorma canvas'ını başlat
     canvasManager.initCanvas('handwritingCanvas');
 }
+
 
 function setupEventListeners() {
     window.addEventListener('show-error-message', (event) => {
@@ -161,7 +213,7 @@ function setupEventListeners() {
     add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
     add('startFromTextBtn', 'click', () => handleNewProblem('text'));
     
-    // Ana çözüm seçenekleri - BU KRİTİK SATIRDI
+    // Ana çözüm seçenekleri
     add('start-solving-workspace-btn', 'click', () => {
         if (stateManager.getStateValue('problem').solution) {
             initializeSmartGuide();
@@ -179,27 +231,21 @@ function setupEventListeners() {
     });
     
     add('solve-all-btn', 'click', async () => { 
-    if (stateManager.getStateValue('problem').solution) { 
-        // Önce akıllı rehberi başlat, sonra interaktif moda geç. 
-        // Bu, 'interactive' view render edildiğinde smartGuide'ın hazır olmasını sağlar. 
-        await initializeSmartGuide(); 
-        stateManager.setView('interactive'); 
-    } else { 
-        showError("Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.", false); 
-    } 
-});
+        if (stateManager.getStateValue('problem').solution) { 
+            await initializeSmartGuide(); 
+            stateManager.setView('interactive'); 
+        } else { 
+            showError("Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.", false); 
+        } 
+    });
     
     add('goBackBtn', 'click', () => stateManager.setView('summary'));
     
-    // ANA SORU SORMA CANVAS ARAÇLARI (handwritingCanvas)
+    // Canvas araçları
     add('hw-pen-btn', 'click', () => setQuestionCanvasTool('pen', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-eraser-btn', 'click', () => setQuestionCanvasTool('eraser', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-clear-btn', 'click', () => canvasManager.clear('handwritingCanvas'));
     add('hw-undo-btn', 'click', () => canvasManager.undo('handwritingCanvas'));
-
-    
-    // Akıllı Rehber elementleri dinamik olarak oluşturulduğu için
-    // event listener'ları renderSmartGuideStep() fonksiyonunda ekleniyor
     
     // Fotoğraf yükleme
     add('selectFileBtn', 'click', () => elements['imageUploader'].click());
@@ -232,13 +278,9 @@ async function initializeSmartGuide() {
             throw new Error('Çözüm verisi bulunamadı');
         }
 
-        // İnteraktif çözüm başlatma mesajı
         showLoading("İnteraktif çözüm başlatılıyor...");
         
-        // Akıllı rehber sistemini başlat
         await smartGuide.initializeGuidance(solutionData);
-        
-        // Solving view'a geç
         stateManager.setView('solving');
         
         showSuccess("İnteraktif çözüm hazır! Adım adım çözüme başlayabilirsiniz.");
@@ -250,7 +292,6 @@ async function initializeSmartGuide() {
         });
         showError("İnteraktif çözüm başlatılırken bir hata oluştu. Lütfen tekrar deneyin.", false);
     } finally {
-        // Yükleme mesajını temizle
         showLoading(false);
     }
 }
@@ -499,7 +540,8 @@ function displayGuideCompletion() {
 }
 
 // --- STATE'E BAĞLI UI GÜNCELLEME FONKSİYONLARI ---
-function renderApp(state) {
+
+async function renderApp(state) {
     const { user, ui, problem } = state;
     
     console.log('renderApp çalıştı, mevcut view:', ui.view);
@@ -523,53 +565,22 @@ function renderApp(state) {
     const { view, inputMode, handwritingInputType } = ui;
     const isVisible = (v) => v === view;
 
-    // Görünüm kontrollerini iyileştir
-    // Soru alanını her zaman göster, sadece inaktif hale getir
+    // Görünüm kontrollerini güncelle
     elements['question-setup-area'].classList.remove('hidden');
     elements['question-setup-area'].classList.toggle('disabled-area', !isVisible('setup'));
-    
-    // Soru durumu göstergesini güncelle
-    const questionStatus = document.getElementById('question-status');
-    if (questionStatus) {
-        if (isVisible('setup')) {
-            questionStatus.textContent = 'Aktif';
-            questionStatus.className = 'text-sm text-green-600 font-medium';
-        } else {
-            questionStatus.textContent = 'Tamamlandı';
-            questionStatus.className = 'text-sm text-gray-500';
-        }
-    }
     
     elements['question-summary-container'].classList.toggle('hidden', view === 'setup' || !problem.solution);
     elements['top-action-buttons'].classList.toggle('hidden', !isVisible('summary'));
     elements['solving-workspace'].classList.toggle('hidden', !isVisible('solving'));
-    
-    // Result container'ı tüm çözüm view'larında göster
     elements['result-container'].classList.toggle('hidden', !['fullSolution', 'interactive'].includes(view));
     
-    // Solution output'u çözüm view'larında göster
     if (elements['solution-output']) {
         elements['solution-output'].classList.toggle('hidden', !['fullSolution', 'interactive'].includes(view));
     }
     
-    // Geri butonunu çözüm view'larında göster
     if (elements['goBackBtn']) {
         elements['goBackBtn'].classList.toggle('hidden', !['fullSolution', 'interactive', 'solving'].includes(view));
     }
-    
-    // "Çözüme Başla" butonlarını her zaman göster, sadece inaktif hale getir
-    const startButtons = ['startFromPhotoBtn', 'recognizeHandwritingBtn', 'startFromTextBtn'];
-    startButtons.forEach(btnId => {
-        if (elements[btnId]) {
-            elements[btnId].classList.remove('hidden');
-            elements[btnId].disabled = !isVisible('setup');
-            if (!isVisible('setup')) {
-                elements[btnId].classList.add('opacity-50', 'cursor-not-allowed');
-            } else {
-                elements[btnId].classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-        }
-    });
     
     // 4. Görünüme Özel İçerik Render'ları
     if (isVisible('setup')) {
@@ -586,7 +597,6 @@ function renderApp(state) {
             if (showCanvas) {
                 setTimeout(() => {
                     canvasManager.resizeCanvas('handwritingCanvas');
-                    // Canvas'ı temizle ve beyaz arka plan ekle
                     const data = canvasManager.canvasPool.get('handwritingCanvas');
                     if (data) {
                         data.ctx.clearRect(0, 0, data.canvas.width, data.canvas.height);
@@ -598,32 +608,28 @@ function renderApp(state) {
             }
         }
     } else if (isVisible('fullSolution')) {
-        console.log('Rendering full solution view');
-        renderFullSolution(problem.solution);
+        console.log('Rendering full solution view with Advanced Math Renderer');
+        await renderFullSolution(problem.solution);
     } else if (isVisible('interactive')) {
         console.log('Rendering interactive view, step:', ui.interactiveStep);
-        renderInteractiveSolution(problem.solution, ui.interactiveStep || 0);
+        await renderInteractiveSolution(problem.solution, ui.interactiveStep || 0);
     } else if (isVisible('solving')) {
-        console.log('Rendering solving view');
-        renderSmartGuideWorkspace();
+        console.log('Rendering solving view with Smart Guide');
+        await renderSmartGuideWorkspace();
     }
-    
-    // Debug: Hangi view'ın aktif olduğunu logla
-    console.log('Current view:', view, 'Solution exists:', !!problem.solution);
 
-    // 5. Problem Özetini Render Et
+    // 5. Problem Özetini Render Et (Advanced Math Renderer ile)
     if (problem.solution) {
-        displayQuestionSummary(problem.solution.problemOzeti);
+        await displayQuestionSummary(problem.solution.problemOzeti);
     } else if (view === 'setup') {
         elements['question'].innerHTML = '';
     }
 }
 
-function renderSmartGuideWorkspace() {
+async function renderSmartGuideWorkspace() {
     const container = elements['step-by-step-container'];
     if (!container) return;
     
-    // Akıllı rehber mevcut mu kontrol et
     const stepInfo = smartGuide.getCurrentStepInfo();
     
     if (!stepInfo) {
@@ -639,21 +645,14 @@ function renderSmartGuideWorkspace() {
                 </div>
             </div>
         `;
-        
-        // Ana menüye dönme butonu için event listener
-        const backToMainMenuBtn = container.querySelector('#back-to-main-menu-btn');
-        if (backToMainMenuBtn) {
-            backToMainMenuBtn.addEventListener('click', () => {
-                stateManager.setView('summary');
-            });
-        }
         return;
     }
     
-    renderSmartGuideStep();
+    await renderSmartGuideStep();
 }
 
-function renderSmartGuideStep() {
+
+async function renderSmartGuideStep() {
     const container = elements['step-by-step-container'];
     const stepInfo = smartGuide.getCurrentStepInfo();
     const progress = smartGuide.getProgress();
@@ -662,13 +661,11 @@ function renderSmartGuideStep() {
     
     container.innerHTML = `
         <div class="smart-guide-workspace p-6 bg-white rounded-lg shadow-md">
-            <!-- Başlık ve Ana Menü Butonu -->
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800">Akıllı Rehber</h3>
                 <button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>
             </div>
             
-            <!-- İlerleme Göstergesi -->
             <div class="progress-section mb-6">
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-lg font-semibold text-gray-800">Adım ${stepInfo.stepNumber} / ${stepInfo.totalSteps}</h3>
@@ -680,24 +677,16 @@ function renderSmartGuideStep() {
                 </div>
             </div>
             
-            <!-- Adım Açıklaması -->
             <div class="step-description mb-6 p-4 bg-blue-50 rounded-lg">
                 <h4 class="font-semibold text-blue-800 mb-2">Bu Adımda Yapılacak:</h4>
-                <p class="text-blue-700">${stepInfo.description}</p>
-                ${stepInfo.difficulty > 3 ? `
-                    <div class="mt-2 text-sm text-orange-600">
-                        ⚠️ Bu adım biraz zor olabilir, dikkatli olun!
-                    </div>
-                ` : ''}
+                <div class="text-blue-700 smart-content" data-content="${escapeHtml(stepInfo.description)}" id="guide-step-description"></div>
             </div>
             
-            <!-- Girdi Alanı -->
             <div class="input-section mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                     Çözümünüzü yazın:
                 </label>
                 
-                <!-- Giriş Modu Seçimi -->
                 <div class="input-mode-selector mb-3">
                     <div class="flex space-x-2">
                         <button id="guide-text-mode-btn" class="px-3 py-1 text-sm rounded-md bg-blue-100 text-blue-700 font-medium">
@@ -709,7 +698,6 @@ function renderSmartGuideStep() {
                     </div>
                 </div>
                 
-                <!-- Klavye Girişi -->
                 <div id="guide-text-input-container">
                     <textarea 
                         id="guide-text-input" 
@@ -719,7 +707,6 @@ function renderSmartGuideStep() {
                     ></textarea>
                 </div>
                 
-                <!-- El Yazısı Canvas -->
                 <div id="guide-canvas-container" class="hidden">
                     <div class="canvas-container w-full h-48 rounded-lg overflow-hidden bg-white shadow-inner border">
                         <canvas id="guide-handwriting-canvas"></canvas>
@@ -747,7 +734,6 @@ function renderSmartGuideStep() {
                 </div>
             </div>
             
-            <!-- Butonlar -->
             <div class="action-buttons flex flex-wrap gap-3 mb-4">
                 <button id="guide-submit-btn" class="btn btn-primary flex-1">
                     Cevabı Gönder
@@ -757,13 +743,9 @@ function renderSmartGuideStep() {
                 </button>
             </div>
             
-            <!-- Geri Bildirim Alanı -->
             <div id="guide-feedback-container" class="feedback-section"></div>
-            
-            <!-- İpucu Alanı -->
             <div id="guide-hint-container" class="hint-section"></div>
             
-            <!-- Navigasyon -->
             <div class="navigation-section flex justify-between mt-6 pt-4 border-t">
                 <button id="guide-previous-step-btn" class="btn btn-secondary" 
                         ${stepInfo.stepNumber <= 1 ? 'disabled' : ''}>
@@ -775,6 +757,11 @@ function renderSmartGuideStep() {
             </div>
         </div>
     `;
+    
+    // Advanced Math Renderer ile içeriği render et
+    setTimeout(async () => {
+        await renderSmartContent(container);
+    }, 50);
     
     // Event listener'ları yeniden bağla
     setupGuideEventListeners();
@@ -971,10 +958,11 @@ async function handleNewProblem(sourceType) {
             { title: "Soru içerik kontrolü yapılıyor", description: "Yapay zeka soruyu analiz ediyor..." },
             { title: "Matematiksel ifadeler tespit ediliyor", description: "Formüller ve denklemler çözümleniyor..." },
             { title: "Problem özeti oluşturuluyor", description: "Verilenler ve istenenler belirleniyor..." },
-            { title: "Çözüm adımları hazırlanıyor", description: "Adım adım çözüm planı oluşturuluyor..." }
+            { title: "Çözüm adımları hazırlanıyor", description: "Adım adım çözüm planı oluşturuluyor..." },
+            { title: "Render sistemi hazırlanıyor", description: "Advanced Math Renderer ile optimize ediliyor..." }
         ];
         
-        showAnimatedLoading(analysisSteps, 2000);
+        showAnimatedLoading(analysisSteps, 1500);
 
         const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
         const payloadParts = [{ text: promptText }];
@@ -987,9 +975,8 @@ async function handleNewProblem(sourceType) {
         if (solution) {
             stateManager.setSolution(solution);
             stateManager.setView('summary');
-            showSuccess("Problem başarıyla çözüldü!", false); // autoHide = false
+            showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", false);
             
-            // Kullanıcının sorgu sayısını artır
             await FirestoreManager.incrementQueryCount();
         } else {
             showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
@@ -1001,7 +988,6 @@ async function handleNewProblem(sourceType) {
         });
         showError("Problem analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.", false);
     } finally {
-        // Yükleme mesajlarını temizle
         showLoading(false);
     }
 }
@@ -1104,8 +1090,8 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 
-// --- PROBLEM ÖZETİ ---
-function displayQuestionSummary(problemOzeti) {
+// --- PROBLEM ÖZETİ VE RENDER FONKSİYONLARI ---
+async function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
     
     const { verilenler, istenen } = problemOzeti;
@@ -1115,34 +1101,28 @@ function displayQuestionSummary(problemOzeti) {
     
     if (verilenler && verilenler.length > 0) {
         summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
-        verilenler.forEach(veri => {
-            // Her veri için akıllı render
-            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}"></li>`;
+        verilenler.forEach((veri, index) => {
+            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}" id="verilen-${index}"></li>`;
         });
         summaryHTML += '</ul></div>';
     }
     
     if (istenen) {
-        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}"></span></div>`;
+        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}" id="istenen-content"></span></div>`;
     }
     
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
     
-    // Akıllı içerik render işlemi
-    setTimeout(() => {
-        const smartElements = elements['question'].querySelectorAll('.smart-content');
-        smartElements.forEach(element => {
-            const content = element.getAttribute('data-content');
-            if (content) {
-                mathRenderer.render(content, element, false);
-            }
-        });
+    // Advanced Math Renderer ile render et
+    setTimeout(async () => {
+        await renderSmartContent(elements['question']);
     }, 50);
 }
 
-function renderFullSolution(solution) {
-    console.log('renderFullSolution called with:', solution);
+
+async function renderFullSolution(solution) {
+    console.log('renderFullSolution called with Advanced Math Renderer:', solution);
     if (!solution) {
         console.log('No solution provided to renderFullSolution');
         return;
@@ -1154,25 +1134,24 @@ function renderFullSolution(solution) {
     html += '<button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>';
     html += '</div>';
     
-    console.log('Full solution data:', solution);
-    
     if (solution.adimlar && solution.adimlar.length > 0) {
-        // Adımlar varsa onları göster
         solution.adimlar.forEach((step, index) => {
             html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
             html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="step-description mb-2 text-gray-700 smart-content" data-content="${escapeHtml(step.adimAciklamasi || 'Adım açıklaması')}"></div>`;
+            html += `<div class="step-description mb-2 text-gray-700 smart-content" data-content="${escapeHtml(step.adimAciklamasi || 'Adım açıklaması')}" id="step-desc-${index}"></div>`;
             if (step.cozum_lateks) {
-                html += `<div class="latex-content" data-latex="${step.cozum_lateks}"></div>`;
+                html += `<div class="latex-content mb-2" data-latex="${escapeHtml(step.cozum_lateks)}" id="step-latex-${index}"></div>`;
+            }
+            if (step.ipucu) {
+                html += `<div class="step-hint p-2 bg-yellow-50 rounded text-sm smart-content" data-content="${escapeHtml(step.ipucu)}" id="step-hint-${index}"></div>`;
             }
             html += '</div>';
         });
     } else if (solution.tamCozumLateks && solution.tamCozumLateks.length > 0) {
-        // Eski format için
         solution.tamCozumLateks.forEach((latex, index) => {
             html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
             html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="latex-content" data-latex="${latex}"></div>`;
+            html += `<div class="latex-content" data-latex="${escapeHtml(latex)}" id="legacy-step-${index}"></div>`;
             html += '</div>';
         });
     } else {
@@ -1182,46 +1161,22 @@ function renderFullSolution(solution) {
     }
     
     html += '</div>';
-    console.log('Setting solution-output HTML:', html.substring(0, 200) + '...');
     elements['solution-output'].innerHTML = html;
     
-    // Geliştirilmiş LaTeX render işlemi
-    setTimeout(() => {
-        // MathRenderer'ın container render özelliğini kullan
-        mathRenderer.renderContainer(elements['solution-output'], true);
-        
-        // Akıllı içerik elementlerini render et
-        const smartElements = elements['solution-output'].querySelectorAll('.smart-content');
-        smartElements.forEach((element, index) => {
-            const content = element.getAttribute('data-content');
-            console.log(`Rendering smart content ${index + 1}:`, content);
-            
-            if (content && content.trim()) {
-                mathRenderer.render(content, element, false);
-            }
-        });
-        
-        // Eksik kalan elementleri kontrol et
-        const unrenderedElements = elements['solution-output'].querySelectorAll('.latex-content:not(.katex)');
-        unrenderedElements.forEach((element, index) => {
-            const content = element.getAttribute('data-latex') || element.textContent || element.innerHTML;
-            console.log(`Rendering unrendered element ${index + 1}:`, content);
-            
-            if (content && content.trim()) {
-                mathRenderer.render(content, element, true);
-            }
-        });
+    // Advanced Math Renderer ile render et
+    setTimeout(async () => {
+        await renderMathInContainer(elements['solution-output'], false);
     }, 100);
     
-    console.log('renderFullSolution completed');
+    console.log('renderFullSolution completed with Advanced Math Renderer');
 }
 
-function renderInteractiveSolution(solution, currentStep = 0) {
+async function renderInteractiveSolution(solution, currentStep = 0) {
     if (!solution || !solution.adimlar || !solution.adimlar.length) {
         elements['solution-output'].innerHTML = `
             <div class="p-4 bg-red-50 text-red-700 rounded-lg">
                 <p>İnteraktif çözüm için adımlar bulunamadı.</p>
-                 <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
+                <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
             </div>`;
         return;
     }
@@ -1236,13 +1191,9 @@ function renderInteractiveSolution(solution, currentStep = 0) {
         return;
     }
 
-    // Çoktan seçmeli seçenekleri oluştur
     const options = generateMultipleChoiceOptions(currentStepData, currentStep, solution.adimlar);
-    
-    // İlerleme bilgisi
     const progress = ((currentStep + 1) / solution.adimlar.length) * 100;
     
-    // Arayüzü render et
     elements['solution-output'].innerHTML = `
         <div class="interactive-solution-workspace p-6 bg-white rounded-lg shadow-md">
             <div class="flex justify-between items-center mb-4">
@@ -1263,7 +1214,7 @@ function renderInteractiveSolution(solution, currentStep = 0) {
             
             <div class="step-description mb-6 p-4 bg-blue-50 rounded-lg">
                 <h4 class="font-semibold text-blue-800 mb-2">Bu Adımda Yapılacak:</h4>
-                <p class="text-blue-700 smart-content" data-content="${escapeHtml(currentStepData.adimAciklamasi || `Adım ${currentStep + 1}`)}"></p>
+                <div class="text-blue-700 smart-content" data-content="${escapeHtml(currentStepData.adimAciklamasi || `Adım ${currentStep + 1}`)}" id="interactive-step-desc"></div>
             </div>
             
             <div class="options-section mb-6">
@@ -1276,8 +1227,8 @@ function renderInteractiveSolution(solution, currentStep = 0) {
                                 ${String.fromCharCode(65 + index)}
                             </div>
                             <div class="option-content flex-1">
-                                <p class="text-gray-800 font-medium">${option.text}</p>
-                                ${option.latex ? `<p class="text-sm text-gray-600 mt-1">${option.latex}</p>` : ''}
+                                <div class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}" id="option-text-${index}"></div>
+                                ${option.latex ? `<div class="text-sm text-gray-600 mt-1 latex-content" data-latex="${escapeHtml(option.latex)}" id="option-latex-${index}"></div>` : ''}
                             </div>
                         </label>
                     `).join('')}
@@ -1285,7 +1236,7 @@ function renderInteractiveSolution(solution, currentStep = 0) {
             </div>
             
             <div class="action-buttons flex flex-wrap gap-3 mb-4">
-                <button id="check-answer-btn" class="btn btn-primary flex-1" disabled>Cevaabı Kontrol Et</button>
+                <button id="check-answer-btn" class="btn btn-primary flex-1" disabled>Cevabı Kontrol Et</button>
                 <button id="hint-btn" class="btn btn-secondary">💡 İpucu</button>
             </div>
             
@@ -1307,15 +1258,9 @@ function renderInteractiveSolution(solution, currentStep = 0) {
     // Event listener'ları bağla
     setupInteractiveSolutionListeners(currentStep, options);
     
-    // Akıllı içerik render işlemi
-    setTimeout(() => {
-        const smartElements = elements['solution-output'].querySelectorAll('.smart-content');
-        smartElements.forEach((element, index) => {
-            const content = element.getAttribute('data-content');
-            if (content) {
-                mathRenderer.render(content, element, false);
-            }
-        });
+    // Advanced Math Renderer ile render et
+    setTimeout(async () => {
+        await renderMathInContainer(elements['solution-output'], false);
     }, 50);
     
     // Navigasyon butonları
@@ -1327,7 +1272,6 @@ function renderInteractiveSolution(solution, currentStep = 0) {
         prevBtn.addEventListener('click', () => {
             if (currentStep > 0) {
                 stateManager.setInteractiveStep(currentStep - 1);
-                renderInteractiveSolution(solution, currentStep - 1);
             }
         });
     }
@@ -1336,7 +1280,6 @@ function renderInteractiveSolution(solution, currentStep = 0) {
         nextBtn.addEventListener('click', () => {
             if (currentStep < solution.adimlar.length - 1) {
                 stateManager.setInteractiveStep(currentStep + 1);
-                renderInteractiveSolution(solution, currentStep + 1);
             }
         });
     }
@@ -1618,6 +1561,7 @@ window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
+window.renderMath = renderMath;
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide };
+export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };

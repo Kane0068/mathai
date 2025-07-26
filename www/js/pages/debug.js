@@ -3,7 +3,7 @@
 //  API Yanıtları ve Render İşlemleri Debug Merkezi
 // =================================================================================
 
-import { mathRenderer } from '../modules/mathRenderer.js';
+import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 
 // DOM elementleri
 const elements = {};
@@ -51,10 +51,10 @@ function testExpression() {
     
     try {
         // Önce analiz yap
-        const analysis = mathRenderer.analyzeContent(input);
+        const analysis = advancedMathRenderer.analyzeContent(input);
         
         // Render işlemi
-        const success = mathRenderer.render(input, testElement, false);
+        const success = advancedMathRenderer.render(input, testElement, false);
         const renderedContent = testElement.innerHTML;
         
         if (success && renderedContent && !renderedContent.includes('ParseError') && !renderedContent.includes('KaTeX error')) {
@@ -104,7 +104,7 @@ function analyzeExpression() {
         return;
     }
     
-    const analysis = mathRenderer.analyzeContent(input);
+    const analysis = advancedMathRenderer.analyzeContent(input);
     
     let html = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -173,7 +173,7 @@ function runInitialTests() {
     tests.forEach(test => {
         const element = elements[test.id];
         if (element) {
-            mathRenderer.render(test.content, element, false);
+            advancedMathRenderer.render(test.content, element, false);
         }
     });
 }
