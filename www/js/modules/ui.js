@@ -76,83 +76,70 @@ export function showSuccess(message, autoHide = true, hideDelay = 3000) {
  * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
  */
 export function showError(message, showResetButton = false, onReset = () => {}) {
-    console.log('🚨 Güvenilir error gösteriliyor:', message);
-    
     const resultContainer = document.getElementById('result-container');
     const statusMessage = document.getElementById('status-message');
     const solutionOutput = document.getElementById('solution-output');
 
-    if (!resultContainer || !statusMessage || !solutionOutput) {
-        console.error('Error display elementleri bulunamadı');
-        alert(message); // Fallback
-        return;
-    }
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // Error mesajı HTML'i
+    // Temel hata mesajı HTML'i
     let errorHTML = `
-        <div class="error-display flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
-            <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
+            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
             </svg>
-            <div class="text-center">
-                <h3 class="font-semibold text-red-800 mb-2">Hata Oluştu</h3>
-                <p class="font-medium text-center text-red-700">${message}</p>
-            </div>
+            <p class="font-medium text-center">${message}</p>
         </div>
     `;
 
+    statusMessage.className = '';
     statusMessage.innerHTML = errorHTML;
 
-    // Reset butonu
+    // DÜZELTME: Tamam butonu için ayrı element oluştur ve event listener ekle
     if (showResetButton) {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'mt-4 text-center';
         
         const okButton = document.createElement('button');
         okButton.textContent = 'Tamam';
-        okButton.className = 'btn btn-primary px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500';
+        okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
         
-        // Event listener - güvenilir versiyon
+        // DÜZELTME: Event listener'ı doğru şekilde ekle
         okButton.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             
             try {
-                console.log('Error tamam butonu tıklandı');
+                console.log('Tamam butonu tıklandı, onReset fonksiyonu çalıştırılıyor...');
                 
-                // Error'ı gizle
+                // Hata mesajını gizle
                 resultContainer.classList.add('hidden');
                 statusMessage.innerHTML = '';
                 
-                // onReset callback'ini çalıştır
+                // onReset fonksiyonunu çalıştır
                 if (typeof onReset === 'function') {
                     onReset();
                 } else {
-                    console.warn('onReset callback geçerli değil');
-                    // Fallback: Ana menüye dön
-                    if (window.stateManager) {
-                        window.stateManager.setView('setup');
-                    }
+                    console.warn('onReset fonksiyonu geçerli değil:', onReset);
                 }
-                
             } catch (error) {
-                console.error('Error tamam butonu handler hatası:', error);
-                // Son çare: Sayfayı yenile
-                location.reload();
+                console.error('Tamam butonu click handler hatası:', error);
             }
         });
         
         buttonContainer.appendChild(okButton);
         statusMessage.appendChild(buttonContainer);
         
-        // Auto focus
-        setTimeout(() => okButton.focus(), 100);
+        // Butona otomatik focus ver
+        setTimeout(() => {
+            okButton.focus();
+        }, 100);
     }
 
     resultContainer.classList.remove('hidden');
     solutionOutput.classList.add('hidden');
     
-    console.log('✅ Güvenilir error display tamamlandı');
+    console.log('showError çağrıldı:', { message, showResetButton, onResetType: typeof onReset });
 }
 
 /**
