@@ -1,6 +1,6 @@
 // =================================================================================
-//  MathAi - UI Modülü (Güncellenmiş - Advanced Math Renderer ile)
-//  Gelişmiş render sistemi entegrasyonu
+//  MathAi - UI Modülü - Düzeltilmiş Error Handling
+//  Tamam butonu sorunu çözüldü
 // =================================================================================
 
 import { advancedMathRenderer } from './advancedMathRenderer.js';
@@ -30,6 +30,116 @@ export function showLoading(message) {
     statusMessage.className = 'flex items-center justify-center space-x-3 p-4 bg-gray-50 rounded-lg';
     resultContainer.classList.remove('hidden');
     solutionOutput.classList.add('hidden');
+}
+
+/**
+ * Ekranda bir başarı mesajı gösterir.
+ * @param {string} message - Gösterilecek başarı mesajı.
+ * @param {boolean} autoHide - Mesajın otomatik olarak gizlenip gizlenmeyeceği.
+ * @param {number} hideDelay - Otomatik gizleme için beklenecek süre (ms).
+ */
+export function showSuccess(message, autoHide = true, hideDelay = 3000) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    // Eğer çözüm view'larındaysa (fullSolution, interactive, solving) başarı mesajını gösterme
+    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
+    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
+        return; // Başarı mesajını gösterme
+    }
+
+    statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
+    statusMessage.innerHTML = `
+        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <p class="font-medium text-center">${message}</p>
+    `;
+
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
+
+    if (autoHide) {
+        setTimeout(() => {
+            resultContainer.classList.add('hidden');
+        }, hideDelay);
+    }
+}
+
+/**
+ * Ekranda bir hata mesajı gösterir - DÜZELTME: Tamam butonu çalışır
+ * @param {string} message - Gösterilecek hata mesajı.
+ * @param {boolean} showResetButton - Kullanıcının arayüzü sıfırlayabileceği bir "Tamam" butonu gösterilsin mi?
+ * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
+ */
+export function showError(message, showResetButton = false, onReset = () => {}) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    // Temel hata mesajı HTML'i
+    let errorHTML = `
+        <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
+            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <p class="font-medium text-center">${message}</p>
+        </div>
+    `;
+
+    statusMessage.className = '';
+    statusMessage.innerHTML = errorHTML;
+
+    // DÜZELTME: Tamam butonu için ayrı element oluştur ve event listener ekle
+    if (showResetButton) {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'mt-4 text-center';
+        
+        const okButton = document.createElement('button');
+        okButton.textContent = 'Tamam';
+        okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+        
+        // DÜZELTME: Event listener'ı doğru şekilde ekle
+        okButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            try {
+                console.log('Tamam butonu tıklandı, onReset fonksiyonu çalıştırılıyor...');
+                
+                // Hata mesajını gizle
+                resultContainer.classList.add('hidden');
+                statusMessage.innerHTML = '';
+                
+                // onReset fonksiyonunu çalıştır
+                if (typeof onReset === 'function') {
+                    onReset();
+                } else {
+                    console.warn('onReset fonksiyonu geçerli değil:', onReset);
+                }
+            } catch (error) {
+                console.error('Tamam butonu click handler hatası:', error);
+            }
+        });
+        
+        buttonContainer.appendChild(okButton);
+        statusMessage.appendChild(buttonContainer);
+        
+        // Butona otomatik focus ver
+        setTimeout(() => {
+            okButton.focus();
+        }, 100);
+    }
+
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
+    
+    console.log('showError çağrıldı:', { message, showResetButton, onResetType: typeof onReset });
 }
 
 /**
@@ -72,71 +182,6 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
     };
 
     showStep();
-}
-
-/**
- * Ekranda bir başarı mesajı gösterir.
- * @param {string} message - Gösterilecek başarı mesajı.
- * @param {boolean} autoHide - Mesajın otomatik olarak gizlenip gizlenmeyeceği.
- * @param {number} hideDelay - Otomatik gizleme için beklenecek süre (ms).
- */
-export function showSuccess(message, autoHide = true, hideDelay = 3000) {
-    const resultContainer = document.getElementById('result-container');
-    const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
-
-    if (!resultContainer || !statusMessage || !solutionOutput) return;
-
-    // Eğer çözüm view'larındaysa (fullSolution, interactive, solving) başarı mesajını gösterme
-    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
-    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
-        return; // Başarı mesajını gösterme
-    }
-
-    statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
-    statusMessage.innerHTML = `
-        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-        </svg>
-        <p class="font-medium text-center">${message}</p>
-    `;
-
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
-
-    if (autoHide) {
-        setTimeout(() => {
-            resultContainer.classList.add('hidden');
-        }, hideDelay);
-    }
-}
-
-/**
- * Ekranda bir hata mesajı gösterir.
- * @param {string} message - Gösterilecek hata mesajı.
- * @param {boolean} showResetButton - Kullanıcının arayüzü sıfırlayabileceği bir "Tamam" butonu gösterilsin mi?
- * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
- */
-export function showError(message, showResetButton = false, onReset = () => {}) {
-    const resultContainer = document.getElementById('result-container');
-    const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
-
-    if (!resultContainer || !statusMessage || !solutionOutput) return;
-
-    statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg';
-    statusMessage.innerHTML = `<p class="font-medium text-center">${message}</p>`;
-
-    if (showResetButton) {
-        const okButton = document.createElement('button');
-        okButton.textContent = 'Tamam';
-        okButton.className = 'btn btn-primary mt-3 w-full max-w-xs';
-        okButton.onclick = onReset;
-        statusMessage.appendChild(okButton);
-    }
-
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
 }
 
 /**

@@ -854,8 +854,28 @@ async function renderApp(state) {
         console.log('Rendering full solution view with Advanced Math Renderer');
         await renderFullSolution(problem.solution);
     } else if (isVisible('interactive')) {
-        console.log('Rendering NEW interactive view');
-        await renderInteractiveSolution(problem.solution); // ← BU ÇALIŞMALI!
+        console.log('Rendering interactive view - DÜZELTME başlıyor');
+        
+        // DÜZELTME: İnteraktif view'ı güvenli şekilde render et
+        try {
+            // Loading göster
+            showLoading("İnteraktif çözüm hazırlanıyor...");
+            
+            // Kısa bir bekleme ile diğer render işlemlerinin tamamlanmasını sağla
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // İnteraktif çözümü render et
+            await renderInteractiveSolution(problem.solution);
+            
+            // Loading'i gizle
+            showLoading(false);
+            
+        } catch (error) {
+            console.error('İnteraktif view render hatası:', error);
+            showLoading(false);
+            showError('İnteraktif çözüm yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', false);
+        }
+        
     } else if (isVisible('solving')) {
         console.log('Rendering solving view with Smart Guide');
         await renderSmartGuideWorkspace();
@@ -868,6 +888,7 @@ async function renderApp(state) {
         elements['question'].innerHTML = '';
     }
 }
+// Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
     // Klavye input'unu temizle
     const keyboardInput = document.getElementById('keyboard-input');
@@ -879,21 +900,6 @@ function clearInputAreas() {
     const guideInput = document.getElementById('guide-text-input');
     if (guideInput) {
         guideInput.value = '';
-    }
-    
-    // İnteraktif çözüm sistemini temizle
-    if (typeof interactiveSolutionManager !== 'undefined') {
-        interactiveSolutionManager.reset();
-    }
-    
-    // Matematik sembol paneli'ni temizle
-    if (typeof mathSymbolPanel !== 'undefined') {
-        mathSymbolPanel.destroy();
-    }
-    
-    // Canvas'ları temizle
-    if (canvasManager.isCanvasReady('handwritingCanvas')) {
-        canvasManager.clear('handwritingCanvas', false);
     }
     
     // Fotoğraf preview'ını temizle
@@ -913,6 +919,7 @@ function clearInputAreas() {
     if (imageUploader) imageUploader.value = '';
     if (cameraUploader) cameraUploader.value = '';
 }
+
 
 async function renderSmartGuideWorkspace() {
     const container = elements['step-by-step-container'];
@@ -1997,7 +2004,7 @@ async function renderFullSolution(solution) {
 }
 
 async function renderInteractiveSolution(solution) {
-    console.log('renderInteractiveSolution çağrıldı');
+    console.log('renderInteractiveSolution çağrıldı - DÜZELTME versiyonu');
     
     if (!solution || !solution.adimlar || !solution.adimlar.length) {
         elements['solution-output'].innerHTML = `
@@ -2009,18 +2016,44 @@ async function renderInteractiveSolution(solution) {
     }
 
     try {
+        console.log('İnteraktif çözüm sistemi başlatılıyor...');
+        
+        // DÜZELTME: Sistemi tamamen sıfırla
+        interactiveSolutionManager.reset();
+        
+        // Kısa bekleme
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         // İnteraktif çözüm sistemini başlat
         const initResult = interactiveSolutionManager.initializeInteractiveSolution(solution);
+        console.log('İnteraktif sistem başlatıldı:', initResult);
+        
+        // Kısa bekleme
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         // İlk adım seçeneklerini oluştur
         const firstStepData = interactiveSolutionManager.generateStepOptions(0);
+        console.log('İlk adım verileri oluşturuldu:', firstStepData);
         
         if (!firstStepData) {
             throw new Error('İlk adım verileri oluşturulamadı');
         }
         
-        // Ana container'ı render et
+        // DÜZELTME: Ana container'ı güvenli şekilde render et
+        console.log('İnteraktif adım render ediliyor...');
         await renderInteractiveStep(firstStepData);
+        
+        // Kısa bekleme sonrası doğrulama
+        setTimeout(() => {
+            const optionsContainer = document.getElementById('interactive-options-container');
+            const options = optionsContainer ? optionsContainer.children : [];
+            console.log('Render doğrulaması - seçenek sayısı:', options.length);
+            
+            if (options.length === 0) {
+                console.warn('Seçenekler kayboldu, yeniden render edilecek');
+                renderInteractiveStep(firstStepData);
+            }
+        }, 200);
         
     } catch (error) {
         console.error('İnteraktif çözüm başlatma hatası:', error);
@@ -2034,9 +2067,58 @@ async function renderInteractiveSolution(solution) {
 
 // Adım render fonksiyonu
 async function renderInteractiveStep(stepData) {
+    console.log('renderInteractiveStep başlıyor - DÜZELTME versiyonu:', stepData);
+    
+    if (!stepData || !stepData.options) {
+        console.error('Step data eksik:', stepData);
+        return;
+    }
+    
     const progress = (stepData.stepNumber / stepData.totalSteps) * 100;
     
-    elements['solution-output'].innerHTML = `
+    // DÜZELTME: innerHTML'i güvenli şekilde ayarla
+    const solutionOutput = elements['solution-output'];
+    
+    if (!solutionOutput) {
+        console.error('solution-output elementi bulunamadı');
+        return;
+    }
+    
+    // Önce container'ı temizle
+    solutionOutput.innerHTML = '';
+    
+    // DÜZELTME: HTML'i parça parça oluştur
+    const htmlContent = generateInteractiveStepHTML(stepData, progress);
+    
+    // HTML'i ayarla
+    solutionOutput.innerHTML = htmlContent;
+    
+    // DÜZELTME: DOM'un hazır olmasını bekle
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Event listener'ları kur
+    console.log('Event listener\'ları kuruluyor...');
+    setupInteractiveSolutionListeners(stepData);
+    
+    // DÜZELTME: Math render'ı ayrı bir task olarak çalıştır
+    setTimeout(async () => {
+        try {
+            console.log('Math rendering başlıyor...');
+            await renderMathInContainer(solutionOutput, false);
+            console.log('Math rendering tamamlandı');
+            
+            // Final doğrulama
+            const optionsContainer = document.getElementById('interactive-options-container');
+            if (optionsContainer) {
+                console.log('Final doğrulama - seçenek sayısı:', optionsContainer.children.length);
+            }
+        } catch (renderError) {
+            console.error('Math render hatası:', renderError);
+        }
+    }, 150);
+}
+function generateInteractiveStepHTML(stepData, progress) {
+    return `
         <div class="interactive-solution-workspace p-6 bg-white rounded-lg shadow-md">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800">İnteraktif Çözüm</h3>
@@ -2093,7 +2175,7 @@ async function renderInteractiveStep(stepData) {
                 <!-- Uyarı mesajları buraya gelecek -->
             </div>
             
-            <!-- Seçenekler -->
+            <!-- Seçenekler - DÜZELTME: Daha güvenli HTML -->
             <div class="options-section mb-6">
                 <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2103,18 +2185,7 @@ async function renderInteractiveStep(stepData) {
                     Doğru çözüm adımını seçin:
                 </h4>
                 <div class="options-grid space-y-3" id="interactive-options-container">
-                    ${stepData.options.map((option, index) => `
-                        <label class="option-label flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all duration-200" data-option-id="${option.displayId}">
-                            <input type="radio" name="interactive-step-${stepData.stepNumber}" value="${option.displayId}" class="sr-only">
-                            <div class="option-letter w-8 h-8 bg-gray-200 text-gray-700 rounded-full flex items-center justify-center font-bold text-sm mr-3 mt-0.5">
-                                ${String.fromCharCode(65 + index)}
-                            </div>
-                            <div class="option-content flex-1">
-                                <div class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}" id="option-text-${option.displayId}"></div>
-                                ${option.latex ? `<div class="text-sm text-gray-600 mt-1 latex-content" data-latex="${escapeHtml(option.latex)}" id="option-latex-${option.displayId}"></div>` : ''}
-                            </div>
-                        </label>
-                    `).join('')}
+                    ${generateOptionsHTML(stepData)}
                 </div>
             </div>
             
@@ -2151,19 +2222,32 @@ async function renderInteractiveStep(stepData) {
             </div>
         </div>
     `;
-    
-    // Event listener'ları kur
-    setupInteractiveSolutionListeners(stepData);
-    
-    // Advanced Math Renderer ile render et
-    setTimeout(async () => {
-        await renderMathInContainer(elements['solution-output'], false);
-    }, 50);
-
-
 }
 
-
+function generateOptionsHTML(stepData) {
+    if (!stepData.options || !Array.isArray(stepData.options)) {
+        console.error('Options verisi eksik:', stepData);
+        return '<p class="text-red-600">Seçenekler yüklenemedi</p>';
+    }
+    
+    return stepData.options.map((option, index) => {
+        const optionLetter = String.fromCharCode(65 + index);
+        const optionId = option.displayId !== undefined ? option.displayId : index;
+        
+        return `
+            <label class="option-label flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all duration-200" data-option-id="${optionId}">
+                <input type="radio" name="interactive-step-${stepData.stepNumber}" value="${optionId}" class="sr-only">
+                <div class="option-letter w-8 h-8 bg-gray-200 text-gray-700 rounded-full flex items-center justify-center font-bold text-sm mr-3 mt-0.5">
+                    ${optionLetter}
+                </div>
+                <div class="option-content flex-1">
+                    <div class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}" id="option-text-${optionId}"></div>
+                    ${option.latex ? `<div class="text-sm text-gray-600 mt-1 latex-content" data-latex="${escapeHtml(option.latex)}" id="option-latex-${optionId}"></div>` : ''}
+                </div>
+            </label>
+        `;
+    }).join('');
+}
 
 function shuffleArray(array) {
     const shuffled = [...array];
@@ -2233,6 +2317,7 @@ function setupInteractiveSolutionListeners(stepData) {
         });
     }
 }
+// İnteraktif çözüm için düzeltilmiş submission handler
 async function handleInteractiveSubmission() {
     const currentState = interactiveSolutionManager.getCurrentState();
     const stepNumber = currentState.currentStep;
@@ -2279,14 +2364,39 @@ async function handleInteractiveSubmission() {
             // UI'yi geri yükle
             restoreUIState(submitBtn, optionLabels, originalButtonText);
             
-            showError(result.error, false);
-            
+            // DÜZELTME: showResetToSetup durumunda özel işlem
             if (result.shouldResetToSetup) {
-                setTimeout(() => {
-                    interactiveSolutionManager.reset();
-                    stateManager.setView('setup');
-                    showError("Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.", true);
-                }, 2000);
+                // Tamam butonu ile birlikte hata göster
+                showError(result.error, true, () => {
+                    console.log('Tamam butonuna tıklandı - Setup view\'a geçiliyor');
+                    
+                    try {
+                        // İnteraktif çözüm sistemini sıfırla
+                        interactiveSolutionManager.reset();
+                        
+                        // State manager ile setup view'a geç
+                        if (window.stateManager) {
+                            window.stateManager.setView('setup');
+                        } else if (window.stateManager) {
+                            stateManager.setView('setup');
+                        }
+                        
+                        // Input alanlarını temizle
+                        clearInputAreas();
+                        
+                        // Başarı mesajı göster
+                        setTimeout(() => {
+                            showSuccess("Yeni soru yükleyerek tekrar deneyebilirsiniz. Her soru için yeniden 3 deneme hakkınız olacak.", false);
+                        }, 500);
+                        
+                    } catch (resetError) {
+                        console.error('Reset işlemi hatası:', resetError);
+                        // Son çare olarak sayfa yenileme
+                        window.location.reload();
+                    }
+                });
+            } else {
+                showError(result.error, false);
             }
             return;
         }
@@ -2314,10 +2424,35 @@ async function handleInteractiveSubmission() {
             
             setTimeout(async () => {
                 if (result.shouldResetToSetup) {
-                    // Tüm deneme hakları bitti
-                    interactiveSolutionManager.reset();
-                    stateManager.setView('setup');
-                    showError("Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.", true);
+                    // DÜZELTME: Tamam butonu ile setup'a yönlendirme
+                    showError("Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.", true, () => {
+                        console.log('Tamam butonuna tıklandı - Sistem sıfırlanıyor');
+                        
+                        try {
+                            // Sistemi sıfırla
+                            interactiveSolutionManager.reset();
+                            
+                            // Setup view'a geç
+                            if (window.stateManager) {
+                                window.stateManager.setView('setup');
+                            } else if (stateManager) {
+                                stateManager.setView('setup');
+                            }
+                            
+                            // Input alanlarını temizle
+                            clearInputAreas();
+                            
+                            // Bilgilendirme mesajı
+                            setTimeout(() => {
+                                showSuccess("Yeni soru yükleyerek tekrar deneyebilirsiniz.", false);
+                            }, 500);
+                            
+                        } catch (resetError) {
+                            console.error('Reset işlemi hatası:', resetError);
+                            window.location.reload();
+                        }
+                    });
+                    
                 } else if (result.nextStep) {
                     // Baştan başla veya mevcut adımı tekrarla
                     console.log('Yeni adım render ediliyor:', result.nextStep);
@@ -2348,7 +2483,7 @@ async function handleInteractiveSubmission() {
         showError("Seçim işlenirken bir hata oluştu. Lütfen tekrar deneyin.", false);
     }
 }
-// UI durumunu geri yükleme yardımcı fonksiyonu
+// UI durumunu geri yükleme yardımcı fonksiyonu (değişiklik yok)
 function restoreUIState(submitBtn, optionLabels, originalButtonText) {
     // Buton durumunu geri al
     if (submitBtn) {
