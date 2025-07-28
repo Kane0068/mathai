@@ -797,51 +797,27 @@ async function renderApp(state) {
     const { view, inputMode, handwritingInputType } = ui;
     const isVisible = (v) => v === view;
 
-    // DÜZELTME 1: Tüm view containerlarını doğru şekilde kontrol et
-    elements['question-setup-area'].classList.toggle('hidden', !isVisible('setup'));
+    // Görünüm kontrollerini güncelle
+    elements['question-setup-area'].classList.remove('hidden');
     elements['question-setup-area'].classList.toggle('disabled-area', !isVisible('setup'));
     
-    // DÜZELTME 2: result-container'ı sadece gerekli view'larda göster
-    const resultContainer = elements['result-container'];
-    const solutionOutput = elements['solution-output'];
-    
-    if (isVisible('interactive')) {
-        // İnteraktif view için özel ayarlar
-        resultContainer.classList.remove('hidden');
-        solutionOutput.classList.remove('hidden');
-        
-        // Diğer containerları gizle
-        elements['solving-workspace'].classList.add('hidden');
-        
-    } else if (isVisible('fullSolution')) {
-        // Tam çözüm view için
-        resultContainer.classList.remove('hidden');
-        solutionOutput.classList.remove('hidden');
-        elements['solving-workspace'].classList.add('hidden');
-        
-    } else if (isVisible('solving')) {
-        // Smart guide view için
-        resultContainer.classList.add('hidden');
-        solutionOutput.classList.add('hidden');
-        elements['solving-workspace'].classList.remove('hidden');
-        
-    } else {
-        // Diğer view'lar için gizle
-        resultContainer.classList.add('hidden');
-        solutionOutput.classList.add('hidden');
-        elements['solving-workspace'].classList.add('hidden');
-    }
-    
-    // Question summary ve action buttons kontrolü
+    // YENİ KONTROL: View'lara göre element görünürlüğü
     if (isVisible('setup')) {
         elements['question-summary-container'].classList.add('hidden');
         elements['top-action-buttons'].classList.add('hidden');
     } else {
+        // Diğer view'larda solution varsa göster
         elements['question-summary-container'].classList.toggle('hidden', !problem.solution);
         elements['top-action-buttons'].classList.toggle('hidden', !isVisible('summary'));
     }
     
-    // Go back button kontrolü
+    elements['solving-workspace'].classList.toggle('hidden', !isVisible('solving'));
+    elements['result-container'].classList.toggle('hidden', !['fullSolution', 'interactive'].includes(view));
+    
+    if (elements['solution-output']) {
+        elements['solution-output'].classList.toggle('hidden', !['fullSolution', 'interactive'].includes(view));
+    }
+    
     if (elements['goBackBtn']) {
         elements['goBackBtn'].classList.toggle('hidden', !['fullSolution', 'interactive', 'solving'].includes(view));
     }
@@ -877,21 +853,16 @@ async function renderApp(state) {
     } else if (isVisible('fullSolution')) {
         console.log('Rendering full solution view with Advanced Math Renderer');
         await renderFullSolution(problem.solution);
-        
     } else if (isVisible('interactive')) {
         console.log('Rendering interactive view - DÜZELTME başlıyor');
         
-        // DÜZELTME 3: İnteraktif view'ı daha güvenli şekilde render et
+        // DÜZELTME: İnteraktif view'ı güvenli şekilde render et
         try {
-            // Önce container'ın doğru şekilde görünür olduğunu garanti et
-            resultContainer.classList.remove('hidden');
-            solutionOutput.classList.remove('hidden');
-            
             // Loading göster
             showLoading("İnteraktif çözüm hazırlanıyor...");
             
-            // DOM'un hazır olmasını bekle
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Kısa bir bekleme ile diğer render işlemlerinin tamamlanmasını sağla
+            await new Promise(resolve => setTimeout(resolve, 100));
             
             // İnteraktif çözümü render et
             await renderInteractiveSolution(problem.solution);
@@ -917,7 +888,6 @@ async function renderApp(state) {
         elements['question'].innerHTML = '';
     }
 }
-
 // Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
     // Klavye input'unu temizle
@@ -2051,28 +2021,15 @@ async function renderInteractiveSolution(solution) {
         // DÜZELTME: Sistemi tamamen sıfırla
         interactiveSolutionManager.reset();
         
-        // DOM elementinin varlığını kontrol et
-        const solutionOutput = elements['solution-output'];
-        if (!solutionOutput) {
-            throw new Error('solution-output elementi bulunamadı');
-        }
-        
-        // Container'ın görünür olduğunu garanti et
-        solutionOutput.classList.remove('hidden');
-        const resultContainer = elements['result-container'];
-        if (resultContainer) {
-            resultContainer.classList.remove('hidden');
-        }
-        
         // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         // İnteraktif çözüm sistemini başlat
         const initResult = interactiveSolutionManager.initializeInteractiveSolution(solution);
         console.log('İnteraktif sistem başlatıldı:', initResult);
         
         // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         // İlk adım seçeneklerini oluştur
         const firstStepData = interactiveSolutionManager.generateStepOptions(0);
@@ -2086,28 +2043,17 @@ async function renderInteractiveSolution(solution) {
         console.log('İnteraktif adım render ediliyor...');
         await renderInteractiveStep(firstStepData);
         
-        // Final kontrol - container'ın görünür olduğunu garanti et
+        // Kısa bekleme sonrası doğrulama
         setTimeout(() => {
-            const containers = [
-                elements['result-container'],
-                elements['solution-output']
-            ];
-            
-            containers.forEach(container => {
-                if (container) {
-                    container.classList.remove('hidden');
-                }
-            });
-            
             const optionsContainer = document.getElementById('interactive-options-container');
             const options = optionsContainer ? optionsContainer.children : [];
-            console.log('Final kontrol - seçenek sayısı:', options.length);
+            console.log('Render doğrulaması - seçenek sayısı:', options.length);
             
             if (options.length === 0) {
                 console.warn('Seçenekler kayboldu, yeniden render edilecek');
                 renderInteractiveStep(firstStepData);
             }
-        }, 300);
+        }, 200);
         
     } catch (error) {
         console.error('İnteraktif çözüm başlatma hatası:', error);
@@ -2117,32 +2063,6 @@ async function renderInteractiveSolution(solution) {
                 <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
             </div>`;
     }
-}
-
-function debugViewState() {
-    const currentView = stateManager.getStateValue('ui').view;
-    const containers = {
-        'result-container': elements['result-container'],
-        'solution-output': elements['solution-output'],
-        'solving-workspace': elements['solving-workspace'],
-        'question-setup-area': elements['question-setup-area']
-    };
-    
-    console.log('=== VIEW DEBUG ===');
-    console.log('Current view:', currentView);
-    
-    Object.entries(containers).forEach(([name, element]) => {
-        if (element) {
-            console.log(`${name}:`, {
-                hidden: element.classList.contains('hidden'),
-                classes: element.className,
-                innerHTML: element.innerHTML.substring(0, 100) + '...'
-            });
-        } else {
-            console.log(`${name}: ELEMENT NOT FOUND`);
-        }
-    });
-    console.log('=== END DEBUG ===');
 }
 
 // Adım render fonksiyonu
@@ -2914,7 +2834,6 @@ window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
 window.renderMath = renderMath;
-window.debugViewState = debugViewState;
 
 // --- EXPORTS ---
 export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
