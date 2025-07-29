@@ -9,7 +9,8 @@ import {
     renderMathInContainer,
     renderSmartContent,
     waitForRenderSystem,
-    showAnimatedLoading
+    showAnimatedLoading,
+    showInViewNotification  // ✅ YENİ EKLEME
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
@@ -242,7 +243,112 @@ function setupEventListeners() {
     // Ana menüye dönme butonları için event delegation
     document.addEventListener('click', (event) => {
         if (event.target && event.target.id === 'back-to-main-menu-btn') {
-            stateManager.setView('summary');
+            event.preventDefault();
+            event.stopPropagation();
+            
+            console.log('🔄 Global back-to-main-menu button clicked');
+            
+            try {
+                // Hangi view'dayız kontrol et
+                const currentView = stateManager ? stateManager.getStateValue('ui').view : 'unknown';
+                console.log(`📍 Current view: ${currentView}`);
+                
+                // View'a göre temizlik yap
+                if (currentView === 'interactive') {
+                    console.log('🧹 Interactive view cleanup başlıyor...');
+                    
+                    // Interactive manager'ı sıfırla
+                    if (window.interactiveSolutionManager) {
+                        window.interactiveSolutionManager.reset();
+                        console.log('✅ Interactive solution manager reset');
+                    }
+                    
+                    // Interactive DOM'u temizle
+                    clearInteractiveDOM();
+                    
+                } else if (currentView === 'solving') {
+                    console.log('🧹 Solving view cleanup başlıyor...');
+                    
+                    // Smart guide'ı sıfırla
+                    if (window.smartGuide) {
+                        window.smartGuide.reset();
+                        console.log('✅ Smart guide reset');
+                    }
+                    
+                } else if (currentView === 'fullSolution') {
+                    console.log('🧹 Full solution view cleanup başlıyor...');
+                    
+                    // Solution output'u temizle
+                    const solutionOutput = document.getElementById('solution-output');
+                    if (solutionOutput) {
+                        solutionOutput.innerHTML = '';
+                    }
+                }
+                
+                // State'i summary'ye çevir
+                if (stateManager) {
+                    stateManager.setView('summary');
+                    console.log('✅ State set to summary');
+                    
+                    // Success mesajı
+                    setTimeout(() => {
+                        if (window.showSuccess) {
+                            window.showSuccess("Ana menüye başarıyla döndünüz.", true, 2000);
+                        }
+                    }, 300);
+                } else {
+                    console.error('❌ stateManager bulunamadı!');
+                }
+                
+            } catch (error) {
+                console.error('❌ Global back button error:', error);
+                
+                // Fallback
+                if (confirm('Bir hata oluştu. Sayfayı yenilemek ister misiniz?')) {
+                    window.location.reload();
+                }
+            }
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        
+        if (target.id === 'interactive-new-problem-btn') {
+            event.preventDefault();
+            console.log('🎯 Yeni problem button clicked');
+            
+            if (window.interactiveSolutionManager) {
+                window.interactiveSolutionManager.reset();
+            }
+            if (stateManager) {
+                stateManager.reset();
+                stateManager.setView('setup');
+            }
+        }
+        
+        if (target.id === 'interactive-review-solution-btn') {
+            event.preventDefault();
+            console.log('📋 Review solution button clicked');
+            
+            if (window.interactiveSolutionManager) {
+                window.interactiveSolutionManager.reset();
+            }
+            if (stateManager) {
+                stateManager.setView('fullSolution');
+            }
+        }
+        
+        if (target.id === 'interactive-try-step-by-step-btn') {
+            event.preventDefault();
+            console.log('📝 Try step by step button clicked');
+            
+            if (window.interactiveSolutionManager) {
+                window.interactiveSolutionManager.reset();
+            }
+            if (stateManager) {
+                stateManager.setView('solving');
+            }
         }
     });
 }
@@ -259,18 +365,27 @@ async function initializeSmartGuide() {
         showLoading("İnteraktif çözüm başlatılıyor...");
 
         await smartGuide.initializeGuidance(solutionData);
+        
+        // ✅ DÜZELTME: View değişikliğini önce yap
         stateManager.setView('solving');
-
-        showSuccess("İnteraktif çözüm hazır! Adım adım çözüme başlayabilirsiniz.");
+        
+        // ✅ DÜZELTME: showLoading'i önce kapat, sonra success göster
+        showLoading(false);
+        
+        // ✅ YENİ: Kısa gecikme ile success mesajı
+        setTimeout(() => {
+            showSuccess("İnteraktif çözüm hazır! Adım adım çözüme başlayabilirsiniz.", true, 4000);
+        }, 500);
 
     } catch (error) {
+        showLoading(false); // Loading'i kapat
+        
         errorHandler.handleError(error, {
             operation: 'initializeSmartGuide',
             fallbackMessage: 'İnteraktif çözüm başlatılamadı'
         });
+        
         showError("İnteraktif çözüm başlatılırken bir hata oluştu. Lütfen tekrar deneyin.", false);
-    } finally {
-        showLoading(false);
     }
 }
 
@@ -743,17 +858,33 @@ async function renderApp(state) {
         elements['query-count'].textContent = limit - (user.dailyQueryCount || 0);
     }
     
-    // 2. Loading ve Error Durumları
-    showLoading(ui.isLoading ? ui.loadingMessage : false);
-    elements['question-setup-area'].classList.toggle('disabled-area', ui.isLoading);
+    // ✅ DÜZELTME: Loading ve Error Durumları - View kontrolü ile
+    const { view } = ui;
     
+    // Loading durumu
+    if (ui.isLoading) {
+        showLoading(ui.loadingMessage);
+        elements['question-setup-area'].classList.add('disabled-area');
+    } else {
+        showLoading(false);
+        elements['question-setup-area'].classList.remove('disabled-area');
+    }
+    
+    // Error durumu - sadece setup ve summary view'larında normal error göster
     if (ui.error) {
-        showError(ui.error, true, () => stateManager.clearError());
+        if (['setup', 'summary'].includes(view)) {
+            showError(ui.error, true, () => stateManager.clearError());
+        } else {
+            // Çözüm view'larında in-view notification kullan
+            showInViewNotification(ui.error, 'error', true, 5000);
+            stateManager.clearError(); // Error'ı temizle
+        }
     }
 
     // 3. Ana Görünüm (View) Yönetimi
-    const { view, inputMode, handwritingInputType } = ui;
+    const { inputMode, handwritingInputType } = ui;
     const isVisible = (v) => v === view;
+
 
     // ✅ FIX: Setup area görünürlüğü
     elements['question-setup-area'].classList.remove('hidden');
@@ -771,21 +902,30 @@ async function renderApp(state) {
     // ✅ FIX: Solving workspace
     elements['solving-workspace'].classList.toggle('hidden', !isVisible('solving'));
     
-    // ✅ FIX: Result container - EN ÖNEMLİ DÜZELTME
+    // ✅ KRITIK DÜZELTME: Result container kontrolü
     if (isVisible('fullSolution') || isVisible('interactive')) {
         // Bu view'larda result-container'ı kesinlikle göster
         elements['result-container'].classList.remove('hidden');
-        elements['result-container'].style.display = 'block'; // Force göster
+        elements['result-container'].style.display = 'block';
         
         if (elements['solution-output']) {
             elements['solution-output'].classList.remove('hidden');
-            elements['solution-output'].style.display = 'block'; // Force göster
+            elements['solution-output'].style.display = 'block';
         }
     } else {
-        // Diğer view'larda gizle
+        // ✅ YENİ: Diğer view'larda (summary, setup, solving) gizle ve temizle
         elements['result-container'].classList.add('hidden');
+        elements['result-container'].style.display = 'none';
+        
         if (elements['solution-output']) {
             elements['solution-output'].classList.add('hidden');
+            elements['solution-output'].style.display = 'none';
+            
+            // ✅ EKSTRA: İnteraktif view'dan çıkıyorsak içeriği temizle
+            if (view === 'summary' || view === 'setup') {
+                elements['solution-output'].innerHTML = '';
+                console.log('🧹 Solution output içeriği temizlendi - view:', view);
+            }
         }
     }
     
@@ -868,6 +1008,9 @@ async function renderApp(state) {
     } else if (isVisible('setup')) {
         elements['question'].innerHTML = '';
     }
+    
+    // ✅ EKSTRA: View değişikliği sonrası konsol log'u
+    console.log(`✅ View render tamamlandı: ${view}, containers hidden: ${view === 'summary' || view === 'setup'}`);
 }
 // Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
@@ -1759,7 +1902,7 @@ async function handleNewProblem(sourceType) {
 
         if (!await handleQueryDecrement()) return;
 
-        // Animasyonlu yükleme mesajları
+        // ✅ DÜZELTME: Animasyonlu yükleme mesajları - daha kısa sürelerle
         const analysisSteps = [
             { title: "Soru içerik kontrolü yapılıyor", description: "Yapay zeka soruyu analiz ediyor..." },
             { title: "Matematiksel ifadeler tespit ediliyor", description: "Formüller ve denklemler çözümleniyor..." },
@@ -1768,7 +1911,8 @@ async function handleNewProblem(sourceType) {
             { title: "Render sistemi hazırlanıyor", description: "Advanced Math Renderer ile optimize ediliyor..." }
         ];
 
-        showAnimatedLoading(analysisSteps, 1500);
+        // ✅ DÜZELTME: Daha kısa süreli animasyon
+        showAnimatedLoading(analysisSteps, 800); // 1500'den 800'e düşürdük
 
         const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
         const payloadParts = [{ text: promptText }];
@@ -1779,25 +1923,33 @@ async function handleNewProblem(sourceType) {
         const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
 
         if (solution) {
+            // ✅ DÜZELTME: Loading'i önce kapat
+            showLoading(false);
+            
             // YENİ EKLEME: SmartGuide'ı da sıfırla (yeni problem için)
             smartGuide.reset();
 
             stateManager.setSolution(solution);
             stateManager.setView('summary');
-            showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", false);
+            
+            // ✅ DÜZELTME: View değiştikten sonra success göster
+            setTimeout(() => {
+                showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", true, 4000);
+            }, 300);
 
             await FirestoreManager.incrementQueryCount();
         } else {
+            showLoading(false);
             showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
         }
     } catch (error) {
+        showLoading(false); // ✅ DÜZELTME: Hata durumunda da loading'i kapat
+        
         errorHandler.handleError(error, {
             operation: 'handleNewProblem',
             context: { sourceType }
         });
         showError("Problem analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.", false);
-    } finally {
-        showLoading(false);
     }
 }
 
@@ -2409,17 +2561,56 @@ function setupOtherInteractiveButtons() {
         });
     }
 
-    // Back to main menu
+    // ✅ DÜZELTME: Back to main menu button - Daha güvenli event binding
     const backBtn = document.getElementById('back-to-main-menu-btn');
     if (backBtn) {
+        // Eski listener'ları temizle
         backBtn.replaceWith(backBtn.cloneNode(true));
         const newBackBtn = document.getElementById('back-to-main-menu-btn');
-        newBackBtn.addEventListener('click', () => {
-            interactiveSolutionManager.reset();
-            if (window.stateManager) {
-                window.stateManager.setView('summary');
+        
+        newBackBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('🔄 Ana menüye dön butonuna basıldı - interaktif çözümden');
+            
+            try {
+                // 1. İnteraktif sistemi tamamen sıfırla
+                interactiveSolutionManager.reset();
+                console.log('✅ Interactive solution manager reset');
+                
+                // 2. Containers'ı temizle ve gizle
+                clearInteractiveDOM();
+                console.log('✅ Interactive DOM cleared');
+                
+                // 3. State'i summary'ye çevir (güvenli şekilde)
+                if (window.stateManager) {
+                    window.stateManager.setView('summary');
+                    console.log('✅ State set to summary');
+                } else {
+                    console.error('❌ stateManager bulunamadı!');
+                }
+                
+                // 4. Success mesajı göster
+                setTimeout(() => {
+                    if (window.showSuccess) {
+                        window.showSuccess("Ana menüye başarıyla döndünüz.", true, 2000);
+                    }
+                }, 300);
+                
+            } catch (error) {
+                console.error('❌ Ana menüye dönüş hatası:', error);
+                
+                // Fallback: Sayfa yenile
+                if (confirm('Bir hata oluştu. Sayfayı yenilemek ister misiniz?')) {
+                    window.location.reload();
+                }
             }
         });
+        
+        console.log('✅ Back to main menu button listener kuruldu');
+    } else {
+        console.warn('⚠️ back-to-main-menu-btn bulunamadı');
     }
 }
 
@@ -2626,39 +2817,47 @@ async function handleInteractiveForceReset(message) {
     }
 }
 function clearInteractiveDOM() {
-    // Solution output'u temizle
+    console.log('🧹 Interaktif DOM temizleniyor...');
+    
+    // Solution output'u tamamen temizle
     const solutionOutput = document.getElementById('solution-output');
     if (solutionOutput) {
         solutionOutput.innerHTML = '';
+        solutionOutput.classList.add('hidden');
+        console.log('✅ Solution output cleared');
     }
     
-    // Result container'ı temizle
+    // Result container'ı gizle
     const resultContainer = document.getElementById('result-container');
     if (resultContainer) {
         resultContainer.classList.add('hidden');
+        resultContainer.style.display = 'none';
+        console.log('✅ Result container hidden');
     }
     
     // Status message'ı temizle
     const statusMessage = document.getElementById('status-message');
     if (statusMessage) {
         statusMessage.innerHTML = '';
+        console.log('✅ Status message cleared');
     }
-}
-
-function hideInteractiveContainers() {
-    const containerIds = [
-        'result-container',
-        'solution-output',
-        'interactive-result-container'
+    
+    // Interactive specific containers
+    const interactiveContainers = [
+        'interactive-options-container',
+        'interactive-result-container',
+        'interactive-warning-container'
     ];
     
-    containerIds.forEach(id => {
+    interactiveContainers.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
+            element.innerHTML = '';
             element.classList.add('hidden');
-            element.style.display = 'none'; // Force gizle
         }
     });
+    
+    console.log('✅ Tüm interaktif DOM elementleri temizlendi');
 }
 function showResetNotification(message) {
     const notification = document.createElement('div');
@@ -3044,7 +3243,105 @@ window.setupInteractiveEventListeners = setupInteractiveEventListeners;
 window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
+window.showInViewNotification = showInViewNotification;
+// index.js dosyasının sonuna bu debug fonksiyonlarını ekleyin
 
+// ✅ DEBUG FONKSİYONLARI
+window.debugInteractive = function() {
+    console.group('🔍 Interactive Debug Info');
+    
+    // State kontrolü
+    console.log('📊 Current State:');
+    if (window.stateManager) {
+        const state = window.stateManager.getStateValue('ui');
+        console.log('  - View:', state.view);
+        console.log('  - Loading:', state.isLoading);
+        console.log('  - Error:', state.error);
+    } else {
+        console.log('  ❌ stateManager not found');
+    }
+    
+    // DOM elementleri kontrolü
+    console.log('🏗️ DOM Elements:');
+    const elements = [
+        'result-container',
+        'solution-output',
+        'back-to-main-menu-btn',
+        'interactive-options-container'
+    ];
+    
+    elements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            console.log(`  - ${id}:`, {
+                exists: true,
+                hidden: el.classList.contains('hidden'),
+                display: el.style.display,
+                innerHTML: el.innerHTML.length + ' chars'
+            });
+        } else {
+            console.log(`  - ${id}: ❌ Not found`);
+        }
+    });
+    
+    // Interactive manager durumu
+    console.log('🎯 Interactive Manager:');
+    if (window.interactiveSolutionManager) {
+        console.log('  - Exists: ✅');
+        console.log('  - State:', window.interactiveSolutionManager.getCurrentState?.());
+    } else {
+        console.log('  - Exists: ❌');
+    }
+    
+    console.groupEnd();
+};
 
+// ✅ FORCE RESET FONKSİYONU
+window.forceResetToSummary = function() {
+    console.log('🔄 Force reset to summary başlıyor...');
+    
+    try {
+        // 1. Tüm manager'ları sıfırla
+        if (window.interactiveSolutionManager) {
+            window.interactiveSolutionManager.reset();
+            console.log('✅ Interactive manager reset');
+        }
+        
+        if (window.smartGuide) {
+            window.smartGuide.reset();
+            console.log('✅ Smart guide reset');
+        }
+        
+        // 2. DOM'u temizle
+        clearInteractiveDOM();
+        console.log('✅ DOM cleared');
+        
+        // 3. State'i zorla değiştir
+        if (window.stateManager) {
+            window.stateManager.setView('summary');
+            console.log('✅ State forced to summary');
+        }
+        
+        // 4. Success mesajı
+        setTimeout(() => {
+            if (window.showSuccess) {
+                window.showSuccess("Zorla ana menüye döndürüldü.", true, 3000);
+            }
+        }, 500);
+        
+        console.log('✅ Force reset completed');
+        
+    } catch (error) {
+        console.error('❌ Force reset error:', error);
+    }
+};
+
+// ✅ Konsol komutları bilgisi
+console.log(`
+🔧 Debug Komutları:
+- debugInteractive() : Mevcut durumu kontrol et
+- forceResetToSummary() : Zorla ana menüye dön
+- clearInteractiveDOM() : DOM'u temizle
+`);
 // --- EXPORTS ---
 export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };

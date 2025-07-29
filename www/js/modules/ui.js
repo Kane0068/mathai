@@ -45,30 +45,113 @@ export function showSuccess(message, autoHide = true, hideDelay = 3000) {
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // Eğer çözüm view'larındaysa (fullSolution, interactive, solving) başarı mesajını gösterme
+    // ✅ DÜZELTME: View kontrolünü daha akıllı yap
     const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
-    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
-        return; // Başarı mesajını gösterme
-    }
+    
+    // Setup ve summary view'larında normal gösterim
+    if (['setup', 'summary'].includes(currentView)) {
+        statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
+        statusMessage.innerHTML = `
+            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <p class="font-medium text-center">${message}</p>
+        `;
 
-    statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
-    statusMessage.innerHTML = `
-        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-        </svg>
-        <p class="font-medium text-center">${message}</p>
-    `;
+        resultContainer.classList.remove('hidden');
+        resultContainer.style.display = 'block';
+        solutionOutput.classList.add('hidden');
 
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
-
-    if (autoHide) {
-        setTimeout(() => {
-            resultContainer.classList.add('hidden');
-        }, hideDelay);
+        if (autoHide) {
+            setTimeout(() => {
+                resultContainer.classList.add('hidden');
+            }, hideDelay);
+        }
+    } else {
+        // Çözüm view'larında in-view notification
+        showInViewNotification(message, 'success', autoHide, hideDelay);
     }
 }
 
+function showInViewNotification(message, type = 'success', autoHide = true, hideDelay = 3000) {
+    // Mevcut bildirimi kaldır
+    const existingNotification = document.getElementById('in-view-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Renk ayarları
+    const colors = {
+        success: {
+            bg: 'bg-green-500',
+            text: 'text-white',
+            icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                   </svg>`
+        },
+        error: {
+            bg: 'bg-red-500',
+            text: 'text-white',
+            icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                   </svg>`
+        },
+        info: {
+            bg: 'bg-blue-500',
+            text: 'text-white',
+            icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                   </svg>`
+        }
+    };
+    
+    const colorScheme = colors[type] || colors.success;
+    
+    // Bildirim elementi oluştur
+    const notification = document.createElement('div');
+    notification.id = 'in-view-notification';
+    notification.className = `fixed top-4 right-4 ${colorScheme.bg} ${colorScheme.text} px-4 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center gap-3 max-w-sm">
+            <div class="flex-shrink-0">
+                ${colorScheme.icon}
+            </div>
+            <div class="flex-1">
+                <p class="text-sm font-medium">${message}</p>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 ml-2 ${colorScheme.text} hover:opacity-70 transition-opacity">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    // Sayfaya ekle
+    document.body.appendChild(notification);
+    
+    // Animasyonla göster
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Otomatik gizle
+    if (autoHide) {
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, hideDelay);
+    }
+    
+    return notification;
+}
 /**
  * Ekranda bir hata mesajı gösterir - DÜZELTME: Tamam butonu çalışır
  * @param {string} message - Gösterilecek hata mesajı.
@@ -82,7 +165,25 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // Temel hata mesajı HTML'i
+    // ✅ YENİ: View kontrolü ekle
+    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
+    
+    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
+        // Çözüm view'larında in-view notification kullan
+        showInViewNotification(message, 'error', !showResetButton, showResetButton ? 0 : 5000);
+        
+        // Reset button gerekiyorsa ayrı göster
+        if (showResetButton) {
+            setTimeout(() => {
+                if (confirm(message + '\n\nDevam etmek istiyor musunuz?')) {
+                    onReset();
+                }
+            }, 1000);
+        }
+        return;
+    }
+
+    // Normal view'larda standart error gösterim
     let errorHTML = `
         <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
             <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,7 +196,6 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
     statusMessage.className = '';
     statusMessage.innerHTML = errorHTML;
 
-    // DÜZELTME: Tamam butonu için ayrı element oluştur ve event listener ekle
     if (showResetButton) {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'mt-4 text-center';
@@ -104,7 +204,6 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
         okButton.textContent = 'Tamam';
         okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
         
-        // DÜZELTME: Event listener'ı doğru şekilde ekle
         okButton.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -112,11 +211,9 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
             try {
                 console.log('Tamam butonu tıklandı, onReset fonksiyonu çalıştırılıyor...');
                 
-                // Hata mesajını gizle
                 resultContainer.classList.add('hidden');
                 statusMessage.innerHTML = '';
                 
-                // onReset fonksiyonunu çalıştır
                 if (typeof onReset === 'function') {
                     onReset();
                 } else {
@@ -130,7 +227,6 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
         buttonContainer.appendChild(okButton);
         statusMessage.appendChild(buttonContainer);
         
-        // Butona otomatik focus ver
         setTimeout(() => {
             okButton.focus();
         }, 100);
@@ -147,40 +243,58 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
  * @param {Array} steps - Gösterilecek adımlar dizisi.
  * @param {number} stepDelay - Her adım arasındaki gecikme (ms).
  */
-export function showAnimatedLoading(steps, stepDelay = 1500) {
+export function showAnimatedLoading(steps, stepDelay = 1000) {
     const resultContainer = document.getElementById('result-container');
     const statusMessage = document.getElementById('status-message');
     const solutionOutput = document.getElementById('solution-output');
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
+    // ✅ DÜZELTME: Container'ları önce göster
     resultContainer.classList.remove('hidden');
+    resultContainer.style.display = 'block';
     solutionOutput.classList.add('hidden');
 
     let currentStep = 0;
 
     const showStep = () => {
+        // ✅ DÜZELTME: Adım tamamlandığında durma koşulu
         if (currentStep >= steps.length) {
-            resultContainer.classList.add('hidden');
+            // Son adımı biraz daha uzun göster, sonra normal loading'e geç
+            setTimeout(() => {
+                showLoading("Çözüm tamamlanıyor...");
+            }, stepDelay / 2);
             return;
         }
 
         const step = steps[currentStep];
+        
+        // ✅ DÜZELTME: Daha görünür ve renkli tasarım
         statusMessage.innerHTML = `
-            <div class="flex items-center justify-center space-x-3">
-                <div class="loader ease-linear rounded-full border-4 border-t-4 border-blue-200 h-8 w-8 animate-spin"></div>
-                <div class="flex flex-col">
-                    <p class="text-blue-600 font-medium">${step.title}</p>
-                    <p class="text-gray-500 text-sm">${step.description}</p>
+            <div class="flex items-center justify-center space-x-4 p-4">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-blue-200 h-10 w-10 animate-spin border-t-blue-600"></div>
+                <div class="flex flex-col text-left">
+                    <p class="text-blue-700 font-semibold text-base">${step.title}</p>
+                    <p class="text-gray-600 text-sm mt-1">${step.description}</p>
+                    <div class="mt-2 flex items-center">
+                        <div class="text-xs text-blue-600 font-medium">Adım ${currentStep + 1}/${steps.length}</div>
+                        <div class="ml-3 flex space-x-1">
+                            ${Array.from({length: steps.length}, (_, i) => 
+                                `<div class="w-2 h-2 rounded-full ${i <= currentStep ? 'bg-blue-500' : 'bg-gray-300'}"></div>`
+                            ).join('')}
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
-        statusMessage.className = 'flex items-center justify-center p-4 bg-blue-50 rounded-lg border border-blue-200';
+        
+        statusMessage.className = 'bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm';
 
         currentStep++;
         setTimeout(showStep, stepDelay);
     };
 
+    // ✅ DÜZELTME: Hemen başlat
     showStep();
 }
 
@@ -406,3 +520,5 @@ if (typeof window !== 'undefined') {
         waitForRenderSystem
     };
 }
+
+export { showInViewNotification };
