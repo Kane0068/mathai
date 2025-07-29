@@ -778,5 +778,5 @@ export class CanvasManager extends OptimizedCanvasManager {
 }
 
 // Export both classes for backward compatibility
-export { OptimizedCanvasManager };
+//export { OptimizedCanvasManager };
 export const canvasManager = new CanvasManager();
