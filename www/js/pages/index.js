@@ -16,9 +16,9 @@ import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
+import { enhancedMathRenderer } from './enhancedAdvancedMathRenderer.js';
 
 
 
@@ -3344,4 +3344,4 @@ console.log(`
 - clearInteractiveDOM() : DOM'u temizle
 `);
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
+export { canvasManager, errorHandler, stateManager, smartGuide, enhancedMathRenderer };
