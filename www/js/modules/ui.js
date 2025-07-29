@@ -8,10 +8,9 @@
 //  Tamam butonu sorunu çözüldü
 // =================================================================================
 
-//import { advancedMathRenderer } from './advancedMathRenderer.js';
 import { enhancedMathRenderer, enhancedMathUI } from './enhancedAdvancedMathRenderer.js';
+import { escapeHtml, logError, sleep } from './utils.js';
 
-ensureDOMReady
 let domReadyPromise = null;
 
 // API Tutarsızlığı için LaTeX normalizer
@@ -1060,24 +1059,7 @@ export async function waitForRenderSystem(timeout = 10000) {
     });
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    if (typeof text !== 'string') text = String(text);
-    
-    try {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    } catch (error) {
-        // Fallback manual escape
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-}
+// escapeHtml function now imported from utils.js
 /**
  * Gelişmiş render fonksiyonu - otomatik tip algılama ile
  */

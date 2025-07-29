@@ -1,11 +1,9 @@
 // firestore.js
-// Firestore ile veri işlemleri.
-// Sadece veritabanı işlemleri burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// Firestore ile veri işlemleri
 
-// auth.js'de başlatılan auth ve db nesnelerini import ediyoruz.
 import { auth, db } from './auth.js'; 
 import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getTodayDate, logError } from './utils.js';
 
 // Tüm Firestore veritabanı işlemlerini yöneten merkezi nesne.
 export const FirestoreManager = {
@@ -15,19 +13,24 @@ export const FirestoreManager = {
      * @param {object} additionalData - Kayıt formundan gelen ek veriler (displayName, phoneNumber).
      */
     async createUserData(user, additionalData) {
-        const userRef = doc(db, "users", user.uid);
-        const userData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: additionalData.displayName,
-            phoneNumber: additionalData.phoneNumber,
-            membershipType: 'free',
-            dailyQueryCount: 0,
-            lastQueryDate: new Date().toISOString().split('T')[0]
-        };
-        await setDoc(userRef, userData);
-        console.log("Firestore: Kullanıcı verisi başarıyla oluşturuldu:", user.uid);
-        return userData;
+        try {
+            const userRef = doc(db, "users", user.uid);
+            const userData = {
+                uid: user.uid,
+                email: user.email,
+                displayName: additionalData.displayName,
+                phoneNumber: additionalData.phoneNumber,
+                membershipType: 'free',
+                dailyQueryCount: 0,
+                lastQueryDate: getTodayDate()
+            };
+            await setDoc(userRef, userData);
+            console.log("Firestore: Kullanıcı verisi başarıyla oluşturuldu:", user.uid);
+            return userData;
+        } catch (error) {
+            logError('FirestoreManager.createUserData', error);
+            throw error;
+        }
     },
 
     /**
@@ -38,33 +41,38 @@ export const FirestoreManager = {
      */
     async getUserData(user) {
         if (!user) {
-            console.error("FirestoreManager: getUserData çağrıldı ama user nesnesi sağlanmadı!");
+            logError("FirestoreManager.getUserData", new Error("user nesnesi sağlanmadı"));
             return null;
         }
 
-        const userRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(userRef);
+        try {
+            const userRef = doc(db, "users", user.uid);
+            const docSnap = await getDoc(userRef);
 
-        if (!docSnap.exists()) {
-            console.error(`Firestore: Veri bulunamadı! UID: ${user.uid}.`);
+            if (!docSnap.exists()) {
+                logError("FirestoreManager.getUserData", new Error(`Veri bulunamadı! UID: ${user.uid}`));
+                return null;
+            }
+
+            let userData = docSnap.data();
+            const today = getTodayDate();
+
+            // Günlük sorgu sayısını sıfırlama mantığı
+            if (userData.lastQueryDate !== today) {
+                userData.dailyQueryCount = 0;
+                userData.lastQueryDate = today;
+                await updateDoc(userRef, {
+                    dailyQueryCount: 0,
+                    lastQueryDate: today
+                });
+                console.log("Firestore: Günlük sorgu hakkı sıfırlandı.");
+            }
+
+            return userData;
+        } catch (error) {
+            logError('FirestoreManager.getUserData', error);
             return null;
         }
-
-        let userData = docSnap.data();
-        const today = new Date().toISOString().split('T')[0];
-
-        // Günlük sorgu sayısını sıfırlama mantığı
-        if (userData.lastQueryDate !== today) {
-            userData.dailyQueryCount = 0;
-            userData.lastQueryDate = today;
-            await updateDoc(userRef, {
-                dailyQueryCount: 0,
-                lastQueryDate: today
-            });
-            console.log("Firestore: Günlük sorgu hakkı sıfırlandı.");
-        }
-
-        return userData;
     },
 
     /**

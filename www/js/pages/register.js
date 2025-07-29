@@ -6,6 +6,7 @@
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { auth, AuthManager } from '../modules/auth.js';
 import { FirestoreManager } from '../modules/firestore.js';
+import { getElements, isValidEmail, isValidPhone, isValidPassword, logError } from '../modules/utils.js';
 
 AuthManager.initPublicPage();
 

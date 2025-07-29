@@ -1,7 +1,7 @@
 // stateManager.js
-// Uygulama durumu yönetimi, reducer yapısı, state güncellemeleri.
-// Sadece state yönetimi ile ilgili fonksiyonlar burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// Uygulama durumu yönetimi
+
+import { logError, sleep } from './utils.js';
 
 export class StateManager {
     constructor() {
@@ -150,8 +150,8 @@ export class StateManager {
     reset = () => this.dispatch({ type: 'RESET' });
 }
 
-// 1. Enhanced State Manager
-class EnhancedStateManager extends StateManager {
+// Enhanced State Manager with validation and backup
+export class EnhancedStateManager extends StateManager {
     constructor() {
         super();
         this.backupStates = [];

@@ -1,7 +1,7 @@
-// canvasManager.js
-// Gelişmiş, performanslı ve hatalara dayanıklı canvas yöneticisi.
-// Sadece canvas yönetimi ile ilgili fonksiyonlar burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// canvasManager.js  
+// Gelişmiş canvas yönetimi
+
+import { logError, isTouchDevice } from './utils.js';
 
 /**
  * Gelişmiş, performansa yönelik ve hatalara karşı dayanıklı canvas yöneticisi.
@@ -445,7 +445,8 @@ export class OptimizedCanvasManager {
     }
 }
 
-class EnhancedCanvasManager extends OptimizedCanvasManager {
+// Export the enhanced canvas manager as the main class
+export class CanvasManager extends OptimizedCanvasManager {
     constructor() {
         super();
         this.canvasInstances = new Map(); // Track all canvas instances
@@ -776,4 +777,6 @@ class EnhancedCanvasManager extends OptimizedCanvasManager {
     }
 }
 
-// export const canvasManager = new OptimizedCanvasManager();
+// Export both classes for backward compatibility
+export { OptimizedCanvasManager };
+export const canvasManager = new CanvasManager();

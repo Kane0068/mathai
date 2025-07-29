@@ -1,17 +1,15 @@
-// smartGuide.js
-// Akıllı rehber sistemi, adım kontrolü, öneriler, analizler.
-// Sadece rehberlik ile ilgili fonksiyonlar burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// smartGuide.js  
+// Akıllı rehber sistemi
 
-// makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
 import { showError, showSuccess, renderMath } from './ui.js';
-import { AdvancedErrorHandler } from './errorHandler.js';
-import { StateManager } from './stateManager.js';
+import { EnhancedErrorHandler } from './errorHandler.js';
+import { EnhancedStateManager } from './stateManager.js';
+import { logError, sleep } from './utils.js';
 
 export class SmartGuideSystem {
     constructor() {
-        this.errorHandler = new AdvancedErrorHandler();
-        this.stateManager = new StateManager();
+        this.errorHandler = new EnhancedErrorHandler();
+        this.stateManager = new EnhancedStateManager();
         this.currentStep = 0;
         this.studentAttempts = [];
         this.guidanceData = null;
@@ -1238,7 +1236,8 @@ goToPreviousStep() {
         return this.canvasManager.toDataURL(this.activeCanvasId);
     }
 }
-class EnhancedSmartGuide extends SmartGuideSystem {
+// Enhanced Smart Guide with better error recovery
+export class EnhancedSmartGuide extends SmartGuideSystem {
     constructor() {
         super();
         this.errorRecovery = {
@@ -1395,5 +1394,5 @@ class EnhancedSmartGuide extends SmartGuideSystem {
         console.log('🧹 Enhanced Smart Guide reset completed');
     }
 }
-// Singleton pattern için export
-export const smartGuide = new SmartGuideSystem();
+// Export both classes and create singleton
+export const smartGuide = new EnhancedSmartGuide();

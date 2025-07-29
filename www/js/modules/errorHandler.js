@@ -1,7 +1,7 @@
 // errorHandler.js
-// Gelişmiş hata yönetimi ve kullanıcıya hata gösterme.
-// Sadece hata yönetimi ile ilgili fonksiyonlar burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// Gelişmiş hata yönetimi ve kullanıcıya hata gösterme
+
+import { logError, sleep } from './utils.js';
 
 export class AdvancedErrorHandler {
     constructor() {
@@ -26,8 +26,10 @@ export class AdvancedErrorHandler {
         });
 
         // Ağ bağlantısı durumunu dinle
-        window.addEventListener('offline', () => this.handleNetworkChange(false));
-        window.addEventListener('online', () => this.handleNetworkChange(true));
+        if (typeof window !== 'undefined') {
+            window.addEventListener('offline', () => this.handleNetworkChange(false));
+            window.addEventListener('online', () => this.handleNetworkChange(true));
+        }
     }
 
     /**
@@ -153,7 +155,8 @@ export class AdvancedErrorHandler {
     }
 }
 // 2. Enhanced Error Handler
-class EnhancedAdvancedErrorHandler extends AdvancedErrorHandler {
+// Enhanced Error Handler with pattern recognition
+export class EnhancedErrorHandler extends AdvancedErrorHandler {
     constructor() {
         super();
         this.errorPatterns = new Map();
@@ -554,5 +557,5 @@ class EnhancedAdvancedErrorHandler extends AdvancedErrorHandler {
     }
 }
 
-// Global bir instance oluşturup dışa aktar
-// export const errorHandler = new AdvancedErrorHandler();
+// Export as singleton for global use
+export const errorHandler = new EnhancedErrorHandler();

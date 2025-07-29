@@ -12,24 +12,22 @@ import {
     showAnimatedLoading,
     showInViewNotification
 } from '../modules/ui.js';
-import { OptimizedCanvasManager } from '../modules/canvasManager.js';
-import { AdvancedErrorHandler } from '../modules/errorHandler.js';
-import { StateManager } from '../modules/stateManager.js';
+import { CanvasManager } from '../modules/canvasManager.js';
+import { EnhancedErrorHandler } from '../modules/errorHandler.js';
+import { EnhancedStateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-// ✅ DÜZELTME: Doğru yoldan import
 import { enhancedMathRenderer } from '../modules/enhancedAdvancedMathRenderer.js';
+import { GEMINI_API_URL, logError, getElements, retry } from '../modules/utils.js';
 
 // Global instances
-const canvasManager = new OptimizedCanvasManager();
-const errorHandler = new AdvancedErrorHandler();
-const stateManager = new StateManager();
+const canvasManager = new CanvasManager();
+const errorHandler = new EnhancedErrorHandler();
+const stateManager = new EnhancedStateManager();
 
 
-// --- Sabitler ---
-const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+// API URL is now imported from utils.js
 
 const masterSolutionPrompt = `Solve the math problem and respond in the following JSON format.
 
