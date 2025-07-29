@@ -3,354 +3,363 @@
 //  Basit ve kullanıcı dostu matematik sembol girişi
 // =================================================================================
 
-export class MathSymbolPanel {
+class EnhancedMathSymbolPanel {
     constructor() {
+        this.panels = new Map();
         this.symbols = this.initializeSymbols();
-        this.activeTextarea = null;
+        this.isInitialized = false;
     }
     
-    // Matematik sembollerini kategorilere ayır
     initializeSymbols() {
         return {
-            // Temel matematik sembolleri
             basic: [
-                { symbol: '+', name: 'Toplama', shortcut: 'plus' },
-                { symbol: '-', name: 'Çıkarma', shortcut: 'minus' },
-                { symbol: '×', name: 'Çarpma', shortcut: 'times' },
-                { symbol: '÷', name: 'Bölme', shortcut: 'divide' },
-                { symbol: '=', name: 'Eşittir', shortcut: 'equals' },
-                { symbol: '≠', name: 'Eşit değil', shortcut: 'neq' },
-                { symbol: '≈', name: 'Yaklaşık', shortcut: 'approx' },
-                { symbol: '±', name: 'Artı-eksi', shortcut: 'pm' }
+                { symbol: '+', latex: '+', label: 'Toplama' },
+                { symbol: '−', latex: '-', label: 'Çıkarma' },
+                { symbol: '×', latex: '\\times', label: 'Çarpma' },
+                { symbol: '÷', latex: '\\div', label: 'Bölme' },
+                { symbol: '=', latex: '=', label: 'Eşittir' },
+                { symbol: '≠', latex: '\\neq', label: 'Eşit değil' },
+                { symbol: '≈', latex: '\\approx', label: 'Yaklaşık eşit' },
+                { symbol: '<', latex: '<', label: 'Küçüktür' },
+                { symbol: '>', latex: '>', label: 'Büyüktür' },
+                { symbol: '≤', latex: '\\leq', label: 'Küçük eşit' },
+                { symbol: '≥', latex: '\\geq', label: 'Büyük eşit' }
             ],
-            
-            // Üs ve kök sembolleri
-            powers: [
-                { symbol: '²', name: 'Kare', shortcut: '^2' },
-                { symbol: '³', name: 'Küp', shortcut: '^3' },
-                { symbol: '⁴', name: 'Dördüncü kuvvet', shortcut: '^4' },
-                { symbol: '⁵', name: 'Beşinci kuvvet', shortcut: '^5' },
-                { symbol: '√', name: 'Karekök', shortcut: 'sqrt', template: '√()' },
-                { symbol: '∛', name: 'Küpkök', shortcut: 'cbrt', template: '∛()' },
-                { symbol: '^', name: 'Üs', shortcut: 'pow', template: '^()' }
-            ],
-            
-            // Kesirler ve ondalık
             fractions: [
-                { symbol: '½', name: 'Yarım', shortcut: '1/2' },
-                { symbol: '⅓', name: 'Üçte bir', shortcut: '1/3' },
-                { symbol: '⅔', name: 'Üçte iki', shortcut: '2/3' },
-                { symbol: '¼', name: 'Çeyrek', shortcut: '1/4' },
-                { symbol: '¾', name: 'Dörtte üç', shortcut: '3/4' },
-                { symbol: '/', name: 'Kesir çizgisi', shortcut: 'frac', template: '()/()', cursorOffset: 1 }
+                { symbol: '½', latex: '\\frac{1}{2}', label: 'Bir bölü iki' },
+                { symbol: '⅓', latex: '\\frac{1}{3}', label: 'Bir bölü üç' },
+                { symbol: '¼', latex: '\\frac{1}{4}', label: 'Bir bölü dört' },
+                { symbol: 'a/b', latex: '\\frac{a}{b}', label: 'Kesir' },
+                { symbol: 'a/bc', latex: '\\frac{a}{bc}', label: 'Karışık kesir' }
             ],
-            
-            // Karşılaştırma sembolleri
-            comparison: [
-                { symbol: '<', name: 'Küçüktür', shortcut: 'lt' },
-                { symbol: '>', name: 'Büyüktür', shortcut: 'gt' },
-                { symbol: '≤', name: 'Küçük eşit', shortcut: 'leq' },
-                { symbol: '≥', name: 'Büyük eşit', shortcut: 'geq' },
-                { symbol: '∞', name: 'Sonsuz', shortcut: 'inf' },
-                { symbol: '°', name: 'Derece', shortcut: 'deg' }
+            powers: [
+                { symbol: 'x²', latex: 'x^2', label: 'Kare' },
+                { symbol: 'x³', latex: 'x^3', label: 'Küp' },
+                { symbol: 'xⁿ', latex: 'x^n', label: 'Üs' },
+                { symbol: '√', latex: '\\sqrt{x}', label: 'Karekök' },
+                { symbol: '∛', latex: '\\sqrt[3]{x}', label: 'Küpkök' },
+                { symbol: 'ⁿ√', latex: '\\sqrt[n]{x}', label: 'n. kök' }
             ],
-            
-            // Trigonometri
-            trigonometry: [
-                { symbol: 'sin', name: 'Sinüs', shortcut: 'sin', template: 'sin()' },
-                { symbol: 'cos', name: 'Kosinüs', shortcut: 'cos', template: 'cos()' },
-                { symbol: 'tan', name: 'Tanjant', shortcut: 'tan', template: 'tan()' },
-                { symbol: 'π', name: 'Pi', shortcut: 'pi' },
-                { symbol: 'θ', name: 'Teta', shortcut: 'theta' },
-                { symbol: 'α', name: 'Alfa', shortcut: 'alpha' }
+            greek: [
+                { symbol: 'α', latex: '\\alpha', label: 'Alfa' },
+                { symbol: 'β', latex: '\\beta', label: 'Beta' },
+                { symbol: 'γ', latex: '\\gamma', label: 'Gama' },
+                { symbol: 'δ', latex: '\\delta', label: 'Delta' },
+                { symbol: 'θ', latex: '\\theta', label: 'Teta' },
+                { symbol: 'λ', latex: '\\lambda', label: 'Lambda' },
+                { symbol: 'μ', latex: '\\mu', label: 'Mü' },
+                { symbol: 'π', latex: '\\pi', label: 'Pi' },
+                { symbol: 'σ', latex: '\\sigma', label: 'Sigma' },
+                { symbol: 'φ', latex: '\\phi', label: 'Fi' },
+                { symbol: 'ω', latex: '\\omega', label: 'Omega' }
             ],
-            
-            // Parantez ve işlemler
-            brackets: [
-                { symbol: '(', name: 'Sol parantez', shortcut: '(' },
-                { symbol: ')', name: 'Sağ parantez', shortcut: ')' },
-                { symbol: '[', name: 'Sol köşeli parantez', shortcut: '[' },
-                { symbol: ']', name: 'Sağ köşeli parantez', shortcut: ']' },
-                { symbol: '{', name: 'Sol süslü parantez', shortcut: '{' },
-                { symbol: '}', name: 'Sağ süslü parantez', shortcut: '}' },
-                { symbol: '|', name: 'Mutlak değer', shortcut: 'abs', template: '|{}|', cursorOffset: 1 }
+            functions: [
+                { symbol: 'sin', latex: '\\sin', label: 'Sinüs' },
+                { symbol: 'cos', latex: '\\cos', label: 'Kosinüs' },
+                { symbol: 'tan', latex: '\\tan', label: 'Tanjant' },
+                { symbol: 'log', latex: '\\log', label: 'Logaritma' },
+                { symbol: 'ln', latex: '\\ln', label: 'Doğal log' },
+                { symbol: 'lim', latex: '\\lim', label: 'Limit' },
+                { symbol: '∫', latex: '\\int', label: 'İntegral' },
+                { symbol: '∑', latex: '\\sum', label: 'Toplam' },
+                { symbol: '∏', latex: '\\prod', label: 'Çarpım' }
+            ],
+            sets: [
+                { symbol: '∈', latex: '\\in', label: 'Elemanı' },
+                { symbol: '∉', latex: '\\notin', label: 'Elemanı değil' },
+                { symbol: '⊂', latex: '\\subset', label: 'Alt küme' },
+                { symbol: '⊆', latex: '\\subseteq', label: 'Alt küme eşit' },
+                { symbol: '∪', latex: '\\cup', label: 'Birleşim' },
+                { symbol: '∩', latex: '\\cap', label: 'Kesişim' },
+                { symbol: '∅', latex: '\\emptyset', label: 'Boş küme' },
+                { symbol: 'ℕ', latex: '\\mathbb{N}', label: 'Doğal sayılar' },
+                { symbol: 'ℤ', latex: '\\mathbb{Z}', label: 'Tam sayılar' },
+                { symbol: 'ℚ', latex: '\\mathbb{Q}', label: 'Rasyonel sayılar' },
+                { symbol: 'ℝ', latex: '\\mathbb{R}', label: 'Gerçel sayılar' }
             ]
         };
     }
     
-    // Paneli oluştur ve textarea'ya bağla
     createPanel(textareaId) {
-        const textarea = document.getElementById(textareaId);
-        if (!textarea) {
-            console.error('Textarea bulunamadı:', textareaId);
+        try {
+            const textarea = document.getElementById(textareaId);
+            if (!textarea) {
+                console.error(`❌ Textarea not found: ${textareaId}`);
+                return null;
+            }
+            
+            // Remove existing panel
+            this.destroyPanel(textareaId);
+            
+            const panelContainer = document.createElement('div');
+            panelContainer.className = 'math-symbol-panel mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg';
+            panelContainer.id = `math-panel-${textareaId}`;
+            
+            // Panel header
+            const header = document.createElement('div');
+            header.className = 'flex items-center justify-between mb-3';
+            header.innerHTML = `
+                <h4 class="text-sm font-semibold text-gray-700">Matematik Sembolleri</h4>
+                <button class="panel-toggle text-xs text-blue-600 hover:text-blue-800" data-panel="${textareaId}">
+                    Gizle
+                </button>
+            `;
+            panelContainer.appendChild(header);
+            
+            // Create tabs
+            const tabsContainer = document.createElement('div');
+            tabsContainer.className = 'tabs-container mb-3';
+            
+            const tabsList = document.createElement('div');
+            tabsList.className = 'flex flex-wrap gap-1 mb-2 border-b border-gray-200';
+            
+            const tabsContent = document.createElement('div');
+            tabsContent.className = 'tabs-content';
+            
+            // Create tabs for each symbol category
+            Object.keys(this.symbols).forEach((category, index) => {
+                // Tab button
+                const tabButton = document.createElement('button');
+                tabButton.className = `tab-button px-3 py-1 text-xs rounded-t-lg transition-colors ${
+                    index === 0 ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`;
+                tabButton.textContent = this.getCategoryLabel(category);
+                tabButton.dataset.category = category;
+                tabButton.dataset.panel = textareaId;
+                tabsList.appendChild(tabButton);
+                
+                // Tab content
+                const tabContent = document.createElement('div');
+                tabContent.className = `tab-content ${index === 0 ? '' : 'hidden'}`;
+                tabContent.dataset.category = category;
+                
+                const symbolsGrid = document.createElement('div');
+                symbolsGrid.className = 'symbols-grid grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1';
+                
+                this.symbols[category].forEach(symbolData => {
+                    const symbolButton = document.createElement('button');
+                    symbolButton.className = 'symbol-button p-2 text-sm bg-white border border-gray-300 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+                    symbolButton.innerHTML = symbolData.symbol;
+                    symbolButton.title = `${symbolData.label} (${symbolData.latex})`;
+                    symbolButton.dataset.latex = symbolData.latex;
+                    symbolButton.dataset.symbol = symbolData.symbol;
+                    symbolButton.dataset.textarea = textareaId;
+                    
+                    symbolsGrid.appendChild(symbolButton);
+                });
+                
+                tabContent.appendChild(symbolsGrid);
+                tabsContent.appendChild(tabContent);
+            });
+            
+            tabsContainer.appendChild(tabsList);
+            tabsContainer.appendChild(tabsContent);
+            panelContainer.appendChild(tabsContainer);
+            
+            // Insert panel after textarea
+            textarea.parentNode.insertBefore(panelContainer, textarea.nextSibling);
+            
+            // Setup event listeners
+            this.setupPanelEventListeners(panelContainer, textareaId);
+            
+            // Store panel reference
+            this.panels.set(textareaId, {
+                container: panelContainer,
+                textarea: textarea,
+                isVisible: true
+            });
+            
+            console.log(`✅ Math symbol panel created for: ${textareaId}`);
+            return panelContainer;
+            
+        } catch (error) {
+            console.error(`❌ Error creating math panel for ${textareaId}:`, error);
             return null;
         }
-        
-        this.activeTextarea = textarea;
-        
-        const panelHTML = this.generatePanelHTML();
-        
-        // Panel container'ını textarea'nın altına ekle
-        const panelContainer = document.createElement('div');
-        panelContainer.className = 'math-symbol-panel-container mt-3';
-        panelContainer.innerHTML = panelHTML;
-        
-        // Textarea'nın parent'ına ekle
-        textarea.parentNode.insertBefore(panelContainer, textarea.nextSibling);
-        
-        // Event listener'ları bağla
-        this.attachEventListeners(panelContainer);
-        
-        return panelContainer;
     }
     
-    // Panel HTML'ini oluştur
-    generatePanelHTML() {
-        return `
-            <div class="math-symbol-panel bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
-                <!-- Panel Başlığı -->
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold text-blue-800 flex items-center gap-2">
-                        🔢 Matematik Sembolleri
-                    </h4>
-                    <button class="panel-toggle-btn text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded transition-colors">
-                        Gizle/Göster
-                    </button>
-                </div>
-                
-                <!-- Kategori Seçici -->
-                <div class="category-selector flex flex-wrap gap-2 mb-3">
-                    <button class="category-btn active" data-category="basic">Temel</button>
-                    <button class="category-btn" data-category="powers">Üs/Kök</button>
-                    <button class="category-btn" data-category="fractions">Kesir</button>
-                    <button class="category-btn" data-category="comparison">Karşılaştırma</button>
-                    <button class="category-btn" data-category="trigonometry">Trigonometri</button>
-                    <button class="category-btn" data-category="brackets">Parantez</button>
-                </div>
-                
-                <!-- Sembol Grid'leri -->
-                <div class="symbol-grids">
-                    ${Object.entries(this.symbols).map(([category, symbols]) => 
-                        this.generateCategoryGrid(category, symbols)
-                    ).join('')}
-                </div>
-                
-                <!-- Hızlı Erişim -->
-                <div class="quick-access mt-3 pt-3 border-t border-blue-200">
-                    <div class="text-xs text-blue-700 mb-2">Hızlı Erişim:</div>
-                    <div class="flex flex-wrap gap-1">
-                        ${['=', '+', '-', '×', '÷', '²', '√', '(', ')', 'π'].map(symbol => 
-                            `<button class="quick-symbol-btn" data-symbol="${symbol}">${symbol}</button>`
-                        ).join('')}
-                    </div>
-                </div>
-                
-                <!-- Temizle ve İpuçları -->
-                <div class="panel-actions mt-3 pt-3 border-t border-blue-200 flex items-center justify-between">
-                    <div class="text-xs text-gray-600 flex gap-4">
-                        <span>💡 Sembollere tıklayarak ekleyin</span>
-                        <span>⌨️ Klavye kısayolları: ^2, sqrt, pi</span>
-                    </div>
-                    <button class="clear-input-btn text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded transition-colors">
-                        Temizle
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-    
-    // Kategori grid'ini oluştur
-    generateCategoryGrid(category, symbols) {
-        const isActive = category === 'basic' ? 'active' : 'hidden';
-        
-        return `
-            <div class="symbol-grid ${isActive}" data-category="${category}">
-                <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-                    ${symbols.map(symbolData => 
-                        `<button class="symbol-btn" 
-                                data-symbol="${symbolData.symbol}"
-                                data-template="${symbolData.template || ''}"
-                                data-cursor-offset="${symbolData.cursorOffset || 0}"
-                                title="${symbolData.name} (${symbolData.shortcut})"
-                                >
-                            ${symbolData.symbol}
-                        </button>`
-                    ).join('')}
-                </div>
-            </div>
-        `;
-    }
-    
-    // Event listener'ları bağla
-    attachEventListeners(panelContainer) {
-        // Kategori değiştirme
+    setupPanelEventListeners(panelContainer, textareaId) {
+        // Tab switching
         panelContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('category-btn')) {
-                this.switchCategory(panelContainer, e.target.dataset.category);
-            }
-            
-            // Sembol ekleme
-            if (e.target.classList.contains('symbol-btn') || e.target.classList.contains('quick-symbol-btn')) {
-                this.insertSymbol(e.target);
-            }
-            
-            // Panel toggle
-            if (e.target.classList.contains('panel-toggle-btn')) {
-                this.togglePanel(panelContainer);
-            }
-            
-            // Input temizleme
-            if (e.target.classList.contains('clear-input-btn')) {
-                this.clearInput();
+            if (e.target.classList.contains('tab-button')) {
+                e.preventDefault();
+                this.switchTab(e.target.dataset.category, textareaId);
             }
         });
         
-        // Klavye kısayolları
-        if (this.activeTextarea) {
-            this.activeTextarea.addEventListener('input', (e) => {
-                this.handleKeyboardShortcuts(e);
+        // Symbol insertion
+        panelContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('symbol-button')) {
+                e.preventDefault();
+                this.insertSymbol(e.target.dataset.latex, textareaId);
+            }
+        });
+        
+        // Panel toggle
+        panelContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('panel-toggle')) {
+                e.preventDefault();
+                this.togglePanel(textareaId);
+            }
+        });
+        
+        // Keyboard shortcuts
+        const textarea = document.getElementById(textareaId);
+        if (textarea) {
+            textarea.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    switch (e.key) {
+                        case 'm':
+                            e.preventDefault();
+                            this.togglePanel(textareaId);
+                            break;
+                        case 'f':
+                            if (e.shiftKey) {
+                                e.preventDefault();
+                                this.insertSymbol('\\frac{}{}_cursor_', textareaId);
+                            }
+                            break;
+                        case 'r':
+                            if (e.shiftKey) {
+                                e.preventDefault();
+                                this.insertSymbol('\\sqrt{}_cursor_', textareaId);
+                            }
+                            break;
+                    }
+                }
             });
         }
     }
     
-    // Kategori değiştir
-    switchCategory(panelContainer, category) {
-        // Butonları güncelle
-        const categoryBtns = panelContainer.querySelectorAll('.category-btn');
-        categoryBtns.forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.category === category) {
-                btn.classList.add('active');
+    switchTab(category, textareaId) {
+        const panelContainer = this.panels.get(textareaId)?.container;
+        if (!panelContainer) return;
+        
+        // Update tab buttons
+        const tabButtons = panelContainer.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            if (button.dataset.category === category) {
+                button.className = 'tab-button px-3 py-1 text-xs rounded-t-lg transition-colors bg-blue-100 text-blue-700 border-b-2 border-blue-500';
+            } else {
+                button.className = 'tab-button px-3 py-1 text-xs rounded-t-lg transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200';
             }
         });
         
-        // Grid'leri güncelle
-        const symbolGrids = panelContainer.querySelectorAll('.symbol-grid');
-        symbolGrids.forEach(grid => {
-            grid.classList.add('hidden');
-            grid.classList.remove('active');
-            if (grid.dataset.category === category) {
-                grid.classList.remove('hidden');
-                grid.classList.add('active');
+        // Update tab content
+        const tabContents = panelContainer.querySelectorAll('.tab-content');
+        tabContents.forEach(content => {
+            if (content.dataset.category === category) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
             }
         });
     }
     
-    // Sembol ekle
-    insertSymbol(button) {
-        if (!this.activeTextarea) return;
+    insertSymbol(latex, textareaId) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
         
-        const symbol = button.dataset.symbol;
-        const template = button.dataset.template;
-        const cursorOffset = parseInt(button.dataset.cursorOffset || 0);
-        
-        const cursorPos = this.activeTextarea.selectionStart;
-        const textBefore = this.activeTextarea.value.substring(0, cursorPos);
-        const textAfter = this.activeTextarea.value.substring(cursorPos);
-        
-        let insertText = template || symbol;
-        let newCursorPos = cursorPos + insertText.length - cursorOffset;
-        
-        // Özel şablonlar için cursor pozisyonunu ayarla
-        if (template) {
-            if (template.includes('()')) {
-                newCursorPos = cursorPos + template.indexOf('()') + 1;
-            } else if (template.includes('{}')) {
-                newCursorPos = cursorPos + template.indexOf('{}') + 1;
-                insertText = template.replace('{}', '');
+        try {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            
+            // Handle special cursor positioning
+            let insertText = latex;
+            let cursorOffset = latex.length;
+            
+            if (latex.includes('_cursor_')) {
+                const parts = latex.split('_cursor_');
+                insertText = parts.join('');
+                cursorOffset = parts[0].length;
             }
-        }
-        
-        // Metni güncelle
-        this.activeTextarea.value = textBefore + insertText + textAfter;
-        
-        // Cursor'u doğru pozisyona getir
-        this.activeTextarea.setSelectionRange(newCursorPos, newCursorPos);
-        this.activeTextarea.focus();
-        
-        // Görsel feedback
-        this.showInsertFeedback(button, symbol);
-    }
-    
-    // Klavye kısayollarını işle
-    handleKeyboardShortcuts(e) {
-        const value = this.activeTextarea.value;
-        const cursorPos = this.activeTextarea.selectionStart;
-        
-        // Basit kısayollar
-        const shortcuts = {
-            '^2': '²',
-            '^3': '³',
-            'sqrt': '√',
-            'pi': 'π',
-            'theta': 'θ',
-            'alpha': 'α',
-            'inf': '∞',
-            'deg': '°',
-            'neq': '≠',
-            'leq': '≤',
-            'geq': '≥',
-            'pm': '±'
-        };
-        
-        // Son yazılan kelimeyi kontrol et
-        const wordMatch = value.substring(0, cursorPos).match(/(\w+)$/);
-        if (wordMatch) {
-            const word = wordMatch[1];
-            if (shortcuts[word]) {
-                const replacement = shortcuts[word];
-                const newValue = value.substring(0, cursorPos - word.length) + replacement + value.substring(cursorPos);
-                this.activeTextarea.value = newValue;
-                this.activeTextarea.setSelectionRange(cursorPos - word.length + replacement.length, cursorPos - word.length + replacement.length);
-            }
+            
+            // Insert text
+            const newText = text.substring(0, start) + insertText + text.substring(end);
+            textarea.value = newText;
+            
+            // Set cursor position
+            const newCursorPos = start + cursorOffset;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+            
+            // Focus and trigger events
+            textarea.focus();
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            console.log(`✅ Symbol inserted: ${latex} at position ${start}`);
+            
+        } catch (error) {
+            console.error(`❌ Error inserting symbol: ${latex}`, error);
         }
     }
     
-    // Panel'i gizle/göster
-    togglePanel(panelContainer) {
-        const symbolGrids = panelContainer.querySelector('.symbol-grids');
-        const quickAccess = panelContainer.querySelector('.quick-access');
-        const panelActions = panelContainer.querySelector('.panel-actions');
+    togglePanel(textareaId) {
+        const panelData = this.panels.get(textareaId);
+        if (!panelData) return;
         
-        if (symbolGrids.style.display === 'none') {
-            symbolGrids.style.display = 'block';
-            quickAccess.style.display = 'block';
-            panelActions.style.display = 'flex';
+        const { container } = panelData;
+        const toggleButton = container.querySelector('.panel-toggle');
+        
+        if (panelData.isVisible) {
+            container.style.display = 'none';
+            toggleButton.textContent = 'Göster';
+            panelData.isVisible = false;
         } else {
-            symbolGrids.style.display = 'none';
-            quickAccess.style.display = 'none';
-            panelActions.style.display = 'none';
+            container.style.display = 'block';
+            toggleButton.textContent = 'Gizle';
+            panelData.isVisible = true;
         }
-    }
-    
-    // Input'u temizle
-    clearInput() {
-        if (this.activeTextarea) {
-            this.activeTextarea.value = '';
-            this.activeTextarea.focus();
-        }
-    }
-    
-    // Görsel feedback göster
-    showInsertFeedback(button, symbol) {
-        button.style.transform = 'scale(1.2)';
-        button.style.backgroundColor = '#3B82F6';
-        button.style.color = 'white';
         
-        setTimeout(() => {
-            button.style.transform = 'scale(1)';
-            button.style.backgroundColor = '';
-            button.style.color = '';
-        }, 200);
+        console.log(`🔄 Panel toggled for ${textareaId}: ${panelData.isVisible ? 'shown' : 'hidden'}`);
     }
     
-    // Panel'i kaldır
+    destroyPanel(textareaId) {
+        const panelData = this.panels.get(textareaId);
+        if (!panelData) return;
+        
+        try {
+            // Remove DOM element
+            if (panelData.container && panelData.container.parentNode) {
+                panelData.container.parentNode.removeChild(panelData.container);
+            }
+            
+            // Remove from map
+            this.panels.delete(textareaId);
+            
+            console.log(`🧹 Math panel destroyed for: ${textareaId}`);
+            
+        } catch (error) {
+            console.error(`❌ Error destroying panel for ${textareaId}:`, error);
+        }
+    }
+    
     destroy() {
-        const panels = document.querySelectorAll('.math-symbol-panel-container');
-        panels.forEach(panel => panel.remove());
-        this.activeTextarea = null;
+        // Destroy all panels
+        for (const textareaId of this.panels.keys()) {
+            this.destroyPanel(textareaId);
+        }
+        
+        console.log('🧹 All math symbol panels destroyed');
+    }
+    
+    getCategoryLabel(category) {
+        const labels = {
+            basic: 'Temel',
+            fractions: 'Kesir',
+            powers: 'Üs/Kök',
+            greek: 'Yunan',
+            functions: 'Fonks.',
+            sets: 'Küme'
+        };
+        return labels[category] || category;
+    }
+    
+    getPanelStats() {
+        return {
+            totalPanels: this.panels.size,
+            activePanels: Array.from(this.panels.values()).filter(p => p.isVisible).length,
+            panels: Array.from(this.panels.keys())
+        };
     }
 }
-
-// Singleton instance
-export const mathSymbolPanel = new MathSymbolPanel();

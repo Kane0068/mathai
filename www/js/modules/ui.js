@@ -3,59 +3,48 @@
 //  Tamam butonu sorunu çözüldü
 // =================================================================================
 
-import { advancedMathRenderer } from './advancedMathRenderer.js';
+//import { advancedMathRenderer } from './advancedMathRenderer.js';
 import { enhancedMathRenderer, enhancedMathUI } from './enhancedAdvancedMathRenderer.js';
 
-// Rendering queue for pending operations
-const renderingQueue = new Map();
+ensureDOMReady
 let domReadyPromise = null;
 
 // API Tutarsızlığı için LaTeX normalizer
 const LATEX_PATTERNS = {
-    // Backslash normalizasyonu - en kritik sorun
     fixBackslashes: {
         pattern: /\\{3,}/g,
         replacement: '\\\\',
         description: 'Fazla backslash temizleme'
     },
-    
-    // Tek backslash komutları
     singleBackslash: {
         pattern: /\\([a-zA-Z]+)(?!\\)/g,
         replacement: (match, command) => {
-            // Zaten çift olanları atla
             const context = match.substring(0, match.indexOf(command) - 1);
             if (context.endsWith('\\')) return match;
             return `\\\\${command}`;
         },
         description: 'Tek backslash komutları düzeltme'
     },
-    
-    // Frac ifadeleri
     fixFrac: {
         pattern: /\\frac\s*\{\s*([^}]*)\s*\}\s*\{\s*([^}]*)\s*\}/g,
         replacement: '\\\\frac{$1}{$2}',
         description: 'Frac komutları normalizasyonu'
     },
-    
-    // Text içeriği - Türkçe karışık için
     fixText: {
         pattern: /\\text\{([^}]*)\}/g,
         replacement: (match, content) => {
-            // Türkçe karakterleri ve özel karakterleri koru
             const cleanContent = content.replace(/[{}]/g, '').trim();
             return `\\\\text{${cleanContent}}`;
         },
         description: 'Text içeriği normalizasyonu'
     },
-    
-    // Matematik sembolleri
     fixMathSymbols: {
         pattern: /\\(sqrt|sum|int|lim|dfrac|tfrac|begin|end)\b/g,
         replacement: '\\\\$1',
         description: 'Matematik sembolleri normalizasyonu'
     }
 };
+
 
 // Türkçe karışık içerik tespiti
 const TURKISH_CONTENT_PATTERNS = {
@@ -67,17 +56,23 @@ const TURKISH_CONTENT_PATTERNS = {
 function ensureDOMReady() {
     if (domReadyPromise) return domReadyPromise;
     
-    if (document.readyState === 'complete') {
-        domReadyPromise = Promise.resolve();
-    } else {
-        domReadyPromise = new Promise(resolve => {
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', resolve);
-            } else {
+    domReadyPromise = new Promise((resolve) => {
+        if (document.readyState === 'complete') {
+            resolve();
+        } else if (document.readyState === 'interactive') {
+            // DOM ready ama resources yüklenmemiş olabilir
+            if (document.body) {
                 resolve();
+            } else {
+                document.addEventListener('DOMContentLoaded', resolve);
             }
-        });
-    }
+        } else {
+            document.addEventListener('DOMContentLoaded', resolve);
+        }
+        
+        // Fallback timeout
+        setTimeout(resolve, 10000); // 10 saniye max bekleme
+    });
     
     return domReadyPromise;
 }
@@ -110,7 +105,6 @@ function normalizeLatexFromAPI(content) {
     console.log('✅ LaTeX normalization - Result:', normalized);
     return normalized;
 }
-
 function analyzeMixedContent(content) {
     const analysis = {
         hasTurkish: false,
@@ -185,6 +179,7 @@ function splitMixedContentSafely(content) {
     return parts;
 }
 
+
 /**
  * Ekranda bir yükleme mesajı gösterir.
  */
@@ -205,12 +200,17 @@ export async function showLoading(message) {
         return;
     }
     
+    // Enhanced renderer durumu kontrol et
+    const rendererStatus = enhancedMathRenderer ? 
+        (enhancedMathRenderer.mathJaxReady || enhancedMathRenderer.katexReady ? 'Ready' : 'Loading') : 
+        'Not Available';
+    
     statusMessage.innerHTML = `
         <div class="flex items-center justify-center space-x-4 p-4">
             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 animate-spin border-t-blue-600"></div>
             <div class="flex flex-col text-left">
                 <p class="text-blue-700 font-semibold text-base">${message}</p>
-                <div class="mt-2 text-xs text-blue-600">Enhanced Math Renderer v2 Active</div>
+                <div class="mt-2 text-xs text-blue-600">Enhanced Math Renderer v2 - Status: ${rendererStatus}</div>
             </div>
         </div>
     `;
@@ -244,7 +244,7 @@ export async function showSuccess(message, autoHide = true, hideDelay = 3000) {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
             <p class="font-medium text-center">${message}</p>
-            <div class="text-xs text-green-600 opacity-75">✨ Enhanced Renderer v2</div>
+            <div class="text-xs text-green-600 opacity-75">✨ Enhanced Renderer v2 Active</div>
         `;
 
         resultContainer.classList.remove('hidden');
@@ -262,129 +262,237 @@ export async function showSuccess(message, autoHide = true, hideDelay = 3000) {
 }
 
 export function showInViewNotification(message, type = 'success', autoHide = true, hideDelay = 3000) {
-    const existingNotification = document.getElementById('in-view-notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    const colors = {
-        success: { bg: 'bg-green-500', text: 'text-white', icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>` },
-        error: { bg: 'bg-red-500', text: 'text-white', icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>` },
-        info: { bg: 'bg-blue-500', text: 'text-white', icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` },
-        warning: { bg: 'bg-yellow-500', text: 'text-white', icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` }
-    };
-    
-    const colorScheme = colors[type] || colors.success;
-    const notification = document.createElement('div');
-    notification.id = 'in-view-notification';
-    notification.className = `fixed top-4 right-4 ${colorScheme.bg} ${colorScheme.text} px-4 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full`;
-    notification.innerHTML = `
-        <div class="flex items-center gap-3 max-w-sm">
-            <div class="flex-shrink-0">${colorScheme.icon}</div>
-            <div class="flex-1">
-                <p class="text-sm font-medium">${message}</p>
-                <div class="text-xs opacity-75 mt-1">Enhanced UI v2</div>
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 ml-2 ${colorScheme.text} hover:opacity-70 transition-opacity">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>`;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.remove('translate-x-full');
-    }, 100);
-    
-    if (autoHide) {
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.classList.add('translate-x-full');
-                setTimeout(() => {
-                    if (notification.parentNode) notification.remove();
-                }, 300);
+    try {
+        // Remove existing notification
+        const existingNotification = document.getElementById('in-view-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        const colors = {
+            success: { 
+                bg: 'bg-green-500', 
+                text: 'text-white', 
+                icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>` 
+            },
+            error: { 
+                bg: 'bg-red-500', 
+                text: 'text-white', 
+                icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>` 
+            },
+            info: { 
+                bg: 'bg-blue-500', 
+                text: 'text-white', 
+                icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` 
+            },
+            warning: { 
+                bg: 'bg-yellow-500', 
+                text: 'text-white', 
+                icon: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` 
             }
-        }, hideDelay);
+        };
+        
+        const colorScheme = colors[type] || colors.success;
+        const notification = document.createElement('div');
+        notification.id = 'in-view-notification';
+        notification.className = `fixed top-4 right-4 ${colorScheme.bg} ${colorScheme.text} px-4 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full`;
+        
+        notification.innerHTML = `
+            <div class="flex items-center gap-3 max-w-sm">
+                <div class="flex-shrink-0">${colorScheme.icon}</div>
+                <div class="flex-1">
+                    <p class="text-sm font-medium notification-message">${escapeHtml(message)}</p>
+                    <div class="text-xs opacity-75 mt-1">Enhanced UI v2</div>
+                </div>
+                <button class="notification-close flex-shrink-0 ml-2 ${colorScheme.text} hover:opacity-70 transition-opacity" aria-label="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>`;
+        
+        // Safe DOM append
+        if (document.body) {
+            document.body.appendChild(notification);
+        } else {
+            console.warn('⚠️ Document body not available for notification');
+            return null;
+        }
+        
+        // Close button handler
+        const closeButton = notification.querySelector('.notification-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                notification.remove();
+            });
+        }
+        
+        // Animation
+        setTimeout(() => {
+            notification.classList.remove('translate-x-full');
+        }, 100);
+        
+        // Auto-hide
+        if (autoHide && hideDelay > 0) {
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.classList.add('translate-x-full');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.remove();
+                        }
+                    }, 300);
+                }
+            }, hideDelay);
+        }
+        
+        return notification;
+        
+    } catch (error) {
+        console.error('❌ showInViewNotification error:', error);
+        // Fallback to console
+        console.log(`NOTIFICATION [${type.toUpperCase()}]: ${message}`);
+        return null;
     }
-    
-    return notification;
 }
 
 /**
  * Ekranda bir hata mesajı gösterir.
  */
 export async function showError(message, showResetButton = false, onReset = () => {}) {
-    await ensureDOMReady();
-    
-    const resultContainer = document.getElementById('result-container');
-    const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
+    try {
+        await ensureDOMReady();
+        
+        const resultContainer = document.getElementById('result-container');
+        const statusMessage = document.getElementById('status-message');
+        const solutionOutput = document.getElementById('solution-output');
 
-    if (!resultContainer || !statusMessage || !solutionOutput) {
-        console.warn('⚠️ showError: Required elements not found');
-        alert(message);
-        return;
-    }
-
-    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
-    
-    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
-        showInViewNotification(message, 'error', !showResetButton, showResetButton ? 0 : 5000);
-        if (showResetButton) {
-            setTimeout(() => {
-                if (confirm(message + '\n\nDevam etmek istiyor musunuz?')) {
-                    onReset();
-                }
-            }, 1000);
+        if (!resultContainer || !statusMessage || !solutionOutput) {
+            console.warn('⚠️ showError: Required elements not found - fallback to alert');
+            alert(`ERROR: ${message}`);
+            return;
         }
-        return;
-    }
 
-    let errorHTML = `
-        <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg border border-red-300">
-            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
-            <p class="font-medium text-center">${message}</p>
-            <div class="text-xs text-red-600 opacity-75">🔧 Enhanced Error Handler</div>
-        </div>`;
-
-    statusMessage.className = '';
-    statusMessage.innerHTML = errorHTML;
-
-    if (showResetButton) {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'mt-4 text-center';
+        const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
         
-        const okButton = document.createElement('button');
-        okButton.textContent = 'Tamam';
-        okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
-        
-        okButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            try {
-                console.log('🔄 Enhanced error reset triggered');
-                resultContainer.classList.add('hidden');
-                statusMessage.innerHTML = '';
-                if (typeof onReset === 'function') {
-                    onReset();
-                } else {
-                    console.warn('onReset fonksiyonu geçerli değil:', onReset);
-                }
-            } catch (error) {
-                console.error('❌ Error reset handler failed:', error);
+        // View-based error display
+        if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
+            showInViewNotification(message, 'error', !showResetButton, showResetButton ? 0 : 5000);
+            
+            if (showResetButton) {
+                setTimeout(() => {
+                    try {
+                        if (confirm(message + '\n\nDevam etmek istiyor musunuz?')) {
+                            if (typeof onReset === 'function') {
+                                onReset();
+                            } else {
+                                console.warn('onReset is not a function:', onReset);
+                            }
+                        }
+                    } catch (confirmError) {
+                        console.error('Confirm dialog error:', confirmError);
+                        if (typeof onReset === 'function') onReset();
+                    }
+                }, 1000);
             }
-        });
+            return;
+        }
+
+        // Main error display
+        const errorHTML = `
+            <div class="error-container flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg border border-red-300">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                <p class="font-medium text-center error-message">${escapeHtml(message)}</p>
+                <div class="text-xs text-red-600 opacity-75">🔧 Enhanced Error Handler v2</div>
+                ${showResetButton ? '<div class="error-actions mt-4"></div>' : ''}
+            </div>`;
+
+        statusMessage.innerHTML = errorHTML;
+
+        if (showResetButton) {
+            const actionsContainer = statusMessage.querySelector('.error-actions');
+            if (actionsContainer) {
+                const okButton = createResetButton(onReset, resultContainer, statusMessage);
+                actionsContainer.appendChild(okButton);
+                
+                // Auto-focus with delay
+                setTimeout(() => {
+                    try {
+                        okButton.focus();
+                    } catch (focusError) {
+                        console.warn('Button focus error:', focusError);
+                    }
+                }, 100);
+            }
+        }
+
+        resultContainer.classList.remove('hidden');
+        resultContainer.style.display = 'block';
+        solutionOutput.classList.add('hidden');
         
-        buttonContainer.appendChild(okButton);
-        statusMessage.appendChild(buttonContainer);
-        
-        setTimeout(() => okButton.focus(), 100);
+    } catch (error) {
+        console.error('❌ showError function failed:', error);
+        // Ultimate fallback
+        alert(`CRITICAL ERROR: ${message}\n\nOriginal error in showError: ${error.message}`);
     }
-
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
 }
-
+function createResetButton(onReset, resultContainer, statusMessage) {
+    const okButton = document.createElement('button');
+    okButton.textContent = 'Tamam';
+    okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+    okButton.type = 'button';
+    
+    // Enhanced click handler
+    const handleClick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        try {
+            console.log('🔄 Enhanced error reset triggered');
+            
+            // UI cleanup
+            resultContainer.classList.add('hidden');
+            statusMessage.innerHTML = '';
+            
+            // Call reset function safely
+            if (typeof onReset === 'function') {
+                try {
+                    onReset();
+                } catch (resetError) {
+                    console.error('❌ onReset function error:', resetError);
+                    // Try alternative reset methods
+                    if (window.stateManager) {
+                        window.stateManager.setView('setup');
+                    }
+                }
+            } else {
+                console.warn('⚠️ onReset is not a function, applying default reset');
+                if (window.stateManager) {
+                    window.stateManager.setView('setup');
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Error reset handler failed:', error);
+            // Last resort
+            if (confirm('Reset işlemi başarısız. Sayfayı yenilemek ister misiniz?')) {
+                window.location.reload();
+            }
+        }
+    };
+    
+    okButton.addEventListener('click', handleClick);
+    
+    // Keyboard support
+    okButton.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick(e);
+        }
+    });
+    
+    return okButton;
+}
 /**
  * Animasyonlu adım adım yükleme mesajı gösterir.
  */
@@ -448,6 +556,13 @@ export async function renderMath(content, element, displayMode = false) {
     
     try {
         await ensureDOMReady();
+        
+        if (!enhancedMathRenderer) {
+            console.error('❌ Enhanced Math Renderer bulunamadı');
+            element.textContent = content;
+            return false;
+        }
+        
         const analysis = analyzeMixedContent(content);
         console.log('🔍 Content analysis:', analysis);
         const normalizedContent = normalizeLatexFromAPI(content);
@@ -456,6 +571,7 @@ export async function renderMath(content, element, displayMode = false) {
             return await renderMixedContent(normalizedContent, element, displayMode);
         }
         
+        // Enhanced math UI renderer kullan
         const result = await enhancedMathUI.renderMath(normalizedContent, element, { displayMode });
         
         if (!result) {
@@ -671,33 +787,90 @@ const domObserver = new EnhancedDOMObserver();
 class RenderPerformanceMonitor {
     constructor() {
         this.reset();
+        this.maxHistorySize = 100;
+        this.renderHistory = [];
     }
     
-    startRender() {
-        return performance.now();
+    startRender(metadata = {}) {
+        const startTime = performance.now();
+        const renderId = `render_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        return {
+            id: renderId,
+            startTime,
+            metadata
+        };
     }
     
-    endRender(startTime, success = true, wasNormalized = false, wasMixed = false) {
-        const renderTime = performance.now() - startTime;
+    endRender(renderSession, success = true, additionalData = {}) {
+        if (!renderSession || !renderSession.startTime) {
+            console.warn('⚠️ Invalid render session for monitoring');
+            return;
+        }
+        
+        const renderTime = performance.now() - renderSession.startTime;
+        const renderData = {
+            id: renderSession.id,
+            duration: renderTime,
+            success,
+            timestamp: new Date().toISOString(),
+            metadata: renderSession.metadata,
+            ...additionalData
+        };
+        
+        // Update stats
         this.stats.totalRenders++;
-        if (success) this.stats.successfulRenders++; else this.stats.failedRenders++;
-        if (wasNormalized) this.stats.apiNormalizationCount++;
-        if (wasMixed) this.stats.mixedContentRenders++;
+        if (success) {
+            this.stats.successfulRenders++;
+        } else {
+            this.stats.failedRenders++;
+        }
+        
+        // Update averages
         const totalTime = this.stats.averageRenderTime * (this.stats.totalRenders - 1) + renderTime;
         this.stats.averageRenderTime = totalTime / this.stats.totalRenders;
+        
+        // Add to history
+        this.renderHistory.push(renderData);
+        if (this.renderHistory.length > this.maxHistorySize) {
+            this.renderHistory.shift();
+        }
+        
+        // Performance warnings
+        if (renderTime > 2000) {
+            console.warn(`⚠️ Slow render detected: ${renderTime.toFixed(2)}ms for ${renderSession.id}`);
+        }
+        
+        return renderData;
+    }
+    
+    getRecentPerformance(count = 10) {
+        return this.renderHistory.slice(-count);
     }
     
     getStats() {
+        const recentRenders = this.getRecentPerformance(20);
+        const recentSuccessRate = recentRenders.length > 0 ? 
+            (recentRenders.filter(r => r.success).length / recentRenders.length) * 100 : 0;
+        
         return {
             ...this.stats,
-            successRate: this.stats.totalRenders > 0 ? (this.stats.successfulRenders / this.stats.totalRenders) * 100 : 0,
-            apiNormalizationRate: this.stats.totalRenders > 0 ? (this.stats.apiNormalizationCount / this.stats.totalRenders) * 100 : 0,
-            mixedContentRate: this.stats.totalRenders > 0 ? (this.stats.mixedContentRenders / this.stats.totalRenders) * 100 : 0
+            successRate: this.stats.totalRenders > 0 ? 
+                (this.stats.successfulRenders / this.stats.totalRenders) * 100 : 0,
+            recentSuccessRate,
+            recentAverageRenderTime: recentRenders.length > 0 ?
+                recentRenders.reduce((sum, r) => sum + r.duration, 0) / recentRenders.length : 0
         };
     }
     
     reset() {
-        this.stats = { totalRenders: 0, successfulRenders: 0, failedRenders: 0, averageRenderTime: 0, apiNormalizationCount: 0, mixedContentRenders: 0 };
+        this.stats = {
+            totalRenders: 0,
+            successfulRenders: 0,
+            failedRenders: 0,
+            averageRenderTime: 0
+        };
+        this.renderHistory = [];
     }
 }
 
@@ -863,11 +1036,22 @@ export async function waitForRenderSystem() {
 
 function escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (typeof text !== 'string') text = String(text);
+    
+    try {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    } catch (error) {
+        // Fallback manual escape
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 }
-
 /**
  * Gelişmiş render fonksiyonu - otomatik tip algılama ile
  */

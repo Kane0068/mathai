@@ -10,7 +10,7 @@ import {
     renderSmartContent,
     waitForRenderSystem,
     showAnimatedLoading,
-    showInViewNotification  // ✅ YENİ EKLEME
+    showInViewNotification
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
@@ -18,17 +18,14 @@ import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-import { enhancedMathRenderer } from './enhancedAdvancedMathRenderer.js';
+// ✅ DÜZELTME: Doğru yoldan import
+import { enhancedMathRenderer } from '../modules/enhancedAdvancedMathRenderer.js';
 
-
-
-
-
-
-// Global instances - Singleton pattern
+// Global instances
 const canvasManager = new OptimizedCanvasManager();
 const errorHandler = new AdvancedErrorHandler();
 const stateManager = new StateManager();
+
 
 // --- Sabitler ---
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
@@ -104,39 +101,91 @@ Problem: {PROBLEM_CONTEXT}
 
 RESPOND ONLY IN JSON FORMAT, NO OTHER TEXT.`;
 
-
-// --- Global DOM Önbelleği ---
+// Global DOM önbelleği
 const elements = {};
 
 // --- UYGULAMA BAŞLANGIÇ NOKTASI ---
-window.addEventListener('load', () => {
-    AuthManager.initProtectedPage(initializeApp);
+window.addEventListener('load', async () => {
+    try {
+        // Önce render sisteminin hazır olmasını bekle
+        console.log('🔄 Render sistemi kontrol ediliyor...');
+        await ensureRenderSystemReady();
+        
+        // Auth manager'ı başlat
+        AuthManager.initProtectedPage(initializeApp);
+    } catch (error) {
+        console.error('❌ App başlatma hatası:', error);
+        document.body.innerHTML = '<div class="p-4 bg-red-100 text-red-800">Uygulama başlatılamadı. Lütfen sayfayı yenileyin.</div>';
+    }
 });
-
+async function ensureRenderSystemReady() {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const checkReady = () => {
+            attempts++;
+            
+            // Enhanced math renderer kontrolü
+            if (typeof enhancedMathRenderer !== 'undefined' && 
+                enhancedMathRenderer.mathJaxReady || enhancedMathRenderer.katexReady) {
+                console.log('✅ Enhanced Math Renderer hazır');
+                resolve();
+                return;
+            }
+            
+            if (attempts >= maxAttempts) {
+                console.warn('⚠️ Render sistemi zaman aşımı, fallback ile devam ediliyor');
+                resolve(); // Reject yerine resolve - uygulama çalışmaya devam etsin
+                return;
+            }
+            
+            console.log(`🔄 Render sistemi kontrol edilyor... (${attempts}/${maxAttempts})`);
+            setTimeout(checkReady, 500);
+        };
+        
+        checkReady();
+    });
+}
 async function initializeApp(userData) {
     if (userData) {
-        // Render sisteminin hazır olmasını bekle
-        showLoading("Matematik render sistemi başlatılıyor...");
-        await waitForRenderSystem();
+        try {
+            showLoading("Matematik render sistemi başlatılıyor...");
+            
+            // Render sisteminin tamamen hazır olmasını bekle
+            await waitForRenderSystem();
+            
+            cacheDOMElements();
+            setupEventListeners();
+            stateManager.subscribe(renderApp);
+            stateManager.setUser(userData);
 
-        cacheDOMElements();
-        setupEventListeners();
-        stateManager.subscribe(renderApp);
-        stateManager.setUser(userData);
+            // Akıllı Rehber sistemini başlat
+            smartGuide.setCanvasManager(canvasManager);
 
-        // Akıllı Rehber sistemini başlat
-        smartGuide.setCanvasManager(canvasManager);
-
-        showLoading(false);
-        console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
+            showLoading(false);
+            console.log('✅ Uygulama başarıyla başlatıldı - Enhanced Math Renderer hazır');
+            
+            // Başarı mesajı göster
+            setTimeout(() => {
+                showSuccess("Matematik çözüm sistemi hazır! Enhanced Math Renderer v2 aktif.", true, 3000);
+            }, 500);
+            
+        } catch (error) {
+            console.error('❌ App initialization error:', error);
+            showLoading(false);
+            showError("Uygulama başlatılırken bir sorun oluştu. Lütfen sayfayı yenileyin.", true, () => {
+                window.location.reload();
+            });
+        }
     } else {
-        document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
+        document.body.innerHTML = '<div class="flex items-center justify-center min-h-screen"><p class="text-red-600">Uygulama başlatılamadı. Lütfen yeniden giriş yapın.</p></div>';
     }
 }
 
 // --- KURULUM FONKSİYONLARI ---
 function cacheDOMElements() {
-    const ids = [
+    const requiredElements = [
         'header-subtitle', 'query-count', 'question-setup-area', 'photo-mode-btn',
         'handwriting-mode-btn', 'photo-mode-container', 'handwriting-mode-container',
         'imageUploader', 'cameraUploader', 'imagePreview', 'startFromPhotoBtn',
@@ -150,10 +199,41 @@ function cacheDOMElements() {
         'solution-output', 'question-summary-container', 'show-full-solution-btn',
         'step-by-step-container'
     ];
-    ids.forEach(id => { elements[id] = document.getElementById(id); });
+    
+    const missingElements = [];
+    
+    requiredElements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            elements[id] = element;
+        } else {
+            missingElements.push(id);
+            console.warn(`⚠️ Element bulunamadı: ${id}`);
+        }
+    });
+    
+    if (missingElements.length > 0) {
+        console.error('❌ Critical elements missing:', missingElements);
+        // Show user-friendly error
+        showError(`Bazı UI elementleri bulunamadı: ${missingElements.slice(0, 3).join(', ')}${missingElements.length > 3 ? '...' : ''}`, true, () => {
+            window.location.reload();
+        });
+    }
 
-    // Ana soru sorma canvas'ını başlat
-    canvasManager.initCanvas('handwritingCanvas');
+    // Canvas initialization with error handling
+    try {
+        if (elements['handwritingCanvas']) {
+            canvasManager.initCanvas('handwritingCanvas');
+            console.log('✅ Ana canvas başarıyla başlatıldı');
+        } else {
+            console.error('❌ Handwriting canvas element bulunamadı');
+        }
+    } catch (canvasError) {
+        console.error('❌ Canvas initialization error:', canvasError);
+        showError('Canvas sistemi başlatılamadı. Lütfen sayfayı yenileyin.', true, () => {
+            window.location.reload();
+        });
+    }
 }
 
 
@@ -161,7 +241,7 @@ function setupEventListeners() {
     window.addEventListener('show-error-message', (event) => {
         stateManager.setError(event.detail.message);
     });
-
+    setupEnhancedBackButtonHandler();
     // ErrorHandler'dan gelen hata mesajlarını dinle
     window.addEventListener('show-error-message', (event) => {
         const { message, isCritical } = event.detail;
@@ -171,7 +251,42 @@ function setupEventListeners() {
             stateManager.setError(message);
         }
     });
+    window.addEventListener('unhandledrejection', (event) => {
+        console.error('❌ Unhandled promise rejection:', event.reason);
+        
+        // Only show user-facing error for critical failures
+        if (event.reason && event.reason.message && 
+            (event.reason.message.includes('render') || 
+             event.reason.message.includes('interactive') ||
+             event.reason.message.includes('canvas'))) {
+            
+            showInViewNotification(
+                'Sistem hatası tespit edildi. Lütfen sayfayı yenileyin.', 
+                'error', 
+                false
+            );
+        }
+    });
 
+    window.addEventListener('error', (event) => {
+        console.error('❌ Global error:', event.error);
+        
+        // Critical error detection
+        if (event.error && (
+            event.error.message.includes('stateManager') ||
+            event.error.message.includes('enhancedMathRenderer') ||
+            event.error.message.includes('interactiveSolutionManager')
+        )) {
+            showError(
+                'Kritik sistem hatası. Sayfa yenilenecek.',
+                true,
+                () => window.location.reload()
+            );
+        }
+    });
+    
+    console.log('✅ Enhanced event listeners kuruldu');
+    
     const add = (id, event, handler) => {
         if (elements[id]) {
             elements[id].addEventListener(event, handler);
@@ -858,7 +973,7 @@ async function renderApp(state) {
         elements['query-count'].textContent = limit - (user.dailyQueryCount || 0);
     }
     
-    // ✅ DÜZELTME: Loading ve Error Durumları - View kontrolü ile
+    // 2. Loading ve Error Durumları - View kontrolü ile
     const { view } = ui;
     
     // Loading durumu
@@ -877,7 +992,7 @@ async function renderApp(state) {
         } else {
             // Çözüm view'larında in-view notification kullan
             showInViewNotification(ui.error, 'error', true, 5000);
-            stateManager.clearError(); // Error'ı temizle
+            stateManager.clearError();
         }
     }
 
@@ -885,12 +1000,11 @@ async function renderApp(state) {
     const { inputMode, handwritingInputType } = ui;
     const isVisible = (v) => v === view;
 
-
-    // ✅ FIX: Setup area görünürlüğü
+    // Setup area görünürlüğü
     elements['question-setup-area'].classList.remove('hidden');
     elements['question-setup-area'].classList.toggle('disabled-area', !isVisible('setup'));
     
-    // ✅ FIX: Question summary container
+    // Question summary container
     if (isVisible('setup')) {
         elements['question-summary-container'].classList.add('hidden');
         elements['top-action-buttons'].classList.add('hidden');
@@ -899,10 +1013,10 @@ async function renderApp(state) {
         elements['top-action-buttons'].classList.toggle('hidden', !isVisible('summary'));
     }
     
-    // ✅ FIX: Solving workspace
+    // Solving workspace
     elements['solving-workspace'].classList.toggle('hidden', !isVisible('solving'));
     
-    // ✅ KRITIK DÜZELTME: Result container kontrolü
+    // ✅ KRITIK DÜZELTME: Result container kontrolü - render sistemi hazır mı kontrol et
     if (isVisible('fullSolution') || isVisible('interactive')) {
         // Bu view'larda result-container'ı kesinlikle göster
         elements['result-container'].classList.remove('hidden');
@@ -913,7 +1027,7 @@ async function renderApp(state) {
             elements['solution-output'].style.display = 'block';
         }
     } else {
-        // ✅ YENİ: Diğer view'larda (summary, setup, solving) gizle ve temizle
+        // Diğer view'larda gizle ve temizle
         elements['result-container'].classList.add('hidden');
         elements['result-container'].style.display = 'none';
         
@@ -921,7 +1035,7 @@ async function renderApp(state) {
             elements['solution-output'].classList.add('hidden');
             elements['solution-output'].style.display = 'none';
             
-            // ✅ EKSTRA: İnteraktif view'dan çıkıyorsak içeriği temizle
+            // İnteraktif view'dan çıkıyorsak içeriği temizle
             if (view === 'summary' || view === 'setup') {
                 elements['solution-output'].innerHTML = '';
                 console.log('🧹 Solution output içeriği temizlendi - view:', view);
@@ -929,7 +1043,7 @@ async function renderApp(state) {
         }
     }
     
-    // ✅ FIX: Go back button
+    // Go back button
     if (elements['goBackBtn']) {
         elements['goBackBtn'].classList.toggle('hidden', !['fullSolution', 'interactive', 'solving'].includes(view));
     }
@@ -963,19 +1077,22 @@ async function renderApp(state) {
         clearInputAreas();
         
     } else if (isVisible('fullSolution')) {
-        console.log('Rendering full solution view with Advanced Math Renderer');
-        await renderFullSolution(problem.solution);
+        console.log('Rendering full solution view with Enhanced Math Renderer');
+        try {
+            await renderFullSolution(problem.solution);
+        } catch (error) {
+            console.error('Full solution render error:', error);
+            showError('Tam çözüm yüklenirken bir hata oluştu.', false);
+        }
+        
     } else if (isVisible('interactive')) {
-        console.log('Rendering interactive view - DÜZELTME starting');
+        console.log('Rendering interactive view - Enhanced version');
         
         try {
-            // Loading göster
             showLoading("İnteraktif çözüm hazırlanıyor...");
-            
-            // Kısa bir bekleme ile diğer render işlemlerinin tamamlanmasını sağla
             await new Promise(resolve => setTimeout(resolve, 100));
             
-            // ✅ FIX: İnteraktif render ÖNCE containers'ı açık tut
+            // Containers'ı açık tut
             if (elements['result-container']) {
                 elements['result-container'].classList.remove('hidden');
                 elements['result-container'].style.display = 'block';
@@ -985,10 +1102,7 @@ async function renderApp(state) {
                 elements['solution-output'].style.display = 'block';
             }
             
-            // İnteraktif çözümü render et
             await renderInteractiveSolution(problem.solution);
-            
-            // Loading'i gizle
             showLoading(false);
             
         } catch (error) {
@@ -999,19 +1113,28 @@ async function renderApp(state) {
         
     } else if (isVisible('solving')) {
         console.log('Rendering solving view with Smart Guide');
-        await renderSmartGuideWorkspace();
+        try {
+            await renderSmartGuideWorkspace();
+        } catch (error) {
+            console.error('Smart guide render error:', error);
+            showError('Adım adım çözüm yüklenirken bir hata oluştu.', false);
+        }
     }
 
     // 5. Problem Özetini Render Et (sadece setup view değilse)
     if (problem.solution && !isVisible('setup')) {
-        await displayQuestionSummary(problem.solution.problemOzeti);
+        try {
+            await displayQuestionSummary(problem.solution.problemOzeti);
+        } catch (error) {
+            console.error('Problem özeti render error:', error);
+        }
     } else if (isVisible('setup')) {
         elements['question'].innerHTML = '';
     }
     
-    // ✅ EKSTRA: View değişikliği sonrası konsol log'u
-    console.log(`✅ View render tamamlandı: ${view}, containers hidden: ${view === 'summary' || view === 'setup'}`);
+    console.log(`✅ View render tamamlandı: ${view}`);
 }
+
 // Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
     console.log('🧹 Clearing input areas...');
@@ -1902,17 +2025,16 @@ async function handleNewProblem(sourceType) {
 
         if (!await handleQueryDecrement()) return;
 
-        // ✅ DÜZELTME: Animasyonlu yükleme mesajları - daha kısa sürelerle
+        // Enhanced animasyonlu yükleme mesajları
         const analysisSteps = [
             { title: "Soru içerik kontrolü yapılıyor", description: "Yapay zeka soruyu analiz ediyor..." },
             { title: "Matematiksel ifadeler tespit ediliyor", description: "Formüller ve denklemler çözümleniyor..." },
             { title: "Problem özeti oluşturuluyor", description: "Verilenler ve istenenler belirleniyor..." },
             { title: "Çözüm adımları hazırlanıyor", description: "Adım adım çözüm planı oluşturuluyor..." },
-            { title: "Render sistemi hazırlanıyor", description: "Advanced Math Renderer ile optimize ediliyor..." }
+            { title: "Enhanced Math Renderer hazırlanıyor", description: "Gelişmiş matematik render sistemi ile optimize ediliyor..." }
         ];
 
-        // ✅ DÜZELTME: Daha kısa süreli animasyon
-        showAnimatedLoading(analysisSteps, 800); // 1500'den 800'e düşürdük
+        showAnimatedLoading(analysisSteps, 800);
 
         const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
         const payloadParts = [{ text: promptText }];
@@ -1923,18 +2045,17 @@ async function handleNewProblem(sourceType) {
         const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
 
         if (solution) {
-            // ✅ DÜZELTME: Loading'i önce kapat
             showLoading(false);
             
-            // YENİ EKLEME: SmartGuide'ı da sıfırla (yeni problem için)
+            // SmartGuide'ı da sıfırla (yeni problem için)
             smartGuide.reset();
 
             stateManager.setSolution(solution);
             stateManager.setView('summary');
             
-            // ✅ DÜZELTME: View değiştikten sonra success göster
+            // Success mesajı
             setTimeout(() => {
-                showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", true, 4000);
+                showSuccess("Problem başarıyla çözüldü! Enhanced Math Renderer v2 ile optimize edildi.", true, 4000);
             }, 300);
 
             await FirestoreManager.incrementQueryCount();
@@ -1943,7 +2064,7 @@ async function handleNewProblem(sourceType) {
             showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
         }
     } catch (error) {
-        showLoading(false); // ✅ DÜZELTME: Hata durumunda da loading'i kapat
+        showLoading(false);
         
         errorHandler.handleError(error, {
             operation: 'handleNewProblem',
@@ -2132,66 +2253,383 @@ async function renderFullSolution(solution) {
     console.log('renderFullSolution completed with Advanced Math Renderer');
 }
 
-function renderInteractiveSolution(solution) {
-    console.log('🔄 renderInteractiveSolution starting - FIXED version');
+async function renderInteractiveSolution(solution) {
+    console.log('🔄 renderInteractiveSolution starting - ENHANCED version');
     
     if (!solution || !solution.adimlar || !solution.adimlar.length) {
-        console.error('❌ Interactive solution data missing');
-        displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
+        console.error('❌ Interactive solution data missing or invalid');
+        displayInteractiveError("İnteraktif çözüm için geçerli adım verisi bulunamadı.");
         return;
     }
 
     try {
-        console.log('✅ Solution data valid, system initializing...');
+        console.log('✅ Solution data validated, initializing enhanced system...');
         
-        // ✅ FIX: Containers'ı kesinlikle açık tut
-        forceShowContainers();
+        // 1. Container'ları kesinlikle açık tut
+        await forceShowContainersWithRetry();
         
-        // 1. Sistemi tamamen sıfırla
-        interactiveSolutionManager.reset();
+        // 2. İnteraktif sistemi tamamen sıfırla ve yeniden başlat
+        if (window.interactiveSolutionManager) {
+            window.interactiveSolutionManager.reset();
+            console.log('✅ Interactive solution manager reset');
+        } else {
+            console.error('❌ interactiveSolutionManager bulunamadı!');
+            throw new Error('İnteraktif çözüm yöneticisi bulunamadı');
+        }
         
-        // 2. DOM hazır olmasını bekle
-        return new Promise(resolve => {
-            setTimeout(async () => {
-                try {
-                    // 3. Çözüm sistemini başlat
-                    console.log('🔄 Interactive solution system initializing...');
-                    const initResult = interactiveSolutionManager.initializeInteractiveSolution(solution);
-                    
-                    if (!initResult || !initResult.success) {
-                        throw new Error('Interactive system could not be started');
-                    }
-                    
-                    console.log('✅ Interactive system initialized:', initResult);
-                    
-                    // 4. İlk adım seçeneklerini oluştur
-                    console.log('🔄 Generating first step options...');
-                    const firstStepData = interactiveSolutionManager.generateStepOptions(0);
-                    
-                    if (!firstStepData || !firstStepData.success) {
-                        throw new Error('First step options could not be created');
-                    }
-                    
-                    console.log('✅ First step options ready:', firstStepData);
-                    
-                    // 5. DOM render
-                    await renderInteractiveStepSafe(firstStepData);
-                    
-                    console.log('✅ Interactive solution rendered successfully');
-                    resolve();
-                    
-                } catch (error) {
-                    console.error('❌ Interactive solution initialization error:', error);
-                    displayInteractiveError(`Interactive solution could not be started: ${error.message}`);
-                    resolve();
-                }
-            }, 100);
-        });
+        // 3. DOM hazırlığını bekle - gelişmiş versiyon
+        await waitForDOMStability();
+        
+        // 4. İnteraktif sistem başlatma - error handling ile
+        let initResult;
+        try {
+            console.log('🔄 Interactive system initializing...');
+            initResult = await interactiveSolutionManager.initializeInteractiveSolution(solution);
+            
+            if (!initResult || !initResult.success) {
+                throw new Error(initResult?.message || 'Interactive system initialization failed');
+            }
+            
+            console.log('✅ Interactive system initialized successfully:', initResult);
+        } catch (initError) {
+            console.error('❌ Interactive system init error:', initError);
+            throw new Error(`İnteraktif sistem başlatılamadı: ${initError.message}`);
+        }
+        
+        // 5. İlk adım seçeneklerini oluştur - gelişmiş error handling
+        let firstStepData;
+        try {
+            console.log('🔄 Generating first step options...');
+            firstStepData = await interactiveSolutionManager.generateStepOptions(0);
+            
+            if (!firstStepData || !firstStepData.success) {
+                throw new Error(firstStepData?.message || 'First step options generation failed');
+            }
+            
+            console.log('✅ First step options generated:', firstStepData);
+        } catch (stepError) {
+            console.error('❌ First step generation error:', stepError);
+            throw new Error(`İlk adım seçenekleri oluşturulamadı: ${stepError.message}`);
+        }
+        
+        // 6. DOM render - gelişmiş error handling ve retry logic
+        try {
+            await renderInteractiveStepWithRetry(firstStepData);
+            console.log('✅ Interactive solution rendered successfully');
+        } catch (renderError) {
+            console.error('❌ Interactive render error:', renderError);
+            throw new Error(`İnteraktif adım render edilemedi: ${renderError.message}`);
+        }
+        
+        // 7. Final validation
+        if (!validateInteractiveSystemHealth()) {
+            throw new Error('İnteraktif sistem doğrulaması başarısız');
+        }
+        
+        return true;
         
     } catch (error) {
-        console.error('❌ Interactive solution startup error:', error);
-        displayInteractiveError(`Interactive solution could not be started: ${error.message}`);
+        console.error('❌ renderInteractiveSolution comprehensive error:', error);
+        displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
+        return false;
     }
+}
+
+async function waitForDOMStability(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        let stabilityTimer;
+        let timeoutTimer;
+        let lastChange = Date.now();
+        
+        const checkStability = () => {
+            const now = Date.now();
+            if (now - lastChange >= 300) { // 300ms stability
+                clearTimeout(stabilityTimer);
+                clearTimeout(timeoutTimer);
+                resolve();
+            } else {
+                stabilityTimer = setTimeout(checkStability, 100);
+            }
+        };
+        
+        const observer = new MutationObserver(() => {
+            lastChange = Date.now();
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true
+        });
+        
+        // Timeout protection
+        timeoutTimer = setTimeout(() => {
+            observer.disconnect();
+            clearTimeout(stabilityTimer);
+            console.warn('⚠️ DOM stability timeout - proceeding anyway');
+            resolve(); // Don't reject, just proceed
+        }, timeout);
+        
+        // Start stability check
+        checkStability();
+        
+        // Cleanup when done
+        setTimeout(() => observer.disconnect(), timeout + 1000);
+    });
+}
+
+async function forceShowContainersWithRetry(maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Container show attempt ${attempt}/${maxRetries}`);
+            
+            const containers = [
+                { id: 'result-container', required: true },
+                { id: 'solution-output', required: true }
+            ];
+            
+            let allSuccessful = true;
+            
+            containers.forEach(({ id, required }) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.classList.remove('hidden');
+                    element.style.display = 'block';
+                    element.style.visibility = 'visible';
+                    element.style.opacity = '1';
+                    console.log(`✅ Container shown: ${id}`);
+                } else if (required) {
+                    console.error(`❌ Required container missing: ${id}`);
+                    allSuccessful = false;
+                }
+            });
+            
+            if (allSuccessful) {
+                // Doğrulama beklemesi
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Final validation
+                const resultContainer = document.getElementById('result-container');
+                const solutionOutput = document.getElementById('solution-output');
+                
+                if (resultContainer && !resultContainer.classList.contains('hidden') &&
+                    solutionOutput && !solutionOutput.classList.contains('hidden')) {
+                    console.log('✅ Containers successfully shown and validated');
+                    return true;
+                }
+            }
+            
+            if (attempt < maxRetries) {
+                console.warn(`⚠️ Container show attempt ${attempt} failed, retrying...`);
+                await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+            }
+            
+        } catch (error) {
+            console.error(`❌ Container show attempt ${attempt} error:`, error);
+            if (attempt === maxRetries) throw error;
+        }
+    }
+    
+    throw new Error('Container gösterme işlemi başarısız');
+}
+async function renderInteractiveStepWithRetry(stepData, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Interactive step render attempt ${attempt}/${maxRetries}`);
+            
+            await renderInteractiveStepSafe(stepData);
+            
+            // Render validation
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            if (validateInteractiveRender()) {
+                console.log('✅ Interactive step render successful');
+                return true;
+            } else {
+                throw new Error('Render validation failed');
+            }
+            
+        } catch (error) {
+            console.error(`❌ Render attempt ${attempt} failed:`, error);
+            
+            if (attempt < maxRetries) {
+                // Cleanup before retry
+                const solutionOutput = document.getElementById('solution-output');
+                if (solutionOutput) {
+                    solutionOutput.innerHTML = '';
+                }
+                
+                // Exponential backoff
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+            } else {
+                throw error;
+            }
+        }
+    }
+}
+function validateInteractiveSystemHealth() {
+    const checks = [
+        {
+            name: 'interactiveSolutionManager',
+            test: () => window.interactiveSolutionManager && typeof window.interactiveSolutionManager.getCurrentState === 'function'
+        },
+        {
+            name: 'result-container',
+            test: () => {
+                const el = document.getElementById('result-container');
+                return el && !el.classList.contains('hidden');
+            }
+        },
+        {
+            name: 'solution-output',
+            test: () => {
+                const el = document.getElementById('solution-output');
+                return el && !el.classList.contains('hidden');
+            }
+        },
+        {
+            name: 'interactive-options-container',
+            test: () => {
+                const el = document.getElementById('interactive-options-container');
+                return el && el.children.length > 0;
+            }
+        }
+    ];
+    
+    const failedChecks = checks.filter(check => {
+        try {
+            return !check.test();
+        } catch (error) {
+            console.error(`Health check error for ${check.name}:`, error);
+            return true;
+        }
+    });
+    
+    if (failedChecks.length > 0) {
+        console.error('❌ System health check failed:', failedChecks.map(c => c.name));
+        return false;
+    }
+    
+    console.log('✅ Interactive system health check passed');
+    return true;
+}
+
+function validateInteractiveRender() {
+    try {
+        const requiredElements = [
+            'interactive-options-container',
+            'interactive-submit-btn'
+        ];
+        
+        for (const elementId of requiredElements) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.error(`❌ Render validation failed: ${elementId} missing`);
+                return false;
+            }
+        }
+        
+        // Option count validation
+        const optionsContainer = document.getElementById('interactive-options-container');
+        const options = optionsContainer.querySelectorAll('.option-label');
+        
+        if (options.length === 0) {
+            console.error('❌ Render validation failed: No options found');
+            return false;
+        }
+        
+        console.log(`✅ Render validation passed: ${options.length} options found`);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Render validation error:', error);
+        return false;
+    }
+}
+function setupEnhancedBackButtonHandler() {
+    document.addEventListener('click', (event) => {
+        if (event.target && event.target.id === 'back-to-main-menu-btn') {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            console.log('🔄 Enhanced back-to-main-menu handler triggered');
+            
+            try {
+                handleBackToMainMenu();
+            } catch (error) {
+                console.error('❌ Back button handler error:', error);
+                handleBackButtonFallback();
+            }
+        }
+    });
+}
+
+async function handleBackToMainMenu() {
+    const currentView = stateManager ? stateManager.getStateValue('ui').view : 'unknown';
+    console.log(`📍 Current view: ${currentView}`);
+    
+    // Show loading during transition
+    showLoading("Ana menüye dönülüyor...");
+    
+    try {
+        // View-specific cleanup
+        switch (currentView) {
+            case 'interactive':
+                await cleanupInteractiveView();
+                break;
+            case 'solving':
+                await cleanupSolvingView();
+                break;
+            case 'fullSolution':
+                await cleanupFullSolutionView();
+                break;
+        }
+        
+        // State transition
+        if (stateManager) {
+            stateManager.setView('summary');
+            console.log('✅ State transitioned to summary');
+        }
+        
+        // Hide loading and show success
+        showLoading(false);
+        setTimeout(() => {
+            showSuccess("Ana menüye başarıyla döndünüz.", true, 2000);
+        }, 200);
+        
+    } catch (error) {
+        console.error('❌ Back to main menu error:', error);
+        showLoading(false);
+        handleBackButtonFallback();
+    }
+}
+async function cleanupSolvingView() {
+    console.log('🧹 Solving view cleanup...');
+    
+    if (window.smartGuide) {
+        window.smartGuide.reset();
+        console.log('✅ Smart guide reset');
+    }
+    
+    // Clear solving workspace
+    const solvingWorkspace = document.getElementById('solving-workspace');
+    if (solvingWorkspace) {
+        const stepContainer = document.getElementById('step-by-step-container');
+        if (stepContainer) {
+            stepContainer.innerHTML = '';
+        }
+    }
+}
+async function cleanupInteractiveView() {
+    console.log('🧹 Interactive view cleanup...');
+    
+    if (window.interactiveSolutionManager) {
+        window.interactiveSolutionManager.reset();
+        console.log('✅ Interactive solution manager reset');
+    }
+    
+    clearInteractiveDOM();
+    console.log('✅ Interactive DOM cleared');
 }
 
 function forceShowContainers() {
@@ -2210,6 +2648,33 @@ function forceShowContainers() {
             console.log(`✅ Force shown: ${id}`);
         }
     });
+}
+
+async function cleanupFullSolutionView() {
+    console.log('🧹 Full solution view cleanup...');
+    
+    const solutionOutput = document.getElementById('solution-output');
+    if (solutionOutput) {
+        solutionOutput.innerHTML = '';
+        console.log('✅ Solution output cleared');
+    }
+}
+
+function handleBackButtonFallback() {
+    console.log('🔄 Back button fallback triggered');
+    
+    if (confirm('Bir hata oluştu. Ana menüye dönmek için sayfayı yenilemek ister misiniz?')) {
+        window.location.reload();
+    } else {
+        // Try basic state reset
+        try {
+            if (window.stateManager) {
+                window.stateManager.setView('setup');
+            }
+        } catch (fallbackError) {
+            console.error('❌ Fallback also failed:', fallbackError);
+        }
+    }
 }
 // Güvenli DOM hazırlık bekleme
 function waitForDOMReady() {
@@ -3237,6 +3702,10 @@ window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
 window.renderMath = renderMath;
+window.enhancedMathRenderer = enhancedMathRenderer; // ✅ Enhanced renderer export
+window.smartGuide = smartGuide;
+window.interactiveSolutionManager = interactiveSolutionManager;
+
 window.renderInteractiveSolution = renderInteractiveSolution;
 window.handleInteractiveSubmissionSafe = handleInteractiveSubmissionSafe;
 window.setupInteractiveEventListeners = setupInteractiveEventListeners;

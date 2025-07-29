@@ -78,65 +78,75 @@ export class EnhancedAdvancedMathRenderer {
      * MathJax v3 optimize edilmiş başlatma
      */
     async initializeMathJax() {
-        if (typeof window.MathJax !== 'undefined' && window.MathJax.startup?.document) {
-            this.mathJaxReady = true;
-            return true;
-        }
-        
-        return new Promise((resolve) => {
-            // MathJax v3 global konfigürasyonu
-            window.MathJax = {
-                tex: {
-                    inlineMath: [['$', '$'], ['\\(', '\\)']],
-                    displayMath: [['$$', '$$'], ['\\[', '\\]']],
-                    processEscapes: true,
-                    processEnvironments: true,
-                    processRefs: true,
-                    tags: 'ams',
-                    // Türkçe karakterler için özel makrolar
-                    macros: {
-                        '\\R': '\\mathbb{R}',
-                        '\\C': '\\mathbb{C}',
-                        '\\N': '\\mathbb{N}',
-                        '\\Z': '\\mathbb{Z}',
-                        '\\Q': '\\mathbb{Q}',
-                        '\\tr': '\\text{#1}',
-                        '\\turkce': '\\text{#1}'
-                    },
-                    packages: {
-                        '[+]': ['ams', 'newcommand', 'configmacros', 'action', 'unicode', 'color']
-                    }
+    if (typeof window.MathJax !== 'undefined' && window.MathJax.startup?.document) {
+        this.mathJaxReady = true;
+        return true;
+    }
+    
+    return new Promise((resolve) => {
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                processRefs: true,
+                tags: 'ams',
+                macros: {
+                    '\\R': '\\mathbb{R}',
+                    '\\C': '\\mathbb{C}',
+                    '\\N': '\\mathbb{N}',
+                    '\\Z': '\\mathbb{Z}',
+                    '\\Q': '\\mathbb{Q}',
+                    '\\tr': '\\text{#1}',
+                    '\\turkce': '\\text{#1}'
                 },
-                svg: {
-                    fontCache: 'global',
-                    displayAlign: 'left',
-                    displayIndent: '0',
-                    scale: 1,
-                    minScale: 0.5,
-                    mtextInheritFont: true
-                },
-                options: {
-                    ignoreHtmlClass: 'tex2jax_ignore|mathjax_ignore',
-                    processHtmlClass: 'tex2jax_process|mathjax_process|smart-content|latex-content',
-                    enableMenu: false, // Performance için kapalı
-                    adaptiveCSS: true
-                },
-                startup: {
-                    ready: () => {
-                        console.log('✅ MathJax v3 hazır');
-                        this.mathJaxReady = true;
-                        window.MathJax.startup.defaultReady();
-                        resolve(true);
-                    },
-                    pageReady: () => {
-                        return window.MathJax.startup.document.state() < window.MathJax.STATE.READY ? 
-                               window.MathJax.startup.document.ready() : Promise.resolve();
-                    }
-                },
-                loader: {
-                    load: ['[tex]/ams', '[tex]/newcommand', '[tex]/configmacros', '[tex]/unicode', '[tex]/color']
+                packages: {
+                    '[+]': ['ams', 'newcommand', 'configmacros', 'action', 'unicode', 'color']
                 }
-            };
+            },
+            svg: {
+                fontCache: 'global',
+                displayAlign: 'left',
+                displayIndent: '0',
+                scale: 1,
+                minScale: 0.5,
+                mtextInheritFont: true
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore|mathjax_ignore',
+                processHtmlClass: 'tex2jax_process|mathjax_process|smart-content|latex-content',
+                enableMenu: false,
+                adaptiveCSS: true
+            },
+            startup: {
+                ready: () => {
+                    console.log('✅ MathJax v3 hazır');
+                    this.mathJaxReady = true;
+                    window.MathJax.startup.defaultReady();
+                    resolve(true);
+                },
+                // FIX: Güvenli pageReady implementasyonu
+                pageReady: () => {
+                    try {
+                        // MathJax'ın kendi varsayılan pageReady metodunu çağır
+                        if (window.MathJax.startup && typeof window.MathJax.startup.defaultPageReady === 'function') {
+                            return window.MathJax.startup.defaultPageReady();
+                        } else {
+                            // Fallback: Manual initialization
+                            console.log('🔧 MathJax pageReady fallback');
+                            return Promise.resolve();
+                        }
+                    } catch (error) {
+                        console.error('❌ MathJax pageReady error:', error);
+                        return Promise.resolve(); // Hatayı yutarak devam et
+                    }
+                }
+            },
+            loader: {
+                load: ['[tex]/ams', '[tex]/newcommand', '[tex]/configmacros', '[tex]/unicode', '[tex]/color']
+            }
+        };
             
             // MathJax script yükleme
             if (!document.getElementById('mathjax-script')) {
