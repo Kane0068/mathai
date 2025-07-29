@@ -1032,15 +1032,29 @@ export async function batchRenderWithQueue(renderTasks, options = {}) {
 /**
  * Render sistemi hazır olup olmadığını kontrol eder
  */
-export async function waitForRenderSystem() {
-    return new Promise((resolve) => {
+export async function waitForRenderSystem(timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = timeout / 100;
+        
         const checkReady = () => {
-            const stats = getRenderStats();
-            if (stats.mathJaxReady || stats.katexReady) {
-                resolve(true);
-            } else {
-                setTimeout(checkReady, 100);
+            attempts++;
+            
+            if (enhancedMathRenderer) {
+                if (enhancedMathRenderer.mathJaxReady || enhancedMathRenderer.katexReady) {
+                    console.log('✅ Render system ready');
+                    resolve(true);
+                    return;
+                }
             }
+            
+            if (attempts >= maxAttempts) {
+                console.warn('⚠️ Render system timeout, proceeding anyway');
+                resolve(true); // Don't reject, just proceed
+                return;
+            }
+            
+            setTimeout(checkReady, 100);
         };
         checkReady();
     });

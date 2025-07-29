@@ -115,8 +115,7 @@ export class EnhancedAdvancedMathRenderer {
             options: {
                 ignoreHtmlClass: 'tex2jax_ignore|mathjax_ignore',
                 processHtmlClass: 'tex2jax_process|mathjax_process|smart-content|latex-content',
-                enableMenu: false,
-                adaptiveCSS: true
+                enableMenu: false
             },
             startup: {
                 ready: () => {

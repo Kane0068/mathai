@@ -107,9 +107,7 @@ const elements = {};
 // --- UYGULAMA BAŞLANGIÇ NOKTASI ---
 window.addEventListener('load', async () => {
     try {
-        // Önce render sisteminin hazır olmasını bekle
-        console.log('🔄 Render sistemi kontrol ediliyor...');
-        await ensureRenderSystemReady();
+        console.log('🔄 Uygulama başlatılıyor...');
         
         // Auth manager'ı başlat
         AuthManager.initProtectedPage(initializeApp);
@@ -118,39 +116,20 @@ window.addEventListener('load', async () => {
         document.body.innerHTML = '<div class="p-4 bg-red-100 text-red-800">Uygulama başlatılamadı. Lütfen sayfayı yenileyin.</div>';
     }
 });
-async function ensureRenderSystemReady() {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        const checkReady = () => {
-            attempts++;
-            
-            // Enhanced math renderer kontrolü
-            if (typeof enhancedMathRenderer !== 'undefined' && 
-                enhancedMathRenderer.mathJaxReady || enhancedMathRenderer.katexReady) {
-                console.log('✅ Enhanced Math Renderer hazır');
-                resolve();
-                return;
-            }
-            
-            if (attempts >= maxAttempts) {
-                console.warn('⚠️ Render sistemi zaman aşımı, fallback ile devam ediliyor');
-                resolve(); // Reject yerine resolve - uygulama çalışmaya devam etsin
-                return;
-            }
-            
-            console.log(`🔄 Render sistemi kontrol edilyor... (${attempts}/${maxAttempts})`);
-            setTimeout(checkReady, 500);
-        };
-        
-        checkReady();
-    });
-}
 async function initializeApp(userData) {
     if (userData) {
         try {
             showLoading("Matematik render sistemi başlatılıyor...");
+            
+            // Explicitly initialize the math renderer with timeout
+            try {
+                await Promise.race([
+                    enhancedMathRenderer.initializeSystem(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Renderer timeout')), 8000))
+                ]);
+            } catch (initError) {
+                console.warn('⚠️ Math renderer initialization failed, continuing with fallback:', initError.message);
+            }
             
             // Render sisteminin tamamen hazır olmasını bekle
             await waitForRenderSystem();
