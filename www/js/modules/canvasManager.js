@@ -1,4 +1,7 @@
-// Dosya Adı: www/js/modules/canvasManager.js
+// canvasManager.js
+// Gelişmiş, performanslı ve hatalara dayanıklı canvas yöneticisi.
+// Sadece canvas yönetimi ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 /**
  * Gelişmiş, performansa yönelik ve hatalara karşı dayanıklı canvas yöneticisi.

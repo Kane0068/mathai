@@ -1,11 +1,7 @@
-// =================================================================================
-//  İnteraktif Çözüm Yöneticisi - TAMAMEN DÜZELTİLMİŞ VERSİYON
-//  Ana Sorunlar ve Çözümler:
-//  1. Sonsuz döngü sorunu çözüldü
-//  2. displayId mantığı düzeltildi  
-//  3. Async/await sorunları giderildi
-//  4. DOM render güvenliği artırıldı
-// =================================================================================
+// interactiveSolutionManager.js
+// Etkileşimli çözüm adımları yönetimi.
+// Sadece etkileşimli çözüm ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 export class InteractiveSolutionManager {
     constructor() {

@@ -1,4 +1,7 @@
-// www/js/pages/register.js
+// register.js
+// Kayıt sayfası işlevleri.
+// Sadece register.html ile ilgili işlemler burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { auth, AuthManager } from '../modules/auth.js';

@@ -1,4 +1,7 @@
-// www/js/modules/firestore.js
+// firestore.js
+// Firestore ile veri işlemleri.
+// Sadece veritabanı işlemleri burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 // auth.js'de başlatılan auth ve db nesnelerini import ediyoruz.
 import { auth, db } from './auth.js'; 

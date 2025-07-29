@@ -1,3 +1,8 @@
+// mathAutocomplete.js
+// Akıllı matematik giriş ve sembol arama.
+// Sadece autocomplete ve sembol arama ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
+
 // =================================================================================
 //  MathAi - Matematik Autocomplete Sistemi
 //  Real-time matematik ifade tamamlama ve önerileri

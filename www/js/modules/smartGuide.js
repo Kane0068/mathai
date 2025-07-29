@@ -1,7 +1,7 @@
-// =================================================================================
-//  Akıllı Rehber Sistemi - smartGuide.js
-//  Matematik problemlerini adım adım çözmek için akıllı rehberlik sistemi
-// =================================================================================
+// smartGuide.js
+// Akıllı rehber sistemi, adım kontrolü, öneriler, analizler.
+// Sadece rehberlik ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 // makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
 import { showError, showSuccess, renderMath } from './ui.js';
@@ -1238,7 +1238,7 @@ goToPreviousStep() {
         return this.canvasManager.toDataURL(this.activeCanvasId);
     }
 }
-class EnhancedSmartGuide extends SmartGuide {
+class EnhancedSmartGuide extends SmartGuideSystem {
     constructor() {
         super();
         this.errorRecovery = {

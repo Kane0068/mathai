@@ -1,3 +1,8 @@
+// stateManager.js
+// Uygulama durumu yönetimi, reducer yapısı, state güncellemeleri.
+// Sadece state yönetimi ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
+
 export class StateManager {
     constructor() {
         this.state = {

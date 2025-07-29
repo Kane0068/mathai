@@ -1,7 +1,7 @@
-// =================================================================================
-//  Matematik Sembol Paneli - mathSymbolPanel.js
-//  Basit ve kullanıcı dostu matematik sembol girişi
-// =================================================================================
+// mathSymbolPanel.js
+// Matematik sembol paneli.
+// Sadece sembol paneli ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 class EnhancedMathSymbolPanel {
     constructor() {
@@ -363,3 +363,8 @@ class EnhancedMathSymbolPanel {
         };
     }
 }
+
+// Export: Hem default hem adlandırılmış şekilde
+const mathSymbolPanel = new EnhancedMathSymbolPanel();
+export { mathSymbolPanel };
+export default mathSymbolPanel;

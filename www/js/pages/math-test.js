@@ -1,7 +1,7 @@
-// =================================================================================
-//  MathAi Test Sistemi - math-test.js
-//  Matematiksel İfadelerin Doğru Gösterilmesi Test Merkezi
-// =================================================================================
+// math-test.js
+// Matematik test sayfası işlevleri.
+// Sadece math-test.html ile ilgili işlemler burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 import { renderMath } from '../modules/ui.js';
 import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';

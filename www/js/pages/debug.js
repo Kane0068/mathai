@@ -1,7 +1,7 @@
-// =================================================================================
-//  MathAi Debug Sistemi - debug.js
-//  API Yanıtları ve Render İşlemleri Debug Merkezi
-// =================================================================================
+// debug.js
+// Debug ve test işlemleri.
+// Sadece debug.html ile ilgili işlemler burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 

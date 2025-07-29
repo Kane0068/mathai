@@ -1,3 +1,8 @@
+// ui.js
+// Arayüz işlemleri ve DOM yardımcıları.
+// Sadece UI ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
+
 // =================================================================================
 //  MathAi - UI Modülü - Düzeltilmiş Error Handling
 //  Tamam butonu sorunu çözüldü
@@ -960,6 +965,13 @@ export async function getRenderSystemStatus() {
     };
 }
 
+/**
+ * Render istatistiklerini döndürür
+ */
+export function getRenderStats() {
+    return performanceMonitor.getStats();
+}
+
 export function clearAllRenderCaches() {
     if (enhancedMathRenderer) enhancedMathRenderer.clearCache();
     renderQueue.clear();
@@ -1099,6 +1111,13 @@ export async function batchRender(renderTasks, batchSize = 5) {
         }
     }
     return results;
+}
+
+/**
+ * Tekil veya tüm render cache'lerini temizler (şimdilik hepsini temizler)
+ */
+export function clearRenderCache() {
+    clearAllRenderCaches();
 }
 
 // Global Exports

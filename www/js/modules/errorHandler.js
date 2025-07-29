@@ -1,4 +1,7 @@
-// Dosya Adı: www/js/modules/errorHandler.js
+// errorHandler.js
+// Gelişmiş hata yönetimi ve kullanıcıya hata gösterme.
+// Sadece hata yönetimi ile ilgili fonksiyonlar burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 export class AdvancedErrorHandler {
     constructor() {

@@ -1,8 +1,7 @@
-// =================================================================================
-//  MathAi - Enhanced Advanced Math Renderer v2
-//  Sağlam LaTeX Rendering Sistemi - Tüm Sorunların Çözümü
-//  Hibrit MathJax v3 + KaTeX + Fallback Sistemi
-// =================================================================================
+// enhancedAdvancedMathRenderer.js
+// MathJax, KaTeX ve fallback ile gelişmiş matematik render sistemi.
+// Sadece matematik render işlemleri burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 /**
  * Enhanced Advanced Math Renderer v2

@@ -1,4 +1,7 @@
-// www/js/pages/forgot-password.js
+// forgot-password.js
+// Şifre sıfırlama sayfası işlevleri.
+// Sadece forgot-password.html ile ilgili işlemler burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 import { sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { auth } from '../modules/auth.js';

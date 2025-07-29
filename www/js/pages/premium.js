@@ -1,4 +1,7 @@
-// www/js/pages/premium.js
+// premium.js
+// Premium sayfası işlevleri.
+// Sadece premium.html ile ilgili işlemler burada olmalı.
+// Ortak yardımcılar utils.js'e taşınmalı.
 
 // Bu sayfa hem giriş yapmış hem de yapmamış kullanıcılar tarafından görülebilir,
 // bu yüzden özel bir AuthManager çağrısı yapmıyoruz.
