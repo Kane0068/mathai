@@ -877,14 +877,6 @@ function clearInputAreas() {
     const keyboardInput = document.getElementById('keyboard-input');
     if (keyboardInput) {
         keyboardInput.value = '';
-        console.log('✅ Keyboard input cleared');
-    }
-    
-    // Guide input'unu temizle
-    const guideInput = document.getElementById('guide-text-input');
-    if (guideInput) {
-        guideInput.value = '';
-        console.log('✅ Guide input cleared');
     }
     
     // Fotoğraf preview'ını temizle
@@ -893,10 +885,7 @@ function clearInputAreas() {
     const uploadSelection = document.getElementById('upload-selection');
     const startFromPhotoBtn = document.getElementById('startFromPhotoBtn');
     
-    if (imagePreview) {
-        imagePreview.src = '';
-        console.log('✅ Image preview cleared');
-    }
+    if (imagePreview) imagePreview.src = '';
     if (previewContainer) previewContainer.classList.add('hidden');
     if (uploadSelection) uploadSelection.classList.remove('hidden');
     if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
@@ -909,7 +898,6 @@ function clearInputAreas() {
     
     console.log('✅ All input areas cleared');
 }
-
 
 async function renderSmartGuideWorkspace() {
     const container = elements['step-by-step-container'];
@@ -2536,12 +2524,12 @@ async function handleInteractiveSubmissionSafe() {
         if (!result || result.error) {
             console.error('❌ Değerlendirme hatası:', result);
             
-            // ✅ FIX: shouldResetToSetup veya totalAttemptsExceeded kontrolü
-            if (result && (result.shouldResetToSetup || result.totalAttemptsExceeded)) {
-                console.log('🔄 SETUP RESET BAŞLATILIYOR...');
+            // ✅ KRITIK FIX: Reset koşullarını netleştir
+            if (result && (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded)) {
+                console.log('🔄 ZORUNLU RESET BAŞLATILIYOR...');
                 
-                // Güvenli reset işlemi
-                handleInteractiveResetToSetup(result.error || result.message);
+                // Güvenli ve garantili reset işlemi
+                await handleInteractiveForceReset(result.error || result.message);
                 return;
             } else {
                 showError(result?.error || "Değerlendirme sırasında hata oluştu", false);
@@ -2562,10 +2550,10 @@ async function handleInteractiveSubmissionSafe() {
                     await renderInteractiveStepSafe(result.nextStep);
                 }
             } else {
-                // ✅ FIX: Yanlış cevap sonrası kontrol
-                if (result.shouldResetToSetup || result.totalAttemptsExceeded) {
-                    console.log('🔄 YANLŞ CEVAP + SETUP RESET BAŞLATILIYOR...');
-                    handleInteractiveResetToSetup(result.message);
+                // ✅ KRITIK FIX: Yanlış cevap sonrası kontrol
+                if (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded) {
+                    console.log('🔄 YANLIŞ CEVAP + ZORUNLU RESET BAŞLATILIYOR...');
+                    await handleInteractiveForceReset(result.message);
                 } else if (result.nextStep) {
                     await renderInteractiveStepSafe(result.nextStep);
                 }
@@ -2577,6 +2565,125 @@ async function handleInteractiveSubmissionSafe() {
         showError("İşlem sırasında beklenmeyen bir hata oluştu", false);
         enableInteractiveUI();
     }
+}
+async function handleInteractiveForceReset(message) {
+    console.log('🔄 ZORUNLU RESET BAŞLATILIYOR...', message);
+    
+    try {
+        // 1. Kullanıcıya bilgi mesajı göster (engellemeyen)
+        showResetNotification(message);
+        
+        // 2. Kısa bekleme (kullanıcının görmesi için)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 3. İnteraktif sistemi tamamen sıfırla
+        interactiveSolutionManager.reset();
+        console.log('✅ InteractiveSolutionManager reset');
+        
+        // 4. DOM'u temizle
+        clearInteractiveDOM();
+        console.log('✅ DOM cleared');
+        
+        // 5. State'i güvenli şekilde setup'a çevir
+        if (window.stateManager) {
+            // Sadece view değiştir, problem verilerini koru
+            window.stateManager.setView('setup');
+            console.log('✅ State set to setup');
+        }
+        
+        // 6. Input alanlarını temizle
+        setTimeout(() => {
+            clearInputAreas();
+            console.log('✅ Input areas cleared');
+        }, 200);
+        
+        // 7. Container'ları gizle
+        setTimeout(() => {
+            hideInteractiveContainers();
+            console.log('✅ Containers hidden');
+        }, 300);
+        
+        // 8. Son kullanıcı bildirimi
+        setTimeout(() => {
+            if (window.showSuccess) {
+                window.showSuccess(
+                    "Yeni soru yükleyerek tekrar deneyebilirsiniz.", 
+                    false
+                );
+            }
+            console.log('✅ Final user notification shown');
+        }, 1000);
+        
+        console.log('✅ ZORUNLU RESET BAŞARIYLA TAMAMLANDI');
+        
+    } catch (error) {
+        console.error('❌ Force reset error:', error);
+        
+        // Fallback: Sayfa yenileme (son çare)
+        if (confirm('Sistem sıfırlanırken bir hata oluştu. Sayfayı yenilemek ister misiniz?')) {
+            window.location.reload();
+        }
+    }
+}
+function clearInteractiveDOM() {
+    // Solution output'u temizle
+    const solutionOutput = document.getElementById('solution-output');
+    if (solutionOutput) {
+        solutionOutput.innerHTML = '';
+    }
+    
+    // Result container'ı temizle
+    const resultContainer = document.getElementById('result-container');
+    if (resultContainer) {
+        resultContainer.classList.add('hidden');
+    }
+    
+    // Status message'ı temizle
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {
+        statusMessage.innerHTML = '';
+    }
+}
+
+function hideInteractiveContainers() {
+    const containerIds = [
+        'result-container',
+        'solution-output',
+        'interactive-result-container'
+    ];
+    
+    containerIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.classList.add('hidden');
+            element.style.display = 'none'; // Force gizle
+        }
+    });
+}
+function showResetNotification(message) {
+    const notification = document.createElement('div');
+    notification.id = 'reset-notification';
+    notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300';
+    notification.innerHTML = `
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <div>
+                <div class="font-semibold">Deneme Hakları Bitti</div>
+                <div class="text-sm opacity-90">${message || 'Soru yükleme ekranına yönlendiriliyorsunuz...'}</div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // 5 saniye sonra kaldır
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
 }
 
 function handleInteractiveResetToSetup(message) {

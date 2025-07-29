@@ -181,13 +181,14 @@ export class InteractiveSolutionManager {
                 };
             }
             
-            // ✅ FIX: Deneme hakkı kontrolü - DAHA NET
+            // ✅ KRITIK FIX: Deneme hakkı kontrolü
             if (this.totalAttempts >= this.maxAttempts) {
-                console.log('❌ TÜM DENEME HAKLARI BİTTİ - SETUP\'A YÖNLENDİRİLİYOR');
+                console.log('❌ TÜM DENEME HAKLARI BİTTİ - KESIN RESET');
                 return { 
                     error: "Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.",
                     shouldResetToSetup: true,
-                    totalAttemptsExceeded: true, // ✅ YENİ FLAG
+                    totalAttemptsExceeded: true,
+                    forceReset: true, // ✅ YENİ FLAG
                     success: false
                 };
             }
@@ -215,26 +216,6 @@ export class InteractiveSolutionManager {
                 this.totalAttempts = newAttemptCount;
                 
                 console.log(`❌ Yanlış cevap! Deneme: ${newAttemptCount}/${this.maxAttempts}`);
-                
-                // Yanlış denemeyi kaydet
-                this.attemptHistory.push({
-                    step: this.currentStep,
-                    attempt: newAttemptCount,
-                    selectedOption: selectedOptionId,
-                    timestamp: Date.now(),
-                    wasCorrect: false
-                });
-            } else {
-                console.log(`✅ Doğru cevap! Adım ${this.currentStep + 1} tamamlandı`);
-                
-                // Doğru cevap için kayıt (deneme sayısını artırmadan)
-                this.attemptHistory.push({
-                    step: this.currentStep,
-                    selectedOption: selectedOptionId,
-                    timestamp: Date.now(),
-                    wasCorrect: true,
-                    noAttemptUsed: true
-                });
             }
             
             // Sonuç nesnesi
@@ -252,12 +233,6 @@ export class InteractiveSolutionManager {
             
             if (selectedOption.isCorrect) {
                 // DOĞRU CEVAP İŞLEMİ
-                this.completedSteps.push({
-                    stepIndex: this.currentStep,
-                    completedAt: Date.now(),
-                    usedAttempt: false
-                });
-                
                 this.currentStep++;
                 
                 if (this.currentStep >= this.totalSteps) {
@@ -274,12 +249,16 @@ export class InteractiveSolutionManager {
             } else {
                 // YANLIŞ CEVAP İŞLEMİ
                 
-                // ✅ FIX: Deneme hakkı bitti mi kontrol et
+                // ✅ KRITIK FIX: Deneme hakkı bitti mi kesin kontrol
                 if (newAttemptCount >= this.maxAttempts) {
+                    console.log('🔚 TÜM DENEME HAKLARI BİTTİ - KESIN RESET BAŞLATILIYOR');
                     result.shouldResetToSetup = true;
-                    result.totalAttemptsExceeded = true; // ✅ YENİ FLAG
+                    result.totalAttemptsExceeded = true;
+                    result.forceReset = true; // ✅ YENİ FLAG
                     result.message = "Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.";
-                    console.log('🔚 TÜM DENEME HAKLARI BİTTİ - SETUP RESET FLAG SET EDİLDİ');
+                    
+                    // Sistem durumunu reset için hazırla
+                    this.prepareForReset();
                 } else {
                     // Henüz deneme hakkı var
                     if (this.currentStep === 0) {
@@ -290,7 +269,6 @@ export class InteractiveSolutionManager {
                     } else {
                         // Diğer adımlarda yanlış - başa dön
                         this.currentStep = 0;
-                        this.completedSteps = [];
                         result.restartFromBeginning = true;
                         result.message = "Yanlış cevap verdiniz. Baştan başlayacaksınız.";
                         result.nextStep = this.generateStepOptions(this.currentStep);
@@ -312,7 +290,12 @@ export class InteractiveSolutionManager {
             };
         }
     }
-    
+    prepareForReset() {
+        console.log('🔄 Sistem reset için hazırlanıyor...');
+        this.isCompleted = true; // Çözümü sonlandır
+        this.isProcessing = false;
+        // Diğer veriler korunacak (reset'te temizlenecek)
+    }
     // Seçeneği displayId ile bul - GÜVENLİ ARAMA
     findOptionByDisplayId(displayId) {
         if (!Array.isArray(this.currentOptions)) {

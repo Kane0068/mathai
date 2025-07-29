@@ -21,7 +21,29 @@ export class StateManager {
         callback(this.state); // Abone olduğunda ilk durumu hemen gönder
         return () => this.subscribers.delete(callback); // Abonelikten çıkma fonksiyonu
     }
-
+    resetToSetupSafely() {
+        // Sadece UI state'ini sıfırla, user ve problem verilerini koru
+        const currentUser = this.state.user;
+        const currentProblem = this.state.problem;
+        
+        this.state = {
+            user: currentUser, // Kullanıcı verilerini koru
+            problem: currentProblem, // Problem verilerini koru (yeniden çözüm için)
+            ui: { 
+                view: 'setup', 
+                isLoading: false, 
+                error: null, 
+                inputMode: 'photo', 
+                handwritingInputType: 'keyboard',
+                interactiveStep: 0 
+            }
+        };
+        
+        // Subscribers'ı bilgilendir
+        this.subscribers.forEach(cb => cb(this.state));
+        
+        console.log('✅ State safely reset to setup with preserved data');
+    }
     dispatch(action) {
         const prevState = this.state;
         const newState = this.reducer(prevState, action);
@@ -123,4 +145,3 @@ export class StateManager {
     reset = () => this.dispatch({ type: 'RESET' });
 }
 
-// export const stateManager = new StateManager();
