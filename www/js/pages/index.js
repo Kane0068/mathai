@@ -2004,22 +2004,17 @@ async function handleNewProblem(sourceType) {
 
         // Enhanced animasyonlu yükleme mesajları
         const analysisSteps = [
-            { title: "Soru içerik kontrolü yapılıyor", description: "Yapay zeka soruyu analiz ediyor..." },
+            { title: "API bağlantısı kuruluyor", description: "Yapay zeka servisine bağlanılıyor..." },
+            { title: "Soru içerik kontrolü yapılıyor", description: "Problem analiz ediliyor..." },
             { title: "Matematiksel ifadeler tespit ediliyor", description: "Formüller ve denklemler çözümleniyor..." },
-            { title: "Problem özeti oluşturuluyor", description: "Verilenler ve istenenler belirleniyor..." },
             { title: "Çözüm adımları hazırlanıyor", description: "Adım adım çözüm planı oluşturuluyor..." },
             { title: "Enhanced Math Renderer hazırlanıyor", description: "Gelişmiş matematik render sistemi ile optimize ediliyor..." }
         ];
 
         showAnimatedLoading(analysisSteps, 800);
 
-        const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
-        const payloadParts = [{ text: promptText }];
-        if (sourceType !== 'text') {
-            payloadParts.push({ inlineData: { mimeType: 'image/png', data: sourceData } });
-        }
-
-        const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
+        // ✅ DÜZELTME: Enhanced API call with retry logic
+        const solution = await makeApiCallWithRetry(sourceType, sourceData, problemContextForPrompt);
 
         if (solution) {
             showLoading(false);
@@ -2050,7 +2045,52 @@ async function handleNewProblem(sourceType) {
         showError("Problem analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.", false);
     }
 }
-
+async function makeApiCallWithRetry(sourceType, sourceData, problemContextForPrompt, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 API çağrısı deneme ${attempt}/${maxRetries}`);
+            
+            const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
+            const payloadParts = [{ text: promptText }];
+            
+            if (sourceType !== 'text') {
+                payloadParts.push({ inlineData: { mimeType: 'image/png', data: sourceData } });
+            }
+            
+            // Son çağrıyı kaydet (retry için)
+            window.lastApiCall = () => makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
+            
+            const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
+            
+            if (solution && solution.problemOzeti) {
+                console.log(`✅ API çağrısı başarılı - deneme ${attempt}`);
+                return solution;
+            } else {
+                throw new Error('API yanıtı geçersiz format');
+            }
+            
+        } catch (error) {
+            lastError = error;
+            console.error(`❌ API çağrısı deneme ${attempt} başarısız:`, error.message);
+            
+            if (attempt < maxRetries) {
+                const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                console.log(`⏳ ${delay}ms bekleniyor, sonra tekrar denenecek...`);
+                
+                // Loading mesajını güncelle
+                showLoading(`API hatası - ${maxRetries - attempt} deneme kaldı. ${delay/1000}s bekleniyor...`);
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    // Tüm denemeler başarısız
+    console.error('❌ Tüm API denemeleri başarısız');
+    throw lastError || new Error('API çağrısı maksimum deneme sayısına ulaştı');
+}
 // --- API ÇAĞRISI ---
 export async function makeApiCall(payload) {
     try {
@@ -2069,23 +2109,361 @@ export async function makeApiCall(payload) {
         if (data.candidates && data.candidates[0] && data.candidates[0].content) {
             const content = data.candidates[0].content.parts[0].text;
 
-            try {
-                const jsonMatch = content.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
-                }
-            } catch (parseError) {
-                console.warn('JSON parse hatası:', parseError);
-            }
+            // ✅ ENHANCED JSON PARSING
+            return parseApiResponse(content);
         }
 
-        throw new Error('Geçersiz API yanıtı');
+        throw new Error('Geçersiz API yanıt yapısı');
     } catch (error) {
         console.error('API çağrısı hatası:', error);
         throw error;
     }
 }
 
+function parseApiResponse(content) {
+    console.log('🔄 API response parsing başlıyor...');
+    
+    // Stratej 1: Direkt JSON parse
+    try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            console.log('✅ Direkt JSON parse başarılı');
+            return validateAndFixApiResponse(result);
+        }
+    } catch (directParseError) {
+        console.log('⚠️ Direkt parse başarısız, temizleme deneniyor...');
+    }
+    
+    // Stratej 2: Content temizleyerek parse
+    try {
+        let cleanedContent = cleanApiContent(content);
+        const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            console.log('✅ Temizleme sonrası parse başarılı');
+            return validateAndFixApiResponse(result);
+        }
+    } catch (cleanParseError) {
+        console.log('⚠️ Temizleme sonrası parse başarısız, regex deneniyor...');
+    }
+    
+    // Stratej 3: Regex ile veri çıkarma
+    try {
+        const result = extractDataWithRegex(content);
+        console.log('✅ Regex extraction başarılı');
+        return validateAndFixApiResponse(result);
+    } catch (regexError) {
+        console.log('⚠️ Regex extraction başarısız, fallback uygulanıyor...');
+    }
+    
+    // Stratej 4: Son çare fallback
+    console.log('🆘 Tüm parsing stratejileri başarısız, fallback uygulanıyor...');
+    return createFallbackResponse();
+}
+
+function cleanApiContent(content) {
+    return content
+        // Unicode karakterleri normalleştir
+        .replace(/[\u201C\u201D]/g, '"') // Smart quotes
+        .replace(/[\u2018\u2019]/g, "'") // Smart apostrophes
+        .replace(/[\u2013\u2014]/g, "-") // En/em dashes
+        
+        // Problematik escape karakterlerini düzelt
+        .replace(/\\\\/g, '\\') // Çift backslash'leri tek yap
+        .replace(/\\"/g, '"')   // Escaped quotes
+        .replace(/\\n/g, '\n')  // Newline
+        .replace(/\\t/g, '\t')  // Tab
+        
+        // Control karakterleri temizle
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+        
+        // Trailing commas
+        .replace(/,(\s*[}\]])/g, '$1')
+        
+        // Extra whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function validateAndFixApiResponse(data) {
+    console.log('🔍 API response validation başlıyor...');
+    
+    // Temel yapı kontrolü
+    if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data structure');
+    }
+    
+    // problemOzeti düzeltmesi
+    if (!data.problemOzeti) {
+        data.problemOzeti = {
+            verilenler: ["Problem özeti eksik"],
+            istenen: "Çözüm isteniyor"
+        };
+    }
+    
+    if (!data.problemOzeti.verilenler || !Array.isArray(data.problemOzeti.verilenler)) {
+        data.problemOzeti.verilenler = ["Verilen bilgiler eksik"];
+    }
+    
+    if (!data.problemOzeti.istenen) {
+        data.problemOzeti.istenen = "Problem çözümü isteniyor";
+    }
+    
+    // adimlar düzeltmesi
+    if (!data.adimlar || !Array.isArray(data.adimlar) || data.adimlar.length === 0) {
+        data.adimlar = [
+            {
+                adimAciklamasi: "API'dan adım bilgisi alınamadı",
+                cozum_lateks: "\\text{Çözüm gösterilemiyor}",
+                ipucu: "Lütfen tekrar deneyin"
+            }
+        ];
+    }
+    
+    // Her adımı kontrol et ve düzelt
+    data.adimlar.forEach((step, index) => {
+        if (!step.adimAciklamasi) {
+            step.adimAciklamasi = `Adım ${index + 1} açıklaması eksik`;
+        }
+        
+        if (!step.cozum_lateks) {
+            step.cozum_lateks = "\\text{LaTeX çözümü eksik}";
+        }
+        
+        if (!step.ipucu) {
+            step.ipucu = "İpucu mevcut değil";
+        }
+        
+        // LaTeX'i temizle
+        step.cozum_lateks = cleanLatexContent(step.cozum_lateks);
+    });
+    
+    // tamCozumLateks düzeltmesi
+    if (!data.tamCozumLateks || !Array.isArray(data.tamCozumLateks) || data.tamCozumLateks.length === 0) {
+        data.tamCozumLateks = data.adimlar.map(step => step.cozum_lateks);
+    }
+    
+    // Her LaTeX içeriğini temizle
+    data.tamCozumLateks = data.tamCozumLateks.map(latex => cleanLatexContent(latex));
+    
+    console.log('✅ API response validation başarılı');
+    return data;
+}
+
+function cleanLatexContent(latex) {
+    if (!latex || typeof latex !== 'string') {
+        return "\\text{LaTeX içeriği eksik}";
+    }
+    
+    return latex
+        .replace(/\\\\\\\\/g, '\\\\') // Fazla backslash'leri düzelt
+        .replace(/\\{3,}/g, '\\\\')    // 3+ backslash'leri çift yap
+        .replace(/^\$+|\$+$/g, '')     // Dış delimiterleri kaldır
+        .replace(/^\\\(|\\\)$/g, '')   // Parantez delimiterleri kaldır
+        .replace(/^\\\[|\\\]$/g, '')   // Köşeli parantez delimiterleri kaldır
+        .trim();
+}
+function extractDataWithRegex(content) {
+    console.log('🔄 Regex data extraction başlıyor...');
+    
+    const result = {
+        problemOzeti: {
+            verilenler: [],
+            istenen: "Problem analiz edilirken hata oluştu"
+        },
+        adimlar: [],
+        tamCozumLateks: []
+    };
+    
+    try {
+        // Verilenler çıkarma (çoklu pattern)
+        const verilenlerPatterns = [
+            /verilenler["\s]*:\s*\[(.*?)\]/s,
+            /"verilenler"\s*:\s*\[(.*?)\]/s,
+            /Verilenler[:\s]*\[(.*?)\]/s
+        ];
+        
+        for (const pattern of verilenlerPatterns) {
+            const match = content.match(pattern);
+            if (match) {
+                const verilenlerStr = match[1];
+                const verilenler = extractArrayItems(verilenlerStr);
+                if (verilenler.length > 0) {
+                    result.problemOzeti.verilenler = verilenler;
+                    break;
+                }
+            }
+        }
+        
+        // İstenen çıkarma
+        const istenenPatterns = [
+            /istenen["\s]*:\s*["']([^"']{10,}?)["']/s,
+            /"istenen"\s*:\s*["']([^"']{10,}?)["']/s,
+            /İstenen[:\s]*["']([^"']{10,}?)["']/s
+        ];
+        
+        for (const pattern of istenenPatterns) {
+            const match = content.match(pattern);
+            if (match && match[1].length > 5) {
+                result.problemOzeti.istenen = match[1].trim();
+                break;
+            }
+        }
+        
+        // Adımlar çıkarma
+        const adimPatterns = [
+            /adimAciklamasi["\s]*:\s*["']([^"']{5,}?)["']/g,
+            /"adimAciklamasi"\s*:\s*["']([^"']{5,}?)["']/g
+        ];
+        
+        const cozumPatterns = [
+            /cozum_lateks["\s]*:\s*["']([^"']{3,}?)["']/g,
+            /"cozum_lateks"\s*:\s*["']([^"']{3,}?)["']/g
+        ];
+        
+        const ipucuPatterns = [
+            /ipucu["\s]*:\s*["']([^"']{3,}?)["']/g,
+            /"ipucu"\s*:\s*["']([^"']{3,}?)["']/g
+        ];
+        
+        // Adım açıklamalarını topla
+        const aciklamalar = [];
+        for (const pattern of adimPatterns) {
+            let match;
+            while ((match = pattern.exec(content)) !== null) {
+                aciklamalar.push(match[1].trim());
+            }
+            if (aciklamalar.length > 0) break;
+        }
+        
+        // Çözümleri topla
+        const cozumler = [];
+        for (const pattern of cozumPatterns) {
+            let match;
+            while ((match = pattern.exec(content)) !== null) {
+                cozumler.push(cleanLatexContent(match[1]));
+            }
+            if (cozumler.length > 0) break;
+        }
+        
+        // İpuçlarını topla
+        const ipuclari = [];
+        for (const pattern of ipucuPatterns) {
+            let match;
+            while ((match = pattern.exec(content)) !== null) {
+                ipuclari.push(match[1].trim());
+            }
+            if (ipuclari.length > 0) break;
+        }
+        
+        // Adımları oluştur
+        const maxSteps = Math.max(aciklamalar.length, cozumler.length, 1);
+        for (let i = 0; i < maxSteps; i++) {
+            result.adimlar.push({
+                adimAciklamasi: aciklamalar[i] || `Adım ${i + 1} açıklaması`,
+                cozum_lateks: cozumler[i] || "\\text{Çözüm eksik}",
+                ipucu: ipuclari[i] || "İpucu mevcut değil"
+            });
+        }
+        
+        // Tam çözümü oluştur
+        result.tamCozumLateks = result.adimlar.map(step => step.cozum_lateks);
+        
+        console.log('✅ Regex extraction başarılı:', result);
+        return result;
+        
+    } catch (error) {
+        console.error('❌ Regex extraction hatası:', error);
+        throw error;
+    }
+}
+
+function extractArrayItems(arrayStr) {
+    try {
+        // JSON array olarak parse etmeyi dene
+        const jsonStr = `[${arrayStr}]`;
+        const parsed = JSON.parse(jsonStr);
+        return parsed.filter(item => typeof item === 'string' && item.trim().length > 0);
+    } catch (jsonError) {
+        // Manuel parsing
+        return arrayStr
+            .split(/,|;|\n/)
+            .map(item => item.replace(/["']/g, '').trim())
+            .filter(item => item.length > 0)
+            .slice(0, 5); // Max 5 item
+    }
+}
+function createFallbackResponse() {
+    console.log('🆘 Creating fallback response...');
+    
+    return {
+        problemOzeti: {
+            verilenler: ["API yanıtı işlenemedi - manuel kontrol gerekli"],
+            istenen: "Çözüm gösterilemiyor"
+        },
+        adimlar: [
+            {
+                adimAciklamasi: "API yanıtı parse edilemedi",
+                cozum_lateks: "\\text{Sistem hatası - lütfen tekrar deneyin}",
+                ipucu: "API ile iletişim sorunu yaşandı"
+            }
+        ],
+        tamCozumLateks: ["\\text{Sistem hatası - API yanıtı işlenemedi}"],
+        _fallback: true,
+        _error: "API response parsing failed"
+    };
+}
+export async function checkApiHealth() {
+    try {
+        const testPayload = {
+            contents: [{
+                role: "user",
+                parts: [{ text: "Test: 2+2=?" }]
+            }]
+        };
+        
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testPayload)
+        });
+        
+        return {
+            healthy: response.ok,
+            status: response.status,
+            statusText: response.statusText
+        };
+    } catch (error) {
+        return {
+            healthy: false,
+            error: error.message
+        };
+    }
+}
+function sanitizeJsonString(jsonStr) {
+    return jsonStr
+        // Unicode karakterleri normalleştir
+        .replace(/[\u201C\u201D]/g, '"') // Smart quotes
+        .replace(/[\u2018\u2019]/g, "'") // Smart apostrophes
+        .replace(/[\u2013\u2014]/g, "-") // En/em dashes
+        
+        // LaTeX karakterlerini escape et
+        .replace(/\\\\/g, '\\\\\\\\') // LaTeX backslashes
+        
+        // Invalid JSON karakterleri temizle
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Control characters
+        .replace(/\t/g, '\\t')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        
+        // Trailing commas
+        .replace(/,(\s*[}\]])/g, '$1')
+        
+        // Extra spaces around colons and commas
+        .replace(/\s*:\s*/g, ':')
+        .replace(/\s*,\s*/g, ',');
+}
 // --- YARDIMCI FONKSİYONLAR ---
 async function handleQueryDecrement() {
     const userData = stateManager.getStateValue('user');
