@@ -13,41 +13,6 @@ import { escapeHtml, logError, sleep } from './utils.js';
 
 let domReadyPromise = null;
 
-// API Tutarsızlığı için LaTeX normalizer
-const LATEX_PATTERNS = {
-    fixBackslashes: {
-        pattern: /\\{3,}/g,
-        replacement: '\\\\',
-        description: 'Fazla backslash temizleme'
-    },
-    singleBackslash: {
-        pattern: /\\([a-zA-Z]+)(?!\\)/g,
-        replacement: (match, command) => {
-            const context = match.substring(0, match.indexOf(command) - 1);
-            if (context.endsWith('\\')) return match;
-            return `\\\\${command}`;
-        },
-        description: 'Tek backslash komutları düzeltme'
-    },
-    fixFrac: {
-        pattern: /\\frac\s*\{\s*([^}]*)\s*\}\s*\{\s*([^}]*)\s*\}/g,
-        replacement: '\\\\frac{$1}{$2}',
-        description: 'Frac komutları normalizasyonu'
-    },
-    fixText: {
-        pattern: /\\text\{([^}]*)\}/g,
-        replacement: (match, content) => {
-            const cleanContent = content.replace(/[{}]/g, '').trim();
-            return `\\\\text{${cleanContent}}`;
-        },
-        description: 'Text içeriği normalizasyonu'
-    },
-    fixMathSymbols: {
-        pattern: /\\(sqrt|sum|int|lim|dfrac|tfrac|begin|end)\b/g,
-        replacement: '\\\\$1',
-        description: 'Matematik sembolleri normalizasyonu'
-    }
-};
 
 
 // Türkçe karışık içerik tespiti
@@ -89,98 +54,90 @@ function normalizeLatexFromAPI(content) {
     
     let normalized = content.trim();
     
-    console.log('🔧 LaTeX normalization - Original:', content);
+    console.log('🔧 Enhanced LaTeX normalization - Original:', content);
     
-    Object.values(LATEX_PATTERNS).forEach(pattern => {
-        if (typeof pattern.replacement === 'function') {
-            normalized = normalized.replace(pattern.pattern, pattern.replacement);
-        } else {
-            normalized = normalized.replace(pattern.pattern, pattern.replacement);
-        }
-    });
+    // CRITICAL FIX: Handle API backslash inconsistency
+    // APIs return 1, 2, or 4 backslashes inconsistently
     
+    // Step 1: Clean content
+    normalized = normalized
+        // Remove Unicode issues
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u2013\u2014]/g, "-")
+        // Remove control characters
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    // Step 2: CRITICAL - Fix backslash inconsistency
+    normalized = fixBackslashInconsistency(normalized);
+    
+    // Step 3: Fix common LaTeX patterns
+    normalized = fixLatexPatterns(normalized);
+    
+    // Step 4: Remove outer delimiters
     normalized = normalized
         .replace(/^\$+|\$+$/g, '')
         .replace(/^\\\(|\\\)$/g, '')
         .replace(/^\\\[|\\\]$/g, '');
     
+    // Step 5: Final cleanup
     normalized = normalized.replace(/\s+/g, ' ').trim();
     
-    console.log('✅ LaTeX normalization - Result:', normalized);
+    console.log('✅ Enhanced LaTeX normalization - Result:', normalized);
     return normalized;
 }
-function analyzeMixedContent(content) {
-    const analysis = {
-        hasTurkish: false,
-        hasLatex: false,
-        isMixed: false,
-        parts: [],
-        confidence: 0
-    };
+function fixBackslashInconsistency(content) {
+    let result = content;
     
-    analysis.hasTurkish = TURKISH_CONTENT_PATTERNS.turkishChars.test(content) ||
-                          TURKISH_CONTENT_PATTERNS.turkishWords.test(content);
+    // Common LaTeX commands that need single backslash
+    const commands = [
+        'frac', 'sqrt', 'sum', 'int', 'lim', 'sin', 'cos', 'tan', 'log', 'ln',
+        'alpha', 'beta', 'gamma', 'delta', 'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega',
+        'text', 'mathbb', 'mathbf', 'mathrm', 'left', 'right', 'begin', 'end',
+        'times', 'div', 'pm', 'mp', 'leq', 'geq', 'neq', 'approx', 'infty',
+        'partial', 'nabla', 'cdot', 'ldots', 'rightarrow', 'leftarrow'
+    ];
     
-    analysis.hasLatex = /\\[a-zA-Z]+|\{[^}]*\}|\^|\$/.test(content);
-    analysis.isMixed = analysis.hasTurkish && analysis.hasLatex;
+    // Fix quadruple backslashes (\\\\) -> single (\)
+    result = result.replace(/\\{4,}/g, '\\');
     
-    if (analysis.isMixed) {
-        analysis.parts = splitMixedContentSafely(content);
-    }
+    // Fix triple backslashes (\\\) -> single (\) 
+    result = result.replace(/\\{3}/g, '\\');
     
-    analysis.confidence = analysis.isMixed ? 0.9 : analysis.hasLatex ? 0.7 : 0.5;
+    // Fix double backslashes before commands (\\command) -> single (\command)
+    commands.forEach(cmd => {
+        const pattern = new RegExp(`\\\\\\\\${cmd}\\b`, 'g');
+        result = result.replace(pattern, `\\${cmd}`);
+    });
     
-    return analysis;
+    // Fix double backslashes in common patterns
+    result = result
+        .replace(/\\\\([{}])/g, '\\$1')           // \\{ -> \{
+        .replace(/\\\\([()])/g, '\\$1')           // \\( -> \(
+        .replace(/\\\\([\[\]])/g, '\\$1')         // \\[ -> \[
+        .replace(/\\\\([_^&%$#])/g, '\\$1');      // \\_ -> \_
+    
+    return result;
 }
-
-function splitMixedContentSafely(content) {
-    const parts = [];
-    const latexPattern = /(\$[^$]+\$|\\\([^)]+\\\)|\\\[[^\]]+\\\])/g;
-    
-    let lastIndex = 0;
-    let match;
-    let iteration = 0;
-    const maxIterations = 100;
-    
-    while ((match = latexPattern.exec(content)) !== null && iteration < maxIterations) {
-        iteration++;
+function fixLatexPatterns(content) {
+    return content
+        // Fix fraction spacing
+        .replace(/\\frac\s*\{\s*([^}]*)\s*\}\s*\{\s*([^}]*)\s*\}/g, '\\frac{$1}{$2}')
         
-        if (match.index > lastIndex) {
-            const textPart = content.slice(lastIndex, match.index).trim();
-            if (textPart) {
-                parts.push({ type: 'text', content: textPart, needsEscape: true });
-            }
-        }
+        // Fix sqrt spacing
+        .replace(/\\sqrt\s*\{\s*([^}]*)\s*\}/g, '\\sqrt{$1}')
         
-        let latexContent = match[1];
+        // Fix text command spacing
+        .replace(/\\text\s*\{\s*([^}]*)\s*\}/g, '\\text{$1}')
         
-        if (latexContent.startsWith('$') && latexContent.endsWith('$')) {
-            latexContent = latexContent.slice(1, -1);
-        } else if (latexContent.startsWith('\\(') && latexContent.endsWith('\\)')) {
-            latexContent = latexContent.slice(2, -2);
-        } else if (latexContent.startsWith('\\[') && latexContent.endsWith('\\]')) {
-            latexContent = latexContent.slice(2, -2);
-        }
+        // Fix superscript/subscript spacing
+        .replace(/([a-zA-Z0-9}])\s*([_^])\s*\{\s*([^}]*)\s*\}/g, '$1$2{$3}')
         
-        if (latexContent.trim()) {
-            parts.push({ type: 'latex', content: normalizeLatexFromAPI(latexContent), needsEscape: false });
-        }
-        
-        lastIndex = match.index + match[0].length;
-    }
-    
-    if (lastIndex < content.length) {
-        const remainingText = content.slice(lastIndex).trim();
-        if (remainingText) {
-            parts.push({ type: 'text', content: remainingText, needsEscape: true });
-        }
-    }
-    
-    if (parts.length === 0) {
-        parts.push({ type: 'text', content: content, needsEscape: true });
-    }
-    
-    return parts;
+        // Fix sum/int/lim patterns
+        .replace(/\\(sum|int|lim|prod)\s*_\s*\{\s*([^}]*)\s*\}\s*\^\s*\{\s*([^}]*)\s*\}/g, '\\$1_{$2}^{$3}');
 }
 
 
@@ -357,7 +314,86 @@ export function showInViewNotification(message, type = 'success', autoHide = tru
         return null;
     }
 }
+export function diagnoseLaTeXIssues(testContent = null) {
+    console.group('🔍 LaTeX Diagnostic Report');
+    
+    const testCases = testContent ? [testContent] : [
+        // Common API response patterns
+        '\\\\frac{1}{2}',
+        '\\\\\\\\sum_{i=1}^{n}',
+        '\\frac{a}{b}',
+        '\\\\sqrt{x^2+y^2}',
+        '$\\\\int_0^1 f(x)dx',
+        '\\\\text{Sonuç: } x = \\\\frac{-b}{2a}'
+    ];
 
+    console.log('📊 System Status:');
+    console.log('- Enhanced Math Renderer:', !!window.enhancedMathRenderer);
+    console.log('- MathJax Ready:', window.enhancedMathRenderer?.mathJaxReady);
+    console.log('- KaTeX Ready:', window.enhancedMathRenderer?.katexReady);
+    
+    console.log('\n📝 LaTeX Normalization Tests:');
+    testCases.forEach((test, index) => {
+        const normalized = normalizeLatexFromAPI(test);
+        const changed = test !== normalized;
+        
+        console.log(`Test ${index + 1}:`, {
+            input: test,
+            output: normalized,
+            changed: changed,
+            status: changed ? '✅ Normalized' : '➡️ No change needed'
+        });
+    });
+    
+    console.log('\n🏥 Health Check:');
+    if (window.enhancedMathRenderer) {
+        const health = window.enhancedMathRenderer.getStatus ? 
+            window.enhancedMathRenderer.getStatus() : 
+            { status: 'Unknown - no getStatus method' };
+        console.log('Renderer Health:', health);
+    }
+    
+    console.groupEnd();
+}
+
+export function quickFixMathRender() {
+    console.log('🔧 Applying quick math render fixes...');
+    
+    // Find all math elements that might have rendering issues
+    const mathElements = document.querySelectorAll('.math-rendered, [data-latex], .smart-content[data-content]');
+    
+    console.log(`📍 Found ${mathElements.length} math elements to check`);
+    
+    let fixedCount = 0;
+    
+    mathElements.forEach(async (element, index) => {
+        try {
+            const content = element.getAttribute('data-latex') || 
+                          element.getAttribute('data-content') || 
+                          element.textContent;
+            
+            if (content && content.includes('\\\\')) {
+                console.log(`🔧 Fixing element ${index + 1}: ${content.substring(0, 30)}...`);
+                
+                const normalized = normalizeLatexFromAPI(content);
+                const success = await renderMath(normalized, element, false);
+                
+                if (success) {
+                    fixedCount++;
+                    console.log(`✅ Fixed element ${index + 1}`);
+                } else {
+                    console.log(`❌ Failed to fix element ${index + 1}`);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Error fixing element ${index + 1}:`, error);
+        }
+    });
+    
+    setTimeout(() => {
+        console.log(`🎉 Quick fix completed: ${fixedCount} elements fixed`);
+    }, 1000);
+}
 /**
  * Ekranda bir hata mesajı gösterir.
  */
@@ -567,35 +603,334 @@ export async function renderMath(content, element, displayMode = false) {
             return false;
         }
         
-        const analysis = analyzeMixedContent(content);
-        console.log('🔍 Content analysis:', analysis);
+        // CRITICAL: Always normalize content first
         const normalizedContent = normalizeLatexFromAPI(content);
+        
+        if (!normalizedContent) {
+            console.warn('⚠️ Normalization failed, using original content');
+            element.textContent = content;
+            element.classList.add('normalization-failed');
+            return false;
+        }
+        
+        // Check for mixed content (Turkish + LaTeX)
+        const analysis = analyzeMixedContent(normalizedContent);
+        console.log('🔍 Content analysis:', analysis);
         
         if (analysis.isMixed) {
             return await renderMixedContent(normalizedContent, element, displayMode);
         }
         
-        // Enhanced math UI renderer kullan
-        const result = await enhancedMathUI.renderMath(normalizedContent, element, { displayMode });
+        // Enhanced math UI renderer with retry logic
+        const result = await renderWithRetry(normalizedContent, element, { displayMode });
         
         if (!result) {
-            console.warn('Enhanced render başarısız, fallback uygulanıyor:', normalizedContent);
-            element.textContent = content;
-            element.classList.add('render-fallback');
-            element.title = 'Math rendering failed - Enhanced fallback active';
-            showInViewNotification('Matematik render başarısız, metin formatında gösteriliyor', 'warning', true, 3000);
+            console.warn('❌ Enhanced render failed, applying fallback');
+            applyRenderFallback(element, content, normalizedContent);
         }
         
         return result;
         
     } catch (error) {
-        console.error('❌ Enhanced renderMath hatası:', error);
-        element.textContent = content;
-        element.classList.add('render-error');
-        element.title = `Render error: ${error.message}`;
+        console.error('❌ Enhanced renderMath error:', error);
+        applyRenderFallback(element, content, null, error);
         return false;
     }
 }
+async function renderWithRetry(content, element, options, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Render attempt ${attempt}/${maxRetries} for content: ${content.substring(0, 50)}...`);
+            
+            const result = await enhancedMathUI.renderMath(content, element, options);
+            
+            if (result) {
+                console.log(`✅ Render successful on attempt ${attempt}`);
+                return true;
+            }
+            
+            if (attempt < maxRetries) {
+                console.warn(`⚠️ Render attempt ${attempt} failed, retrying...`);
+                await new Promise(resolve => setTimeout(resolve, attempt * 100));
+            }
+            
+        } catch (error) {
+            console.error(`❌ Render attempt ${attempt} error:`, error);
+            
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, attempt * 200));
+        }
+    }
+    
+    return false;
+}
+/**
+ * MathML render hatası durumunda kullanıcı deneyimini iyileştiren
+ * gelişmiş bir geri dönüş (fallback) arayüzü uygular.
+ * @param {HTMLElement | null} element - İçeriğin render edileceği hedef DOM öğesi.
+ * @param {string | null} originalContent - İşlenmemiş, orijinal matematik içeriği.
+ * @param {string | null} normalizedContent - Render için hazırlanmış, temizlenmiş içerik.
+ * @param {Error | null} [error=null] - Render sırasında oluşan hata nesnesi (varsa).
+ */
+function applyRenderFallback(element, originalContent, normalizedContent, error = null) {
+    if (!element) {
+        console.error('❌ applyRenderFallback: Hedef element bulunamadı (null).');
+        return;
+    }
+
+    // --- Merkezi Yapılandırma Nesnesi ---
+    // Metinleri ve sınıfları tek bir yerden yönetin.
+    const config = {
+        css: {
+            containerBase: 'fallback-math-container rounded-lg p-3 my-2',
+            iconBase: 'fallback-icon flex-shrink-0 mt-1',
+            body: 'fallback-body flex-1',
+            title: 'fallback-title font-medium text-gray-800 mb-1',
+            content: 'fallback-text font-mono text-sm bg-white border rounded px-2 py-1 mb-2 break-all',
+            info: 'fallback-info text-xs text-gray-600',
+            actions: 'fallback-actions mt-3 flex gap-2 flex-wrap',
+            debugDetails: 'fallback-debug mt-3 text-xs',
+            debugSummary: 'cursor-pointer text-blue-600 hover:text-blue-800 font-medium',
+        },
+        buttons: {
+            retry: {
+                base: 'px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors',
+                text: '🔄 Tekrar Dene',
+                loadingText: '⏳ Deneniyor...',
+            },
+            copy: {
+                base: 'px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors',
+                text: '📋 İçeriği Kopyala',
+                successText: '✅ Kopyalandı',
+                errorText: '❌ Kopyalama Başarısız',
+            },
+            debug: {
+                base: 'px-3 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors',
+                text: '🔍 Element Debug',
+            },
+        },
+        states: {
+            error: {
+                icon: '❌',
+                title: 'Matematik Render Hatası',
+                info: '🔧 Sistem hatası nedeniyle matematik ifadesi düz metin olarak gösteriliyor.',
+                containerClass: 'border-red-300 bg-red-50',
+                iconClass: 'text-red-500',
+                notification: 'Matematik render hatası - teknik destek gerekebilir.',
+            },
+            warning: {
+                icon: '⚠️',
+                title: 'Matematik Render Uyarısı',
+                info: '📝 Matematik render başarısız, düz metin modunda gösteriliyor.',
+                containerClass: 'border-yellow-300 bg-yellow-50',
+                iconClass: 'text-yellow-500',
+                notification: 'Matematik ifadesi düz metin olarak gösteriliyor.',
+            },
+        },
+    };
+
+    // Geliştirme ortamı kontrolü
+    const isDevelopment = window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.search.includes('debug=true');
+
+    // Elementi güvenli bir şekilde temizle
+    try {
+        element.innerHTML = '';
+        element.className = 'math-render-fallback';
+    } catch (clearError) {
+        console.error('❌ Element temizlenirken hata oluştu:', clearError);
+        return;
+    }
+
+    const displayContent = (normalizedContent && normalizedContent.trim()) ?
+                           normalizedContent :
+                           (originalContent || 'İçerik bulunamadı');
+
+    const state = error ? config.states.error : config.states.warning;
+
+    // Ana fallback konteynerini oluştur
+    const fallbackContainer = document.createElement('div');
+    fallbackContainer.className = `${config.css.containerBase} ${state.containerClass}`;
+
+    // Ana içerik HTML'ini oluştur
+    fallbackContainer.innerHTML = `
+        <div class="fallback-content flex items-start gap-3">
+            <div class="${config.css.iconBase} ${state.iconClass}">${state.icon}</div>
+            <div class="${config.css.body}">
+                <div class="${config.css.title}">${state.title}</div>
+                <div class="${config.css.content}">${escapeHtml(displayContent)}</div>
+                <div class="${config.css.info}">${state.info}</div>
+            </div>
+        </div>
+    `;
+
+    // Geliştirme ortamı için debug bilgilerini ekle
+    if (isDevelopment) {
+        const debugInfo = document.createElement('details');
+        debugInfo.className = config.css.debugDetails;
+        debugInfo.innerHTML = `
+            <summary class="${config.css.debugSummary}">🔍 Debug Bilgileri (Geliştirici)</summary>
+            <div class="mt-2 p-2 bg-gray-100 rounded border font-mono text-xs overflow-auto">
+                <div class="grid grid-cols-1 gap-2">
+                    <div><strong>Orijinal İçerik:</strong><pre class="mt-1 text-gray-700 whitespace-pre-wrap break-all">${escapeHtml(originalContent || 'null')}</pre></div>
+                    <div><strong>Normalize Edilmiş:</strong><pre class="mt-1 text-gray-700 whitespace-pre-wrap break-all">${escapeHtml(normalizedContent || 'null')}</pre></div>
+                    <div><strong>Hata Mesajı:</strong><pre class="mt-1 text-red-600 whitespace-pre-wrap">${error ? escapeHtml(error.message) : 'Hata yok'}</pre></div>
+                    <div><strong>Hata Stack:</strong><pre class="mt-1 text-red-500 text-xs whitespace-pre-wrap">${error?.stack ? escapeHtml(error.stack.substring(0, 500)) : 'Stack yok'}</pre></div>
+                    <div><strong>Element Info:</strong><pre class="mt-1 text-blue-600 whitespace-pre-wrap">ID: ${element.id || 'yok'}\nClass: ${element.className || 'yok'}\nParent: ${element.parentElement?.tagName || 'yok'}</pre></div>
+                </div>
+            </div>
+        `;
+        fallbackContainer.appendChild(debugInfo);
+    }
+
+    // Eylem düğmelerini ekle
+    const actionButtons = document.createElement('div');
+    actionButtons.className = config.css.actions;
+    actionButtons.innerHTML = `
+        <button class="retry-render-btn ${config.buttons.retry.base}">${config.buttons.retry.text}</button>
+        <button class="copy-content-btn ${config.buttons.copy.base}">${config.buttons.copy.text}</button>
+        ${isDevelopment ? `<button class="debug-element-btn ${config.buttons.debug.base}">${config.buttons.debug.text}</button>` : ''}
+    `;
+    fallbackContainer.appendChild(actionButtons);
+
+    // Düğme olay dinleyicilerini ayarla
+    setupFallbackActions(actionButtons, element, originalContent, normalizedContent, error, config);
+
+    // Oluşturulan arayüzü elemente ekle
+    try {
+        element.appendChild(fallbackContainer);
+    } catch (appendError) {
+        console.error('❌ Fallback konteyneri eklenirken hata:', appendError);
+        // Nihai geri dönüş: Sadece metin içeriğini ayarla
+        element.textContent = displayContent;
+        return;
+    }
+
+    // Kullanıcıya bildirim göster
+    if (window.showInViewNotification) {
+        window.showInViewNotification(
+            state.notification,
+            error ? 'error' : 'warning',
+            true,
+            error ? 8000 : 5000
+        );
+    }
+
+    // İzleme için konsola log bırak
+    console.warn('🔧 Math render fallback uygulandı:', {
+        hasError: !!error,
+        errorMessage: error?.message,
+        originalLength: originalContent?.length || 0,
+        normalizedLength: normalizedContent?.length || 0,
+        elementId: element.id,
+        timestamp: new Date().toISOString(),
+    });
+}
+
+/**
+ * Fallback arayüzündeki eylem düğmeleri için olay dinleyicilerini ayarlar.
+ * @param {HTMLElement} actionsContainer - Düğmeleri içeren konteyner.
+ * @param {HTMLElement} element - Ana render elementi.
+ * @param {string | null} originalContent - Orijinal içerik.
+ * @param {string | null} normalizedContent - Normalize edilmiş içerik.
+ * @param {Error | null} error - Orijinal hata.
+ * @param {object} config - Metin ve sınıfları içeren yapılandırma nesnesi.
+ */
+function setupFallbackActions(actionsContainer, element, originalContent, normalizedContent, error, config) {
+    const retryBtn = actionsContainer.querySelector('.retry-render-btn');
+    const copyBtn = actionsContainer.querySelector('.copy-content-btn');
+    const debugBtn = actionsContainer.querySelector('.debug-element-btn');
+
+    // Tekrar Dene Düğmesi
+    if (retryBtn) {
+        retryBtn.addEventListener('click', async () => {
+            console.log('🔄 Kullanıcı render işlemini tekrar denedi.');
+            retryBtn.disabled = true;
+            retryBtn.textContent = config.buttons.retry.loadingText;
+
+            try {
+                element.innerHTML = '';
+                element.className = '';
+                const contentToRender = normalizedContent || originalContent;
+
+                if (contentToRender && window.renderMath) {
+                    const success = await window.renderMath(contentToRender, element, false);
+                    if (!success) throw new Error('Render tekrar denemesi başarısız oldu.');
+                    
+                    if (window.showInViewNotification) {
+                        window.showInViewNotification('Matematik render başarılı! ✅', 'success', true, 2000);
+                    }
+                } else {
+                    throw new Error('Render fonksiyonu (window.renderMath) veya içerik bulunamadı.');
+                }
+            } catch (retryError) {
+                console.error('❌ Tekrar deneme başarısız:', retryError);
+                applyRenderFallback(element, originalContent, normalizedContent, retryError);
+                if (window.showInViewNotification) {
+                    window.showInViewNotification('Tekrar deneme başarısız oldu.', 'error', true, 3000);
+                }
+            }
+        });
+    }
+
+    // İçeriği Kopyala Düğmesi
+    if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+            const contentToCopy = normalizedContent || originalContent || 'İçerik yok';
+            try {
+                await navigator.clipboard.writeText(contentToCopy);
+                copyBtn.textContent = config.buttons.copy.successText;
+                if (window.showInViewNotification) {
+                    window.showInViewNotification('İçerik panoya kopyalandı.', 'success', true, 2000);
+                }
+            } catch (copyError) {
+                console.error('❌ Kopyalama başarısız:', copyError);
+                copyBtn.textContent = config.buttons.copy.errorText;
+            } finally {
+                setTimeout(() => {
+                    copyBtn.textContent = config.buttons.copy.text;
+                }, 2000);
+            }
+        });
+    }
+
+    // Element Debug Düğmesi (sadece geliştirme ortamında)
+    if (debugBtn) {
+        debugBtn.addEventListener('click', () => {
+            console.group('🔍 Element Debug Bilgileri');
+            console.log('Element:', element);
+            console.log('Original Content:', originalContent);
+            console.log('Normalized Content:', normalizedContent);
+            console.log('Error:', error);
+            console.log('Parent Element:', element.parentElement);
+            console.log('Computed Style:', window.getComputedStyle(element));
+            console.groupEnd();
+            
+            window.debugElement = element;
+            console.log('💡 Element, konsolda "window.debugElement" olarak erişilebilir.');
+        });
+    }
+}
+
+/**
+ * Potansiyel XSS saldırılarını önlemek için metin içeriğini güvenli hale getirir.
+ * Null veya undefined değerleri boş bir string olarak döndürür.
+ * @param {any} text - Güvenli hale getirilecek metin.
+ * @returns {string} HTML-escaped string.
+ */
+function escapeHtml(text) {
+    if (text === null || typeof text === 'undefined') return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// Modül olarak dışa aktarma
+export { applyRenderFallback, setupFallbackActions };
 
 async function renderMixedContent(content, element, displayMode = false) {
     try {
@@ -638,7 +973,29 @@ async function renderMixedContent(content, element, displayMode = false) {
         return false;
     }
 }
-
+function analyzeMixedContent(content) {
+    const analysis = {
+        hasTurkish: false,
+        hasLatex: false,
+        isMixed: false,
+        parts: [],
+        confidence: 0
+    };
+    
+    analysis.hasTurkish = TURKISH_CONTENT_PATTERNS.turkishChars.test(content) ||
+                          TURKISH_CONTENT_PATTERNS.turkishWords.test(content);
+    
+    analysis.hasLatex = /\\[a-zA-Z]+|\{[^}]*\}|\^|\$/.test(content);
+    analysis.isMixed = analysis.hasTurkish && analysis.hasLatex;
+    
+    if (analysis.isMixed) {
+        analysis.parts = splitMixedContentSafely(content);
+    }
+    
+    analysis.confidence = analysis.isMixed ? 0.9 : analysis.hasLatex ? 0.7 : 0.5;
+    
+    return analysis;
+}
 /**
  * Container içindeki tüm matematik içeriğini render eder
  */

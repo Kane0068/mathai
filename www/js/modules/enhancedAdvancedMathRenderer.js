@@ -964,7 +964,478 @@ export class EnhancedAdvancedMathRenderer {
         console.log('🧹 Enhanced Math Renderer destroyed');
     }
 }
+// Enhanced LaTeX Normalizer - Complete Solution for Math Rendering
+// Fixes backslash inconsistency from API responses
 
+export class EnhancedLatexNormalizer {
+    constructor() {
+        this.patterns = this.initializeNormalizationPatterns();
+        this.cache = new Map();
+        this.debugMode = false;
+    }
+
+    /**
+     * Main normalization function - handles all API inconsistencies
+     * @param {string} content - Raw LaTeX content from API
+     * @returns {string} - Normalized LaTeX ready for rendering
+     */
+    normalizeLatex(content) {
+        if (!content || typeof content !== 'string') {
+            return '';
+        }
+
+        // Check cache first
+        const cacheKey = this.generateCacheKey(content);
+        if (this.cache.has(cacheKey)) {
+            return this.cache.get(cacheKey);
+        }
+
+        let normalized = content.trim();
+
+        // Step 1: Clean and prepare
+        normalized = this.cleanRawContent(normalized);
+
+        // Step 2: Normalize backslashes (CRITICAL)
+        normalized = this.normalizeBackslashes(normalized);
+
+        // Step 3: Fix common LaTeX patterns  
+        normalized = this.fixLatexPatterns(normalized);
+
+        // Step 4: Remove outer delimiters
+        normalized = this.removeOuterDelimiters(normalized);
+
+        // Step 5: Final cleanup
+        normalized = this.finalCleanup(normalized);
+
+        // Cache result
+        this.cache.set(cacheKey, normalized);
+
+        if (this.debugMode) {
+            console.log('LaTeX Normalization:', {
+                original: content,
+                normalized: normalized,
+                changes: content !== normalized
+            });
+        }
+
+        return normalized;
+    }
+
+    /**
+     * Clean raw content from API response
+     */
+    cleanRawContent(content) {
+        return content
+            // Remove Unicode issues
+            .replace(/[\u201C\u201D]/g, '"')  // Smart quotes
+            .replace(/[\u2018\u2019]/g, "'")  // Smart apostrophes
+            .replace(/[\u2013\u2014]/g, "-")  // En/em dashes
+            
+            // Remove control characters
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+            
+            // Normalize whitespace
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /**
+     * CRITICAL: Normalize backslashes from API inconsistency
+     * APIs return 1, 2, or 4 backslashes inconsistently
+     */
+    normalizeBackslashes(content) {
+        // Strategy: Convert all to single backslash first, then to proper LaTeX
+
+        let normalized = content;
+
+        // Step 1: Detect and fix quadruple backslashes (\\\\)
+        normalized = normalized.replace(/\\{4,}/g, '\\');
+
+        // Step 2: Fix triple backslashes (\\\)
+        normalized = normalized.replace(/\\{3}/g, '\\');
+
+        // Step 3: Handle double backslashes - keep only for line breaks
+        // Preserve \\ for actual line breaks in LaTeX, but fix command backslashes
+        normalized = this.intelligentDoubleBackslashFix(normalized);
+
+        return normalized;
+    }
+
+    /**
+     * Intelligent handling of double backslashes
+     * Preserves legitimate \\ (line breaks) while fixing command backslashes
+     */
+    intelligentDoubleBackslashFix(content) {
+        // Common LaTeX commands that should have single backslash
+        const commands = [
+            'frac', 'sqrt', 'sum', 'int', 'lim', 'sin', 'cos', 'tan', 'log', 'ln',
+            'alpha', 'beta', 'gamma', 'delta', 'theta', 'lambda', 'mu', 'pi', 'sigma',
+            'text', 'mathbb', 'mathbf', 'mathrm', 'left', 'right', 'begin', 'end',
+            'times', 'div', 'pm', 'mp', 'leq', 'geq', 'neq', 'approx', 'infty'
+        ];
+
+        let result = content;
+
+        // Fix double backslashes before known commands
+        commands.forEach(cmd => {
+            const pattern = new RegExp(`\\\\\\\\${cmd}\\b`, 'g');
+            result = result.replace(pattern, `\\${cmd}`);
+        });
+
+        // Fix double backslashes in common patterns
+        result = result
+            // Fix \\{ and \\}
+            .replace(/\\\\([{}])/g, '\\$1')
+            // Fix \\( and \\)
+            .replace(/\\\\([()])/g, '\\$1')
+            // Fix \\[ and \\]
+            .replace(/\\\\([\[\]])/g, '\\$1')
+            // Fix \\^, \\_, etc.
+            .replace(/\\\\([_^&%$#])/g, '\\$1');
+
+        return result;
+    }
+
+    /**
+     * Fix common LaTeX patterns
+     */
+    fixLatexPatterns(content) {
+        let result = content;
+
+        this.patterns.forEach(pattern => {
+            if (typeof pattern.replacement === 'function') {
+                result = result.replace(pattern.pattern, pattern.replacement);
+            } else {
+                result = result.replace(pattern.pattern, pattern.replacement);
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * Remove outer delimiters that shouldn't be there
+     */
+    removeOuterDelimiters(content) {
+        return content
+            .replace(/^\$+|\$+$/g, '')        // Remove outer $
+            .replace(/^\\\(|\\\)$/g, '')      // Remove outer \( \)
+            .replace(/^\\\[|\\\]$/g, '')      // Remove outer \[ \]
+            .replace(/^\${2,}|\${2,}$/g, ''); // Remove outer $$
+    }
+
+    /**
+     * Final cleanup
+     */
+    finalCleanup(content) {
+        return content
+            .replace(/\s+/g, ' ')  // Normalize spaces
+            .replace(/\s*([{}])\s*/g, '$1')  // Remove spaces around braces
+            .trim();
+    }
+
+    /**
+     * Initialize normalization patterns
+     */
+    initializeNormalizationPatterns() {
+        return [
+            // Fraction normalization
+            {
+                name: 'frac_spaces',
+                pattern: /\\frac\s*\{\s*([^}]*)\s*\}\s*\{\s*([^}]*)\s*\}/g,
+                replacement: '\\frac{$1}{$2}'
+            },
+
+            // Square root normalization  
+            {
+                name: 'sqrt_spaces',
+                pattern: /\\sqrt\s*\{\s*([^}]*)\s*\}/g,
+                replacement: '\\sqrt{$1}'
+            },
+
+            // Text command normalization
+            {
+                name: 'text_normalization',
+                pattern: /\\text\s*\{\s*([^}]*)\s*\}/g,
+                replacement: '\\text{$1}'
+            },
+
+            // Sum, integral, limit normalization
+            {
+                name: 'math_operators',
+                pattern: /\\(sum|int|lim|prod)\s*_\s*\{\s*([^}]*)\s*\}\s*\^\s*\{\s*([^}]*)\s*\}/g,
+                replacement: '\\$1_{$2}^{$3}'
+            },
+
+            // Superscript/subscript spacing
+            {
+                name: 'super_sub_script',
+                pattern: /([a-zA-Z0-9}])\s*([_^])\s*\{\s*([^}]*)\s*\}/g,
+                replacement: '$1$2{$3}'
+            },
+
+            // Left/right delimiter spacing
+            {
+                name: 'left_right_delimiters',
+                pattern: /\\left\s*([()[\]|])\s*(.*?)\s*\\right\s*([()[\]|])/g,
+                replacement: '\\left$1$2\\right$3'
+            }
+        ];
+    }
+
+    /**
+     * Generate cache key
+     */
+    generateCacheKey(content) {
+        // Simple hash for caching
+        let hash = 0;
+        for (let i = 0; i < content.length; i++) {
+            const char = content.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString();
+    }
+
+    /**
+     * Clear cache
+     */
+    clearCache() {
+        this.cache.clear();
+    }
+
+    /**
+     * Enable/disable debug mode
+     */
+    setDebugMode(enabled) {
+        this.debugMode = enabled;
+    }
+
+    /**
+     * Get normalization statistics
+     */
+    getStats() {
+        return {
+            cacheSize: this.cache.size,
+            patternsCount: this.patterns.length
+        };
+    }
+}
+
+/**
+ * Enhanced Math Renderer with proper normalization
+ */
+export class EnhancedMathRenderer {
+    constructor() {
+        this.normalizer = new EnhancedLatexNormalizer();
+        this.mathJaxReady = false;
+        this.katexReady = false;
+        this.cache = new Map();
+        
+        this.initializeRenderers();
+    }
+
+    async initializeRenderers() {
+        // Initialize MathJax
+        await this.initializeMathJax();
+        
+        // Check KaTeX
+        this.katexReady = typeof window.katex !== 'undefined';
+        
+        console.log(`Math Renderer Ready - MathJax: ${this.mathJaxReady}, KaTeX: ${this.katexReady}`);
+    }
+
+    async initializeMathJax() {
+        if (typeof window.MathJax !== 'undefined') {
+            this.mathJaxReady = true;
+            return;
+        }
+
+        return new Promise((resolve) => {
+            window.MathJax = {
+                tex: {
+                    inlineMath: [['$', '$'], ['\\(', '\\)']],
+                    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                    processEscapes: true,
+                    processEnvironments: true,
+                    tags: 'ams',
+                    macros: {
+                        '\\R': '\\mathbb{R}',
+                        '\\C': '\\mathbb{C}',
+                        '\\N': '\\mathbb{N}',
+                        '\\Z': '\\mathbb{Z}',
+                        '\\Q': '\\mathbb{Q}'
+                    }
+                },
+                svg: {
+                    fontCache: 'global',
+                    displayAlign: 'left',
+                    scale: 1
+                },
+                startup: {
+                    ready: () => {
+                        this.mathJaxReady = true;
+                        window.MathJax.startup.defaultReady();
+                        resolve();
+                    }
+                }
+            };
+
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
+            script.async = true;
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Main render function with normalization
+     */
+    async render(content, element, options = {}) {
+        if (!content || !element) {
+            console.warn('Missing content or element for rendering');
+            return false;
+        }
+
+        try {
+            // CRITICAL: Normalize LaTeX first
+            const normalizedContent = this.normalizer.normalizeLatex(content);
+            
+            if (!normalizedContent) {
+                element.textContent = content;
+                return false;
+            }
+
+            // Try rendering with available engines
+            if (this.mathJaxReady) {
+                return await this.renderWithMathJax(normalizedContent, element, options);
+            } else if (this.katexReady) {
+                return await this.renderWithKaTeX(normalizedContent, element, options);
+            } else {
+                // Fallback
+                element.textContent = content;
+                element.classList.add('math-fallback');
+                return false;
+            }
+
+        } catch (error) {
+            console.error('Math rendering error:', error);
+            element.textContent = content;
+            element.classList.add('math-render-error');
+            return false;
+        }
+    }
+
+    async renderWithMathJax(content, element, options = {}) {
+        if (!this.mathJaxReady) return false;
+
+        try {
+            const displayMode = options.displayMode || false;
+            const mathContent = displayMode ? `\\[${content}\\]` : `\\(${content}\\)`;
+            
+            element.innerHTML = mathContent;
+            await window.MathJax.typesetPromise([element]);
+            
+            return true;
+        } catch (error) {
+            console.error('MathJax render error:', error);
+            return false;
+        }
+    }
+
+    async renderWithKaTeX(content, element, options = {}) {
+        if (!this.katexReady) return false;
+
+        try {
+            const katexOptions = {
+                displayMode: options.displayMode || false,
+                throwOnError: false,
+                strict: 'ignore'
+            };
+
+            window.katex.render(content, element, katexOptions);
+            return true;
+        } catch (error) {
+            console.error('KaTeX render error:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Render container with all math content
+     */
+    async renderContainer(container, displayMode = false) {
+        if (!container) return;
+
+        const mathElements = container.querySelectorAll('[data-latex], .smart-content[data-content]');
+        
+        for (const element of mathElements) {
+            const content = element.getAttribute('data-latex') || element.getAttribute('data-content');
+            if (content) {
+                await this.render(content, element, { displayMode });
+            }
+        }
+    }
+
+    /**
+     * Enable debug mode for normalizer
+     */
+    enableDebug() {
+        this.normalizer.setDebugMode(true);
+    }
+
+    /**
+     * Get system status
+     */
+    getStatus() {
+        return {
+            mathJaxReady: this.mathJaxReady,
+            katexReady: this.katexReady,
+            normalizerStats: this.normalizer.getStats()
+        };
+    }
+}
+
+// Example usage and testing
+export function testNormalization() {
+    const normalizer = new EnhancedLatexNormalizer();
+    normalizer.setDebugMode(true);
+
+    const testCases = [
+        // API inconsistency examples
+        '\\\\frac{1}{2}',           // Double backslash
+        '\\\\\\\\frac{a}{b}',       // Quadruple backslash  
+        '\\frac{x}{y}',             // Single backslash (correct)
+        '\\\\sum_{i=1}^{n} x_i',    // Mixed backslashes
+        '\\\\sqrt{\\\\frac{a}{b}}', // Nested double backslashes
+        
+        // Complex expressions
+        '$\\\\int_{0}^{\\\\infty} e^{-x} dx$',
+        '\\\\left(\\\\frac{1}{2}\\\\right)^2',
+        '\\\\text{Solution: } x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}'
+    ];
+
+    console.log('=== LaTeX Normalization Tests ===');
+    testCases.forEach((test, index) => {
+        const result = normalizer.normalizeLatex(test);
+        console.log(`Test ${index + 1}:`, {
+            input: test,
+            output: result,
+            changed: test !== result
+        });
+    });
+}
+
+// Create global instance
+export const mathRenderer = new EnhancedMathRenderer();
+
+// Make available globally
+if (typeof window !== 'undefined') {
+    window.mathRenderer = mathRenderer;
+    window.testNormalization = testNormalization;
+    
+    console.log('Enhanced Math Renderer loaded. Try: testNormalization()');
+}
 // =================================================================================
 //  Enhanced UI Module - DOM Timing Sorunları Çözümü
 // =================================================================================
@@ -1143,16 +1614,7 @@ export const enhancedMathUI = new EnhancedMathUI(enhancedMathRenderer);
 
 // Backward compatibility
 export const advancedMathRenderer = enhancedMathRenderer;
-export const mathRenderer = {
-    render: (content, element, displayMode) => 
-        enhancedMathRenderer.render(content, element, { displayMode }),
-    renderContainer: (container, displayMode) => 
-        enhancedMathRenderer.renderContainer(container, displayMode),
-    isSimpleText: (content) => {
-        const analysis = enhancedMathRenderer.analyzeContent(content);
-        return analysis.type === 'text';
-    }
-};
+
 
 // Global erişim
 if (typeof window !== 'undefined') {
