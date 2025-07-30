@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Architecture Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success-bg { background-color: #e8f5e8; }
+        .error-bg { background-color: #ffe8e8; }
+    </style>
+</head>
+<body>
+    <h1>Modular Architecture Test</h1>
+    <div id="test-results"></div>
+    
+    <script type="module">
+        const results = document.getElementById('test-results');
+        
+        function addResult(message, isSuccess = true) {
+            const div = document.createElement('div');
+            div.className = `test-result ${isSuccess ? 'success success-bg' : 'error error-bg'}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+        
+        async function runTests() {
+            try {
+                // Test 1: Configuration System
+                const { config } = await import('./js/core/config.js');
+                const apiKey = config.getApiKey('gemini');
+                if (apiKey) {
+                    addResult('✅ Configuration system works - API key loaded');
+                } else {
+                    addResult('❌ Configuration system failed - no API key', false);
+                }
+                
+                // Test 2: Container System
+                const { container, initializeContainer } = await import('./js/core/container.js');
+                if (container) {
+                    addResult('✅ Container system loaded');
+                } else {
+                    addResult('❌ Container system failed', false);
+                }
+                
+                // Test 3: API Service
+                const { ApiService } = await import('./js/services/apiService.js');
+                const apiService = new ApiService(null); // Pass null for errorHandler in test
+                if (apiService) {
+                    addResult('✅ API Service can be instantiated');
+                } else {
+                    addResult('❌ API Service instantiation failed', false);
+                }
+                
+                // Test 4: Problem Solver Service
+                const { ProblemSolverService } = await import('./js/services/problemSolverService.js');
+                const problemSolver = new ProblemSolverService(null, null, null); // Null services for test
+                if (problemSolver) {
+                    addResult('✅ Problem Solver Service can be instantiated');
+                } else {
+                    addResult('❌ Problem Solver Service instantiation failed', false);
+                }
+                
+                // Test 5: Configuration validation
+                try {
+                    config.validate();
+                    addResult('✅ Configuration validation passed');
+                } catch (error) {
+                    addResult(`❌ Configuration validation failed: ${error.message}`, false);
+                }
+                
+                // Test 6: Configuration get/set
+                const originalTimeout = config.get('api.gemini.timeout');
+                config.set('api.gemini.timeout', 45000);
+                const newTimeout = config.get('api.gemini.timeout');
+                
+                if (newTimeout === 45000) {
+                    addResult('✅ Configuration get/set works');
+                    // Restore original value
+                    config.set('api.gemini.timeout', originalTimeout);
+                } else {
+                    addResult('❌ Configuration get/set failed', false);
+                }
+                
+                // Test 7: Container registration
+                try {
+                    container.registerInstance('testService', { name: 'test' });
+                    const testService = container.get('testService');
+                    if (testService.name === 'test') {
+                        addResult('✅ Container registration and retrieval works');
+                    } else {
+                        addResult('❌ Container service retrieval failed', false);
+                    }
+                } catch (error) {
+                    addResult(`❌ Container test failed: ${error.message}`, false);
+                }
+                
+                addResult('🎉 All core modular architecture tests completed!');
+                
+            } catch (error) {
+                addResult(`❌ Test suite failed: ${error.message}`, false);
+                console.error('Test error:', error);
+            }
+        }
+        
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>

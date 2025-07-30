@@ -1,11 +1,7 @@
-// login.js
-// Giriş sayfası işlevleri.
-// Sadece login.html ile ilgili işlemler burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// www/js/pages/login.js
 
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { auth, AuthManager } from '../modules/auth.js';
-import { getElements, logError } from '../modules/utils.js';
 
 AuthManager.initPublicPage();
 

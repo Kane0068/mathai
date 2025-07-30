@@ -1,7 +1,4 @@
-// profile.js
-// Kullanıcı profil sayfası işlevleri.
-// Sadece profile.html ile ilgili işlemler burada olmalı.
-// Ortak yardımcılar utils.js'e taşınmalı.
+// www/js/pages/profile.js
 
 import { AuthManager } from '../modules/auth.js';
 

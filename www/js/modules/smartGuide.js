@@ -1,15 +1,15 @@
-// smartGuide.js  
-// Akıllı rehber sistemi
+// =================================================================================
+//  Akıllı Rehber Sistemi - smartGuide.js
+//  Matematik problemlerini adım adım çözmek için akıllı rehberlik sistemi
+// =================================================================================
 
+// makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
 import { showError, showSuccess, renderMath } from './ui.js';
-import { EnhancedErrorHandler } from './errorHandler.js';
-import { EnhancedStateManager } from './stateManager.js';
-import { logError, sleep } from './utils.js';
 
 export class SmartGuideSystem {
-    constructor() {
-        this.errorHandler = new EnhancedErrorHandler();
-        this.stateManager = new EnhancedStateManager();
+    constructor(errorHandler = null, stateManager = null) {
+        this.errorHandler = errorHandler;
+        this.stateManager = stateManager;
         this.currentStep = 0;
         this.studentAttempts = [];
         this.guidanceData = null;
@@ -1236,163 +1236,6 @@ goToPreviousStep() {
         return this.canvasManager.toDataURL(this.activeCanvasId);
     }
 }
-// Enhanced Smart Guide with better error recovery
-export class EnhancedSmartGuide extends SmartGuideSystem {
-    constructor() {
-        super();
-        this.errorRecovery = {
-            maxRetries: 3,
-            retryDelay: 1000,
-            currentRetries: 0
-        };
-        this.performanceMetrics = {
-            stepRenderTimes: [],
-            averageResponseTime: 0,
-            totalSteps: 0
-        };
-    }
-    
-    async initializeGuidance(solutionData) {
-        try {
-            console.log('🔄 Enhanced Smart Guide initialization...');
-            
-            if (!solutionData || !solutionData.adimlar) {
-                throw new Error('Invalid solution data provided');
-            }
-            
-            // Validate steps data
-            const validSteps = solutionData.adimlar.filter(step => 
-                step && (step.adimAciklamasi || step.cozum_lateks)
-            );
-            
-            if (validSteps.length === 0) {
-                throw new Error('No valid steps found in solution data');
-            }
-            
-            // Initialize with validated data
-            const result = await super.initializeGuidance({
-                ...solutionData,
-                adimlar: validSteps
-            });
-            
-            this.performanceMetrics.totalSteps = validSteps.length;
-            console.log(`✅ Enhanced Smart Guide initialized with ${validSteps.length} steps`);
-            
-            return result;
-            
-        } catch (error) {
-            console.error('❌ Enhanced Smart Guide initialization error:', error);
-            
-            // Error recovery
-            if (this.errorRecovery.currentRetries < this.errorRecovery.maxRetries) {
-                this.errorRecovery.currentRetries++;
-                console.log(`🔄 Retrying Smart Guide init (${this.errorRecovery.currentRetries}/${this.errorRecovery.maxRetries})`);
-                
-                await new Promise(resolve => setTimeout(resolve, this.errorRecovery.retryDelay));
-                return this.initializeGuidance(solutionData);
-            }
-            
-            throw error;
-        }
-    }
-    
-    async evaluateStudentStep(studentInput, inputType = 'text') {
-        const startTime = performance.now();
-        
-        try {
-            console.log(`🔍 Evaluating student step: ${inputType}`);
-            
-            // Enhanced input validation
-            if (!studentInput || (typeof studentInput === 'string' && !studentInput.trim())) {
-                return {
-                    isCorrect: false,
-                    message: 'Lütfen bir cevap girin.',
-                    attempts: this.getCurrentStepAttemptInfo().attempts,
-                    remaining: this.getCurrentStepAttemptInfo().remaining,
-                    canAttempt: false
-                };
-            }
-            
-            // Type-specific processing
-            let processedInput = studentInput;
-            if (inputType === 'canvas') {
-                // Canvas input processing would go here
-                // For now, we'll treat it as an image
-                processedInput = studentInput; // Base64 image data
-            } else {
-                // Text input normalization
-                processedInput = this.normalizeTextInput(studentInput);
-            }
-            
-            // Call parent evaluation
-            const result = await super.evaluateStudentStep(processedInput, inputType);
-            
-            // Record performance metrics
-            const renderTime = performance.now() - startTime;
-            this.performanceMetrics.stepRenderTimes.push(renderTime);
-            this.updateAverageResponseTime();
-            
-            console.log(`✅ Step evaluation completed in ${renderTime.toFixed(2)}ms`);
-            return result;
-            
-        } catch (error) {
-            console.error('❌ Enhanced step evaluation error:', error);
-            
-            // Graceful degradation
-            return {
-                isCorrect: false,
-                message: 'Değerlendirme sırasında bir hata oluştu. Lütfen tekrar deneyin.',
-                attempts: this.getCurrentStepAttemptInfo().attempts,
-                remaining: this.getCurrentStepAttemptInfo().remaining,
-                canAttempt: true,
-                error: true
-            };
-        }
-    }
-    
-    normalizeTextInput(input) {
-        if (typeof input !== 'string') return input;
-        
-        // Basic text normalization
-        return input
-            .trim()
-            .replace(/\s+/g, ' ') // Multiple spaces to single
-            .replace(/[""]/g, '"') // Smart quotes to regular
-            .replace(/['']/g, "'") // Smart apostrophes
-            .replace(/–—/g, '-') // En/em dashes to hyphen
-            .toLowerCase(); // Case insensitive comparison
-    }
-    
-    updateAverageResponseTime() {
-        if (this.performanceMetrics.stepRenderTimes.length > 0) {
-            const total = this.performanceMetrics.stepRenderTimes.reduce((sum, time) => sum + time, 0);
-            this.performanceMetrics.averageResponseTime = total / this.performanceMetrics.stepRenderTimes.length;
-        }
-    }
-    
-    getPerformanceReport() {
-        return {
-            ...this.performanceMetrics,
-            currentStep: this.getCurrentStepInfo()?.stepNumber || 0,
-            totalSteps: this.performanceMetrics.totalSteps,
-            completionRate: this.performanceMetrics.totalSteps > 0 ? 
-                ((this.getCurrentStepInfo()?.stepNumber || 0) / this.performanceMetrics.totalSteps) * 100 : 0
-        };
-    }
-    
-    reset() {
-        super.reset();
-        
-        // Reset enhanced properties
-        this.errorRecovery.currentRetries = 0;
-        this.performanceMetrics = {
-            stepRenderTimes: [],
-            averageResponseTime: 0,
-            totalSteps: 0
-        };
-        
-        console.log('🧹 Enhanced Smart Guide reset completed');
-    }
-}
-// Export both classes and create singleton
-export const smartGuide = new EnhancedSmartGuide();
+
+// Singleton pattern için export
+export const smartGuide = new SmartGuideSystem();
