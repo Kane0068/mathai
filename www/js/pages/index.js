@@ -15,7 +15,7 @@ import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
+import { enhancedMathSystem } from '../modules/enhancedMathSystem.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
 
@@ -114,27 +114,56 @@ const elements = {};
 
 // --- UYGULAMA BAŞLANGIÇ NOKTASI ---
 window.addEventListener('load', () => {
-    AuthManager.initProtectedPage(initializeApp);
+    try {
+        AuthManager.initProtectedPage(initializeApp);
+    } catch (error) {
+        console.error('App initialization failed:', error);
+        document.body.innerHTML = `
+            <div class="flex items-center justify-center min-h-screen">
+                <div class="text-center p-6 bg-red-50 rounded-lg max-w-md">
+                    <h1 class="text-xl font-bold text-red-700 mb-2">Uygulama Başlatma Hatası</h1>
+                    <p class="text-red-600 mb-4">Uygulama başlatılırken bir hata oluştu.</p>
+                    <button onclick="location.reload()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                        Yeniden Dene
+                    </button>
+                </div>
+            </div>
+        `;
+    }
 });
 
 async function initializeApp(userData) {
-    if (userData) {
-        // Render sisteminin hazır olmasını bekle
-        showLoading("Matematik render sistemi başlatılıyor...");
-        await waitForRenderSystem();
+    try {
+        if (userData) {
+            // Render sisteminin hazır olmasını bekle
+            showLoading("Matematik render sistemi başlatılıyor...");
+            await waitForRenderSystem();
+            
+            cacheDOMElements();
+            setupEventListeners();
+            stateManager.subscribe(renderApp);
+            stateManager.setUser(userData);
+            
+            // Akıllı Rehber sistemini başlat
+            smartGuide.setCanvasManager(canvasManager);
+            
+            showLoading(false);
+            console.log('✅ Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
+        } else {
+            document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
+        }
+    } catch (error) {
+        console.error('❌ App initialization error:', error);
+        showError(`Uygulama başlatılırken hata: ${error.message}`, true);
         
-        cacheDOMElements();
-        setupEventListeners();
-        stateManager.subscribe(renderApp);
-        stateManager.setUser(userData);
-        
-        // Akıllı Rehber sistemini başlat
-        smartGuide.setCanvasManager(canvasManager);
-        
-        showLoading(false);
-        console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
-    } else {
-        document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
+        // Fallback: basic functionality
+        try {
+            cacheDOMElements();
+            setupEventListeners();
+            console.log('⚠️ Basic functionality loaded as fallback');
+        } catch (fallbackError) {
+            console.error('❌ Even fallback failed:', fallbackError);
+        }
     }
 }
 
@@ -194,9 +223,18 @@ function setupEventListeners() {
     add('handwriting-mode-btn', 'click', () => stateManager.setInputMode('handwriting'));
     add('switchToCanvasBtn', 'click', () => stateManager.setHandwritingInputType('canvas'));
     add('switchToKeyboardBtn', 'click', () => stateManager.setHandwritingInputType('keyboard'));
-    add('startFromPhotoBtn', 'click', () => handleNewProblem('image'));
-    add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
-    add('startFromTextBtn', 'click', () => handleNewProblem('text'));
+    add('startFromPhotoBtn', 'click', () => {
+        console.log('📸 Photo button clicked');
+        handleNewProblem('image');
+    });
+    add('recognizeHandwritingBtn', 'click', () => {
+        console.log('✏️ Handwriting button clicked');
+        handleNewProblem('canvas');
+    });
+    add('startFromTextBtn', 'click', () => {
+        console.log('📝 Text button clicked');
+        handleNewProblem('text');
+    });
     
     // Ana çözüm seçenekleri
     add('start-solving-workspace-btn', 'click', () => {
@@ -1794,6 +1832,7 @@ function isCanvasEmpty(canvasId) {
 }
 
 async function handleNewProblem(sourceType) {
+    console.log('🔍 handleNewProblem called with sourceType:', sourceType);
     let sourceData;
     let problemContextForPrompt = "Görseldeki matematik problemini çöz.";
 
@@ -2917,4 +2956,4 @@ window.renderMath = renderMath;
 window.debugViewState = debugViewState;
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
+export { canvasManager, errorHandler, stateManager, smartGuide, enhancedMathSystem };

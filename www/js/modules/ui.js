@@ -3,7 +3,7 @@
 //  Tamam butonu sorunu çözüldü
 // =================================================================================
 
-import { advancedMathRenderer } from './advancedMathRenderer.js';
+import { enhancedMathSystem } from './enhancedMathSystem.js';
 
 /**
  * Ekranda bir yükleme mesajı gösterir.
@@ -198,8 +198,8 @@ export async function renderMath(content, element, displayMode = false) {
     }
     
     try {
-        // Gelişmiş render sistemini kullan
-        const result = await advancedMathRenderer.render(content, element, displayMode);
+        // Enhanced Math System kullan
+        const result = await enhancedMathSystem.render(content, element, { displayMode });
         
         if (!result) {
             console.warn('Render başarısız, fallback uygulanıyor:', content);
@@ -230,7 +230,7 @@ export async function renderMathInContainer(container, displayMode = false) {
     }
     
     try {
-        await advancedMathRenderer.renderContainer(container, displayMode);
+        await enhancedMathSystem.renderContainer(container, { displayMode });
         console.log('Container render tamamlandı');
     } catch (error) {
         console.error('Container render hatası:', error);
@@ -285,14 +285,14 @@ export async function renderLatexContent(container) {
  * Render performans monitörü
  */
 export function getRenderStats() {
-    return advancedMathRenderer.getStats();
+    return enhancedMathSystem.getSystemStatus();
 }
 
 /**
  * Render cache temizleme
  */
 export function clearRenderCache() {
-    advancedMathRenderer.clearCache();
+    enhancedMathSystem.components.renderer.clearCache();
 }
 
 /**

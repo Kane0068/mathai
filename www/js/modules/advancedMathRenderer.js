@@ -98,6 +98,25 @@ export class AdvancedMathRenderer {
                     this.processQueue();
                 },
                 pageReady: () => {
+                    // Wait for MathJax to be fully available
+                    if (!window.MathJax || !window.MathJax.STATE) {
+                        // Return a promise that resolves when MathJax is ready
+                        return new Promise((resolve) => {
+                            const checkMathJax = () => {
+                                if (window.MathJax && window.MathJax.STATE && window.MathJax.startup && window.MathJax.startup.document) {
+                                    const state = window.MathJax.startup.document.state();
+                                    if (state < window.MathJax.STATE.READY) {
+                                        window.MathJax.startup.document.ready().then(resolve);
+                                    } else {
+                                        resolve();
+                                    }
+                                } else {
+                                    setTimeout(checkMathJax, 10);
+                                }
+                            };
+                            checkMathJax();
+                        });
+                    }
                     return MathJax.startup.document.state() < MathJax.STATE.READY ? 
                            MathJax.startup.document.ready() : Promise.resolve();
                 }

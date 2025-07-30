@@ -4,7 +4,7 @@
 // =================================================================================
 
 import { renderMath } from '../modules/ui.js';
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
+import { enhancedMathSystem } from '../modules/enhancedMathSystem.js';
 
 // Test verileri
 const TEST_CATEGORIES = {
@@ -249,7 +249,7 @@ async function runSingleTest(test) {
         document.body.appendChild(testElement);
         
         // Yeni MathRenderer ile render et
-        const success = advancedMathRenderer.render(test.latex, testElement, false);
+        const success = await enhancedMathSystem.render(test.latex, testElement, { displayMode: false });
         
         // Render edilen içeriği al
         const renderedContent = testElement.innerHTML;
@@ -368,7 +368,7 @@ function testCustomExpression() {
     document.body.appendChild(testElement);
     
     try {
-        const success = advancedMathRenderer.render(latex, testElement, false);
+        const success = await enhancedMathSystem.render(latex, testElement, { displayMode: false });
         const renderedContent = testElement.innerHTML;
         
         if (success && renderedContent && !renderedContent.includes('ParseError') && !renderedContent.includes('KaTeX error')) {

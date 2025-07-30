@@ -3,7 +3,7 @@
 //  API Yanıtları ve Render İşlemleri Debug Merkezi
 // =================================================================================
 
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
+import { enhancedMathSystem } from '../modules/enhancedMathSystem.js';
 
 // DOM elementleri
 const elements = {};
@@ -36,7 +36,7 @@ function setupEventListeners() {
     elements['debug-clear'].addEventListener('click', () => clearDebug());
 }
 
-function testExpression() {
+async function testExpression() {
     const input = elements['debug-input'].value.trim();
     if (!input) {
         elements['debug-result'].innerHTML = '<p class="text-red-600 text-sm">Lütfen bir ifade girin.</p>';
@@ -51,10 +51,10 @@ function testExpression() {
     
     try {
         // Önce analiz yap
-        const analysis = advancedMathRenderer.analyzeContent(input);
+        const analysis = enhancedMathSystem.components.renderer.analyzeContentAdvanced(input);
         
         // Render işlemi
-        const success = advancedMathRenderer.render(input, testElement, false);
+        const success = await enhancedMathSystem.render(input, testElement, { displayMode: false });
         const renderedContent = testElement.innerHTML;
         
         if (success && renderedContent && !renderedContent.includes('ParseError') && !renderedContent.includes('KaTeX error')) {
@@ -104,7 +104,7 @@ function analyzeExpression() {
         return;
     }
     
-    const analysis = advancedMathRenderer.analyzeContent(input);
+    const analysis = enhancedMathSystem.components.renderer.analyzeContentAdvanced(input);
     
     let html = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -161,7 +161,7 @@ function getSpecialCharacters(text) {
     return specialChars.slice(0, 10).join(', ') + (specialChars.length > 10 ? '...' : '');
 }
 
-function runInitialTests() {
+async function runInitialTests() {
     // Test örneklerini render et
     const tests = [
         { id: 'test-simple', content: '2 + 3 = 5' },
@@ -170,12 +170,12 @@ function runInitialTests() {
         { id: 'test-mixed', content: 'Bir kenar uzunluğu: $\\sqrt{8}$ cm' }
     ];
     
-    tests.forEach(test => {
+    for (const test of tests) {
         const element = elements[test.id];
         if (element) {
-            advancedMathRenderer.render(test.content, element, false);
+            await enhancedMathSystem.render(test.content, element, { displayMode: false });
         }
-    });
+    }
 }
 
 function clearDebug() {
