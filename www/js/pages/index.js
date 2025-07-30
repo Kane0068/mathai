@@ -5,6 +5,9 @@ import {
     showLoading, 
     showError, 
     showSuccess, 
+    renderMath, 
+    renderMathInContainer, 
+    renderSmartContent,
     waitForRenderSystem,
     showAnimatedLoading 
 } from '../modules/ui.js';
@@ -12,9 +15,9 @@ import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
+import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-import { unifiedMathRenderer, renderApiResponse } from './modules/unifiedMathRenderer.js';
 
 
 
@@ -111,56 +114,27 @@ const elements = {};
 
 // --- UYGULAMA BAŞLANGIÇ NOKTASI ---
 window.addEventListener('load', () => {
-    try {
-        AuthManager.initProtectedPage(initializeApp);
-    } catch (error) {
-        console.error('App initialization failed:', error);
-        document.body.innerHTML = `
-            <div class="flex items-center justify-center min-h-screen">
-                <div class="text-center p-6 bg-red-50 rounded-lg max-w-md">
-                    <h1 class="text-xl font-bold text-red-700 mb-2">Uygulama Başlatma Hatası</h1>
-                    <p class="text-red-600 mb-4">Uygulama başlatılırken bir hata oluştu.</p>
-                    <button onclick="location.reload()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                        Yeniden Dene
-                    </button>
-                </div>
-            </div>
-        `;
-    }
+    AuthManager.initProtectedPage(initializeApp);
 });
 
 async function initializeApp(userData) {
-    try {
-        if (userData) {
-            // Render sisteminin hazır olmasını bekle
-            showLoading("Matematik render sistemi başlatılıyor...");
-            await waitForRenderer();
-            
-            cacheDOMElements();
-            setupEventListeners();
-            stateManager.subscribe(renderApp);
-            stateManager.setUser(userData);
-            
-            // Akıllı Rehber sistemini başlat
-            smartGuide.setCanvasManager(canvasManager);
-            
-            showLoading(false);
-            console.log('✅ Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
-        } else {
-            document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
-        }
-    } catch (error) {
-        console.error('❌ App initialization error:', error);
-        showError(`Uygulama başlatılırken hata: ${error.message}`, true);
+    if (userData) {
+        // Render sisteminin hazır olmasını bekle
+        showLoading("Matematik render sistemi başlatılıyor...");
+        await waitForRenderSystem();
         
-        // Fallback: basic functionality
-        try {
-            cacheDOMElements();
-            setupEventListeners();
-            console.log('⚠️ Basic functionality loaded as fallback');
-        } catch (fallbackError) {
-            console.error('❌ Even fallback failed:', fallbackError);
-        }
+        cacheDOMElements();
+        setupEventListeners();
+        stateManager.subscribe(renderApp);
+        stateManager.setUser(userData);
+        
+        // Akıllı Rehber sistemini başlat
+        smartGuide.setCanvasManager(canvasManager);
+        
+        showLoading(false);
+        console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
+    } else {
+        document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
     }
 }
 
@@ -220,18 +194,9 @@ function setupEventListeners() {
     add('handwriting-mode-btn', 'click', () => stateManager.setInputMode('handwriting'));
     add('switchToCanvasBtn', 'click', () => stateManager.setHandwritingInputType('canvas'));
     add('switchToKeyboardBtn', 'click', () => stateManager.setHandwritingInputType('keyboard'));
-    add('startFromPhotoBtn', 'click', () => {
-        console.log('📸 Photo button clicked');
-        handleNewProblem('image');
-    });
-    add('recognizeHandwritingBtn', 'click', () => {
-        console.log('✏️ Handwriting button clicked');
-        handleNewProblem('canvas');
-    });
-    add('startFromTextBtn', 'click', () => {
-        console.log('📝 Text button clicked');
-        handleNewProblem('text');
-    });
+    add('startFromPhotoBtn', 'click', () => handleNewProblem('image'));
+    add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
+    add('startFromTextBtn', 'click', () => handleNewProblem('text'));
     
     // Ana çözüm seçenekleri
     add('start-solving-workspace-btn', 'click', () => {
@@ -1230,7 +1195,7 @@ async function renderSmartGuideStep() {
     
     // Advanced Math Renderer ile içeriği render et
     setTimeout(async () => {
-        await unifiedMathRenderer.renderContainer(container);
+        await renderSmartContent(container);
         // Roadmap içeriğini yükle
         await loadRoadmapContent();
         
@@ -1829,7 +1794,6 @@ function isCanvasEmpty(canvasId) {
 }
 
 async function handleNewProblem(sourceType) {
-    console.log('🔍 handleNewProblem called with sourceType:', sourceType);
     let sourceData;
     let problemContextForPrompt = "Görseldeki matematik problemini çöz.";
 
@@ -1991,13 +1955,82 @@ function setQuestionCanvasTool(tool, buttonIds) {
 // --- PROBLEM ÖZETİ VE RENDER FONKSİYONLARI ---
 async function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
-    await unifiedMathRenderer.renderProblemSummary(problemOzeti, elements['question']);
+    
+    const { verilenler, istenen } = problemOzeti;
+    
+    let summaryHTML = '<div class="problem-summary bg-blue-50 p-4 rounded-lg mb-4">';
+    summaryHTML += '<h3 class="font-semibold text-blue-800 mb-2">Problem Özeti:</h3>';
+    
+    if (verilenler && verilenler.length > 0) {
+        summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
+        verilenler.forEach((veri, index) => {
+            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}" id="verilen-${index}"></li>`;
+        });
+        summaryHTML += '</ul></div>';
+    }
+    
+    if (istenen) {
+        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}" id="istenen-content"></span></div>`;
+    }
+    
+    summaryHTML += '</div>';
+    elements['question'].innerHTML = summaryHTML;
+    
+    // Advanced Math Renderer ile render et
+    setTimeout(async () => {
+        await renderSmartContent(elements['question']);
+    }, 50);
 }
 
 
 async function renderFullSolution(solution) {
-    if (!solution) return;
-    await renderApiResponse(solution, elements['solution-output']);
+    console.log('renderFullSolution called with Advanced Math Renderer:', solution);
+    if (!solution) {
+        console.log('No solution provided to renderFullSolution');
+        return;
+    }
+    
+    let html = '<div class="full-solution-container">';
+    html += '<div class="flex justify-between items-center mb-4">';
+    html += '<h3 class="text-xl font-bold text-gray-800">Tam Çözüm</h3>';
+    html += '<button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>';
+    html += '</div>';
+    
+    if (solution.adimlar && solution.adimlar.length > 0) {
+        solution.adimlar.forEach((step, index) => {
+            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
+            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
+            html += `<div class="step-description mb-2 text-gray-700 smart-content" data-content="${escapeHtml(step.adimAciklamasi || 'Adım açıklaması')}" id="step-desc-${index}"></div>`;
+            if (step.cozum_lateks) {
+                html += `<div class="latex-content mb-2" data-latex="${escapeHtml(step.cozum_lateks)}" id="step-latex-${index}"></div>`;
+            }
+            if (step.ipucu) {
+                html += `<div class="step-hint p-2 bg-yellow-50 rounded text-sm smart-content" data-content="${escapeHtml(step.ipucu)}" id="step-hint-${index}"></div>`;
+            }
+            html += '</div>';
+        });
+    } else if (solution.tamCozumLateks && solution.tamCozumLateks.length > 0) {
+        solution.tamCozumLateks.forEach((latex, index) => {
+            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
+            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
+            html += `<div class="latex-content" data-latex="${escapeHtml(latex)}" id="legacy-step-${index}"></div>`;
+            html += '</div>';
+        });
+    } else {
+        html += '<div class="p-4 bg-red-50 text-red-700 rounded-lg">';
+        html += '<p>Çözüm verisi bulunamadı. Lütfen tekrar deneyin.</p>';
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    elements['solution-output'].innerHTML = html;
+    
+    // Advanced Math Renderer ile render et
+    setTimeout(async () => {
+        await renderMathInContainer(elements['solution-output'], false);
+    }, 100);
+    
+    console.log('renderFullSolution completed with Advanced Math Renderer');
 }
 
 async function renderInteractiveSolution(solution) {
@@ -2151,7 +2184,7 @@ async function renderInteractiveStep(stepData) {
     setTimeout(async () => {
         try {
             console.log('Math rendering başlıyor...');
-            await unifiedMathRenderer.renderContainer(solutionOutput, false);
+            await renderMathInContainer(solutionOutput, false);
             console.log('Math rendering tamamlandı');
             
             // Final doğrulama
@@ -2805,7 +2838,7 @@ async function displayInteractiveCompletion(completionStats) {
     
     // Math render
     setTimeout(async () => {
-        await await unifiedMathRenderer.renderContainer(container, false);
+        await renderMathInContainer(container, false);
     }, 50);
 }
 
@@ -2880,8 +2913,8 @@ window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
+window.renderMath = renderMath;
 window.debugViewState = debugViewState;
-window.unifiedMathRenderer = unifiedMathRenderer;
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide};
+export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
