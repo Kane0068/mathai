@@ -92,32 +92,18 @@ export class AdvancedMathRenderer {
             },
             startup: {
                 ready: () => {
-                    try {
-                        console.log('MathJax v3 hazır');
-                        this.mathJaxReady = true;
-                        if (MathJax.startup && MathJax.startup.defaultReady) {
-                            MathJax.startup.defaultReady();
-                        }
-                        this.processQueue();
-                    } catch (error) {
-                        console.error('MathJax ready error:', error);
-                        this.mathJaxReady = true; // Set to true anyway to prevent hanging
-                        this.processQueue();
-                    }
+                    console.log('MathJax v3 hazır');
+                    this.mathJaxReady = true;
+                    MathJax.startup.defaultReady();
+                    this.processQueue();
                 },
                 pageReady: () => {
-                    if (typeof MathJax !== 'undefined' && MathJax.startup && MathJax.startup.document && MathJax.STATE) {
-                        return MathJax.startup.document.state() < MathJax.STATE.READY ? 
-                               MathJax.startup.document.ready() : Promise.resolve();
-                    }
-                    return Promise.resolve();
+                    return MathJax.startup.document.state() < MathJax.STATE.READY ? 
+                           MathJax.startup.document.ready() : Promise.resolve();
                 }
             },
             loader: {
-                load: ['[tex]/ams', '[tex]/newcommand', '[tex]/configmacros'],
-                failed: (err) => {
-                    console.warn('MathJax component load warning:', err);
-                }
+                load: ['[tex]/ams', '[tex]/newcommand', '[tex]/configmacros']
             }
         };
         
@@ -692,27 +678,6 @@ export class AdvancedMathRenderer {
             queueLength: this.renderQueue.length,
             cacheSize: this.cache.size
         };
-    }
-    
-    /**
-     * Wait for render system to be ready
-     */
-    waitForSystem() {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Render system initialization timeout'));
-            }, 10000);
-            
-            const checkReady = () => {
-                if (this.mathJaxReady || this.katexReady) {
-                    clearTimeout(timeout);
-                    resolve(true);
-                } else {
-                    setTimeout(checkReady, 100);
-                }
-            };
-            checkReady();
-        });
     }
 }
 

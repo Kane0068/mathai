@@ -5,11 +5,13 @@
 
 // makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
 import { showError, showSuccess, renderMath } from './ui.js';
+import { AdvancedErrorHandler } from './errorHandler.js';
+import { StateManager } from './stateManager.js';
 
 export class SmartGuideSystem {
-    constructor(errorHandler = null, stateManager = null) {
-        this.errorHandler = errorHandler;
-        this.stateManager = stateManager;
+    constructor() {
+        this.errorHandler = new AdvancedErrorHandler();
+        this.stateManager = new StateManager();
         this.currentStep = 0;
         this.studentAttempts = [];
         this.guidanceData = null;
