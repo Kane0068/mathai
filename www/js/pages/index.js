@@ -18,8 +18,14 @@ import { smartGuide } from '../modules/smartGuide.js';
 import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
+import { makeApiCall, solveProblem } from '../modules/apiManager.js';
 
-
+import { 
+    renderProblemSummary, 
+    renderFullSolution, 
+    renderInteractiveStep,
+    renderInteractiveCompletion 
+} from '../modules/renderManager.js';
 
 
 // --- Yardımcı Fonksiyonlar ---
@@ -34,110 +40,6 @@ const canvasManager = new OptimizedCanvasManager();
 const errorHandler = new AdvancedErrorHandler();
 const stateManager = new StateManager();
 
-// --- Sabitler ---
-const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-const masterSolutionPrompt = `MATEMATIK PROBLEM ÇÖZÜCÜ - KATKI KURALLARI
-
-🚨 KRİTİK TALİMATLAR - MUTLAKA TAKİP ET:
-
-1. YANIT FORMATI GEREKSİNİMLERİ:
-   - Yanıt SADECE geçerli JSON olmalı
-   - JSON'dan önce veya sonra ASLA ekstra metin yazma
-   - Tüm string'ler için çift tırnak kullan
-   - Sondaki virgülleri kaldır
-   - Karakter kaçışlarını doğru yap (\\n, \\", \\\\)
-
-2. ALAN ÖZEL KURALLARI - MUTLAKA UYULACAK:
-   
-   adimAciklamasi alanı için:
-   ✅ SADECE Türkçe metin: "Verilen değerleri yerine koy"
-   ❌ YASAK: √, ∫, ∑, π, α, β, θ, ≤, ≥, ≠, ±, $, $$, \\(, \\), \\[, \\]
-   ❌ YASAK: \\frac, \\sqrt, \\sum, \\int, herhangi bir LaTeX komut
-   
-   ipucu alanı için:
-   ✅ SADECE Türkçe metin: "Bu adımda işlem sırasına dikkat et"
-   ❌ YASAK: Tüm matematik sembolleri ve LaTeX komutları
-   
-   cozum_lateks alanı için:
-   ✅ SADECE LaTeX: "$$x = \\frac{a + b}{c}$$"
-   ✅ MUTLAKA $$ ile başla ve bitir
-   ❌ YASAK: Türkçe kelimeler bu alanda
-
-3. ZORUNLU DOĞRULAMA KELİMELERİ:
-   - Türkçe alanlarda kullan: "hesapla", "bul", "belirle", "çöz", "yerine koy"
-   - Matematik sembolleri yerine kelime kullan: "karekök" (√ değil), "pi sayısı" (π değil)
-
-4. ÖRNEK DOĞRU FORMAT:
-   ✅ "adimAciklamasi": "Denklemin sol tarafındaki değerleri topla"
-   ❌ "adimAciklamasi": "x + y = 5 denklemini çöz"
-   
-   ✅ "cozum_lateks": "$$x + y = 5$$"
-   ❌ "cozum_lateks": "x + y = 5"
-
-5. JSON ŞEMA GEREKSİNİMLERİ:
-   - problemOzeti, adimlar ve tamCozumLateks alanları MUTLAKA olmalı
-   - adimlar array'i boş olmamalı
-   - Her adımda adimAciklamasi ve cozum_lateks MUTLAKA olmalı
-
-INTELLIGENT STEP CREATION RULES:
-- Analyze the problem complexity and create appropriate number of steps
-- Simple concept questions (like "which is irrational?"): 1-2 steps maximum
-- Multiple choice questions: Focus on the logical reasoning, not checking each option separately
-- Calculation problems: Break into natural mathematical steps
-- Complex proofs: More detailed steps are acceptable
-
-JSON SCHEMA:
-{
-  "problemOzeti": {
-    "verilenler": [
-      "Turkish explanation text with math: $LaTeX_inline$",
-      "Another data in Turkish: $\\\\frac{a}{b} = 5$"
-    ],
-    "istenen": "What is requested in Turkish: $\\\\sqrt{x^2 + y^2}$"
-  },
-  "adimlar": [
-    {
-      "adimAciklamasi": "PURE VERBAL Turkish explanation - NO MATH SYMBOLS OR LaTeX",
-      "cozum_lateks": "$$pure_latex_expression$$",
-      "ipucu": "PURE VERBAL Turkish helpful hint - NO MATH SYMBOLS OR LaTeX", 
-      "yanlisSecenekler": [
-        {
-          "metin": "$$wrong_latex_expression$$",
-          "yanlisGeriBildirimi": "Turkish explanation why it's wrong with math: $LaTeX_inline$"
-        }
-      ]
-    }
-  ],
-  "tamCozumLateks": [
-    "$$step_1_pure_latex$$",
-    "$$step_2_pure_latex$$", 
-    "$$final_answer_pure_latex$$"
-  ]
-}
-
-STEP EXAMPLES BY PROBLEM TYPE:
-
-For "Which number is irrational?" type questions:
-- Step 1: "Rasyonel ve irrasyonel sayıları ayırt etme kurallarını hatırla"
-- Step 2: "Verilen seçenekleri tek tek incele ve hangisinin kesir şeklinde yazılamayacağını belirle"
-
-For calculation problems:
-- Step 1: "Verilen değerleri formülde yerine koy"
-- Step 2: "İşlem sırasını takip ederek hesapla"
-- Step 3: "Sonucu kontrol et"
-
-For geometry problems:
-- Step 1: "Şeklin özelliklerini belirle"
-- Step 2: "Uygun formülü seç"
-- Step 3: "Hesaplamaları yap"
-
-IMPORTANT: Keep adimAciklamasi and ipucu fields completely free of mathematical symbols, fractions, square roots, or any LaTeX. Use only descriptive Turkish words.
-
-Problem: {PROBLEM_CONTEXT}
-
-RESPOND ONLY IN JSON FORMAT, NO OTHER TEXT.`;
 
 
 // --- Global DOM Önbelleği ---
@@ -1854,39 +1756,24 @@ async function handleNewProblem(sourceType) {
         
         showAnimatedLoading(analysisSteps, 1500);
 
-        const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
-        const payloadParts = [{ text: promptText }];
-        if (sourceType !== 'text') {
-            payloadParts.push({ inlineData: { mimeType: 'image/png', data: sourceData } });
-        }
-        
-        const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
-        
+        const solution = await solveProblem(problemContextForPrompt, sourceType !== 'text' ? sourceData : null);
+
         if (solution) {
             // YENİ EKLEME: Final validation before using solution
-            const finalValidation = validateApiResponse(solution);
-            
-            if (finalValidation.valid || finalValidation.correctedResponse) {
-                const finalSolution = finalValidation.correctedResponse || solution;
-                
+                        if (solution) {
                 // SmartGuide'ı sıfırla
                 smartGuide.reset();
                 
-                stateManager.setSolution(finalSolution);
+                stateManager.setSolution(solution);
                 stateManager.setView('summary');
                 
-                // YENİ EKLEME: Başarı mesajına validation bilgisi ekle
-                const successMessage = finalValidation.warnings.length > 0 ? 
-                    "Problem çözüldü! (Bazı düzeltmeler uygulandı)" : 
-                    "Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.";
-                
-                showSuccess(successMessage, false);
+                showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", false);
                 
                 await FirestoreManager.incrementQueryCount();
             } else {
-                console.error('Final validation failed:', finalValidation.errors);
-                showError("API yanıtı geçersiz format içeriyor. Lütfen tekrar deneyin.", false);
+                showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
             }
+            
         } else {
             showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
         }
@@ -1940,260 +1827,15 @@ const responseValidationSchema = {
     }
 };
 
-/**
- * YENİ EKLEME: API yanıtını doğrulama fonksiyonu
- */
-function validateApiResponse(response) {
-    const errors = [];
-    const warnings = [];
-    
-    try {
-        // 1. Temel yapı kontrolü
-        if (!response || typeof response !== 'object') {
-            errors.push('Geçersiz JSON yapısı');
-            return { valid: false, errors, warnings, correctedResponse: null };
-        }
-        
-        // 2. Zorunlu alan kontrolü
-        responseValidationSchema.required.forEach(field => {
-            if (!response[field]) {
-                errors.push(`Zorunlu alan eksik: ${field}`);
-            }
-        });
-        
-        // 3. problemOzeti kontrolü
-        if (response.problemOzeti) {
-            if (!response.problemOzeti.verilenler || !Array.isArray(response.problemOzeti.verilenler)) {
-                errors.push('problemOzeti.verilenler array olmalı');
-            }
-            if (!response.problemOzeti.istenen || typeof response.problemOzeti.istenen !== 'string') {
-                errors.push('problemOzeti.istenen string olmalı');
-            }
-        }
-        
-        // 4. adimlar array kontrolü
-        if (response.adimlar) {
-            if (!Array.isArray(response.adimlar) || response.adimlar.length === 0) {
-                errors.push('adimlar boş olmayan array olmalı');
-            } else {
-                response.adimlar.forEach((step, index) => {
-                    // adimAciklamasi kontrolü
-                    if (!step.adimAciklamasi) {
-                        errors.push(`Adım ${index + 1}: adimAciklamasi eksik`);
-                    } else {
-                        const forbiddenMatches = step.adimAciklamasi.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
-                        if (forbiddenMatches) {
-                            errors.push(`Adım ${index + 1}: adimAciklamasi'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
-                        }
-                        if (step.adimAciklamasi.length < 5) {
-                            warnings.push(`Adım ${index + 1}: adimAciklamasi çok kısa`);
-                        }
-                    }
-                    
-                    // cozum_lateks kontrolü
-                    if (!step.cozum_lateks) {
-                        errors.push(`Adım ${index + 1}: cozum_lateks eksik`);
-                    } else {
-                        if (!step.cozum_lateks.startsWith('$$') || !step.cozum_lateks.endsWith('$$')) {
-                            errors.push(`Adım ${index + 1}: cozum_lateks $$ ile başlayıp bitmeli`);
-                        }
-                        if (step.cozum_lateks.length < 4) {
-                            errors.push(`Adım ${index + 1}: cozum_lateks çok kısa`);
-                        }
-                    }
-                    
-                    // ipucu kontrolü (opsiyonel)
-                    if (step.ipucu) {
-                        const forbiddenMatches = step.ipucu.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
-                        if (forbiddenMatches) {
-                            errors.push(`Adım ${index + 1}: ipucu'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
-                        }
-                    }
-                });
-            }
-        }
-        
-        // 5. tamCozumLateks kontrolü
-        if (response.tamCozumLateks) {
-            if (!Array.isArray(response.tamCozumLateks) || response.tamCozumLateks.length === 0) {
-                errors.push('tamCozumLateks boş olmayan array olmalı');
-            }
-        }
-        
-        return { 
-            valid: errors.length === 0, 
-            errors, 
-            warnings,
-            correctedResponse: errors.length > 0 ? autoCorrectResponse(response, errors) : response
-        };
-        
-    } catch (validationError) {
-        errors.push(`Doğrulama hatası: ${validationError.message}`);
-        return { valid: false, errors, warnings, correctedResponse: null };
-    }
-}
 
-/**
- * YENİ EKLEME: Otomatik düzeltme fonksiyonu
- */
-function autoCorrectResponse(response, errors) {
-    let corrected = JSON.parse(JSON.stringify(response));
-    
-    try {
-        // adimlar düzeltmeleri
-        if (corrected.adimlar && Array.isArray(corrected.adimlar)) {
-            corrected.adimlar.forEach((step, index) => {
-                // adimAciklamasi düzeltme
-                if (step.adimAciklamasi) {
-                    step.adimAciklamasi = cleanTextFromMathSymbols(step.adimAciklamasi);
-                }
-                
-                // ipucu düzeltme
-                if (step.ipucu) {
-                    step.ipucu = cleanTextFromMathSymbols(step.ipucu);
-                }
-                
-                // cozum_lateks format düzeltme
-                if (step.cozum_lateks) {
-                    if (!step.cozum_lateks.startsWith('$$')) {
-                        step.cozum_lateks = `$$${step.cozum_lateks.replace(/^\$+|\$+$/g, '')}$$`;
-                    }
-                    if (!step.cozum_lateks.endsWith('$$') && step.cozum_lateks.startsWith('$$')) {
-                        step.cozum_lateks = step.cozum_lateks + '$$';
-                    }
-                }
-            });
-        }
-        
-        // Eksik alanları varsayılan değerlerle doldur
-        if (!corrected.problemOzeti) {
-            corrected.problemOzeti = {
-                verilenler: ["Problem verisi analiz edildi"],
-                istenen: "Problemin çözümü"
-            };
-        }
-        
-        if (!corrected.tamCozumLateks || !Array.isArray(corrected.tamCozumLateks)) {
-            corrected.tamCozumLateks = ["$$\\text{Çözüm adımları üretildi}$$"];
-        }
-        
-        return corrected;
-        
-    } catch (correctionError) {
-        console.error('Otomatik düzeltme hatası:', correctionError);
-        return response; // Orijinali döndür
-    }
-}
 
-/**
- * YENİ EKLEME: Metinden matematik sembollerini temizleme
- */
-function cleanTextFromMathSymbols(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    return text
-        // LaTeX komutlarını kaldır
-        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        .replace(/\\[a-zA-Z]+/g, '')
-        // Matematik sembollerini kaldır
-        .replace(/[\$\\√∫∑π±≤≥≠αβθγδ]/g, '')
-        // Delimiterleri kaldır
-        .replace(/\$+/g, '')
-        .replace(/\\\(/g, '').replace(/\\\)/g, '')
-        .replace(/\\\[/g, '').replace(/\\\]/g, '')
-        // Fazla boşlukları temizle
-        .replace(/\s+/g, ' ')
-        .trim();
-}
 
-/**
- * YENİ EKLEME: JSON parse'ı güvenli hale getirme
- */
-function safeJsonParse(text) {
-    try {
-        // Önce temel temizlik
-        let cleaned = text.trim();
-        
-        // JSON dışındaki metinleri kaldır
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            cleaned = jsonMatch[0];
-        } else {
-            throw new Error('JSON yapısı bulunamadı');
-        }
-        
-        // Yaygın JSON hatalarını düzelt
-        cleaned = cleaned
-            .replace(/,(\s*[}\]])/g, '$1') // Sondaki virgülleri kaldır
-            .replace(/\\n/g, '\\\\n') // Newline escape düzelt
-            .replace(/\\"/g, '\\\\"') // Quote escape düzelt
-            .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Control karakterleri kaldır
-        
-        return JSON.parse(cleaned);
-        
-    } catch (parseError) {
-        console.error('JSON parse hatası:', parseError.message);
-        throw new Error(`JSON parse başarısız: ${parseError.message}`);
-    }
-}
 
-// --- API ÇAĞRISI ---
-export async function makeApiCall(payload) {
-    try {
-        const response = await fetch(GEMINI_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
 
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} - ${response.statusText}`);
-        }
 
-        const data = await response.json();
-        
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-            const content = data.candidates[0].content.parts[0].text;
-            
-            try {
-                // GÜNCELLENEN: Güvenli JSON parse kullan
-                const parsedContent = safeJsonParse(content);
-                
-                // YENİ EKLEME: Yanıtı doğrula
-                const validation = validateApiResponse(parsedContent);
-                
-                if (!validation.valid) {
-                    console.warn('API yanıt doğrulama hataları:', validation.errors);
-                    console.warn('API yanıt uyarıları:', validation.warnings);
-                    
-                    // Düzeltilmiş yanıt varsa onu kullan
-                    if (validation.correctedResponse) {
-                        console.log('Otomatik düzeltilmiş yanıt kullanılıyor');
-                        return validation.correctedResponse;
-                    } else {
-                        throw new Error(`Yanıt doğrulama başarısız: ${validation.errors.join(', ')}`);
-                    }
-                }
-                
-                // Uyarıları logla
-                if (validation.warnings.length > 0) {
-                    console.warn('API yanıt uyarıları:', validation.warnings);
-                }
-                
-                return parsedContent;
-                
-            } catch (parseError) {
-                console.error('JSON parse hatası:', parseError);
-                throw new Error(`Yanıt işleme hatası: ${parseError.message}`);
-            }
-        }
-        
-        throw new Error('Geçersiz API yanıtı - content bulunamadı');
-    } catch (error) {
-        console.error('API çağrısı hatası:', error);
-        throw error;
-    }
-}
+
+
+
 // --- YARDIMCI FONKSİYONLAR ---
 async function handleQueryDecrement() {
     const userData = stateManager.getStateValue('user');
@@ -2259,169 +1901,7 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 // --- PROBLEM ÖZETİ VE RENDER FONKSİYONLARI ---
 async function displayQuestionSummary(problemOzeti) {
-    if (!problemOzeti) return;
-    
-    const { verilenler, istenen } = problemOzeti;
-    
-    let summaryHTML = '<div class="problem-summary bg-blue-50 p-4 rounded-lg mb-4">';
-    summaryHTML += '<h3 class="font-semibold text-blue-800 mb-2">Problem Özeti:</h3>';
-    
-    if (verilenler && verilenler.length > 0) {
-        summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
-        verilenler.forEach((veri, index) => {
-            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}" id="verilen-${index}"></li>`;
-        });
-        summaryHTML += '</ul></div>';
-    }
-    
-    if (istenen) {
-        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}" id="istenen-content"></span></div>`;
-    }
-    
-    summaryHTML += '</div>';
-    elements['question'].innerHTML = summaryHTML;
-    
-    // Advanced Math Renderer ile render et
-    setTimeout(async () => {
-        await renderSmartContent(elements['question']);
-    }, 50);
-}
-
-
-async function renderFullSolution(solution) {
-    console.log('renderFullSolution called with Advanced Math Renderer:', solution);
-    if (!solution) {
-        console.log('No solution provided to renderFullSolution');
-        return;
-    }
-    
-    let html = '<div class="full-solution-container">';
-    html += '<div class="flex justify-between items-center mb-4">';
-    html += '<h3 class="text-xl font-bold text-gray-800">Tam Çözüm</h3>';
-    html += '<button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>';
-    html += '</div>';
-    
-    if (solution.adimlar && solution.adimlar.length > 0) {
-        solution.adimlar.forEach((step, index) => {
-            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
-            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="step-description mb-2 text-gray-700 smart-content" data-content="${escapeHtml(step.adimAciklamasi || 'Adım açıklaması')}" id="step-desc-${index}"></div>`;
-            if (step.cozum_lateks) {
-                html += `<div class="latex-content mb-2" data-latex="${escapeHtml(step.cozum_lateks)}" id="step-latex-${index}"></div>`;
-            }
-            if (step.ipucu) {
-                html += `<div class="step-hint p-2 bg-yellow-50 rounded text-sm smart-content" data-content="${escapeHtml(step.ipucu)}" id="step-hint-${index}"></div>`;
-            }
-            html += '</div>';
-        });
-    } else if (solution.tamCozumLateks && solution.tamCozumLateks.length > 0) {
-        solution.tamCozumLateks.forEach((latex, index) => {
-            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
-            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="latex-content" data-latex="${escapeHtml(latex)}" id="legacy-step-${index}"></div>`;
-            html += '</div>';
-        });
-    } else {
-        html += '<div class="p-4 bg-red-50 text-red-700 rounded-lg">';
-        html += '<p>Çözüm verisi bulunamadı. Lütfen tekrar deneyin.</p>';
-        html += '</div>';
-    }
-    
-    html += '</div>';
-    elements['solution-output'].innerHTML = html;
-    
-    // Advanced Math Renderer ile render et
-    setTimeout(async () => {
-        await renderMathInContainer(elements['solution-output'], false);
-    }, 100);
-    
-    console.log('renderFullSolution completed with Advanced Math Renderer');
-}
-
-async function renderInteractiveSolution(solution) {
-    console.log('renderInteractiveSolution çağrıldı - DÜZELTME versiyonu');
-    
-    if (!solution || !solution.adimlar || !solution.adimlar.length) {
-        elements['solution-output'].innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>İnteraktif çözüm için adımlar bulunamadı.</p>
-                <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
-            </div>`;
-        return;
-    }
-
-    try {
-        console.log('İnteraktif çözüm sistemi başlatılıyor...');
-        
-        // DÜZELTME: Sistemi tamamen sıfırla
-        interactiveSolutionManager.reset();
-        
-        // DOM elementinin varlığını kontrol et
-        const solutionOutput = elements['solution-output'];
-        if (!solutionOutput) {
-            throw new Error('solution-output elementi bulunamadı');
-        }
-        
-        // Container'ın görünür olduğunu garanti et
-        solutionOutput.classList.remove('hidden');
-        const resultContainer = elements['result-container'];
-        if (resultContainer) {
-            resultContainer.classList.remove('hidden');
-        }
-        
-        // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // İnteraktif çözüm sistemini başlat
-        const initResult = interactiveSolutionManager.initializeInteractiveSolution(solution);
-        console.log('İnteraktif sistem başlatıldı:', initResult);
-        
-        // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // İlk adım seçeneklerini oluştur
-        const firstStepData = interactiveSolutionManager.generateStepOptions(0);
-        console.log('İlk adım verileri oluşturuldu:', firstStepData);
-        
-        if (!firstStepData) {
-            throw new Error('İlk adım verileri oluşturulamadı');
-        }
-        
-        // DÜZELTME: Ana container'ı güvenli şekilde render et
-        console.log('İnteraktif adım render ediliyor...');
-        await renderInteractiveStep(firstStepData);
-        
-        // Final kontrol - container'ın görünür olduğunu garanti et
-        setTimeout(() => {
-            const containers = [
-                elements['result-container'],
-                elements['solution-output']
-            ];
-            
-            containers.forEach(container => {
-                if (container) {
-                    container.classList.remove('hidden');
-                }
-            });
-            
-            const optionsContainer = document.getElementById('interactive-options-container');
-            const options = optionsContainer ? optionsContainer.children : [];
-            console.log('Final kontrol - seçenek sayısı:', options.length);
-            
-            if (options.length === 0) {
-                console.warn('Seçenekler kayboldu, yeniden render edilecek');
-                renderInteractiveStep(firstStepData);
-            }
-        }, 300);
-        
-    } catch (error) {
-        console.error('İnteraktif çözüm başlatma hatası:', error);
-        elements['solution-output'].innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>İnteraktif çözüm başlatılamadı: ${error.message}</p>
-                <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
-            </div>`;
-    }
+    await renderProblemSummary(problemOzeti, elements['question']);
 }
 
 function debugViewState() {
@@ -2450,189 +1930,7 @@ function debugViewState() {
     console.log('=== END DEBUG ===');
 }
 
-// Adım render fonksiyonu
-async function renderInteractiveStep(stepData) {
-    console.log('renderInteractiveStep başlıyor - DÜZELTME versiyonu:', stepData);
-    
-    if (!stepData || !stepData.options) {
-        console.error('Step data eksik:', stepData);
-        return;
-    }
-    
-    const progress = (stepData.stepNumber / stepData.totalSteps) * 100;
-    
-    // DÜZELTME: innerHTML'i güvenli şekilde ayarla
-    const solutionOutput = elements['solution-output'];
-    
-    if (!solutionOutput) {
-        console.error('solution-output elementi bulunamadı');
-        return;
-    }
-    
-    // Önce container'ı temizle
-    solutionOutput.innerHTML = '';
-    
-    // DÜZELTME: HTML'i parça parça oluştur
-    const htmlContent = generateInteractiveStepHTML(stepData, progress);
-    
-    // HTML'i ayarla
-    solutionOutput.innerHTML = htmlContent;
-    
-    // DÜZELTME: DOM'un hazır olmasını bekle
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Event listener'ları kur
-    console.log('Event listener\'ları kuruluyor...');
-    setupInteractiveSolutionListeners(stepData);
-    
-    // DÜZELTME: Math render'ı ayrı bir task olarak çalıştır
-    setTimeout(async () => {
-        try {
-            console.log('Math rendering başlıyor...');
-            await renderMathInContainer(solutionOutput, false);
-            console.log('Math rendering tamamlandı');
-            
-            // Final doğrulama
-            const optionsContainer = document.getElementById('interactive-options-container');
-            if (optionsContainer) {
-                console.log('Final doğrulama - seçenek sayısı:', optionsContainer.children.length);
-            }
-        } catch (renderError) {
-            console.error('Math render hatası:', renderError);
-        }
-    }, 150);
-}
-function generateInteractiveStepHTML(stepData, progress) {
-    return `
-        <div class="interactive-solution-workspace p-6 bg-white rounded-lg shadow-md">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">İnteraktif Çözüm</h3>
-                <button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>
-            </div>
-            
-            <!-- İlerleme ve Deneme Bilgisi -->
-            <div class="progress-section mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <!-- İlerleme -->
-                    <div class="progress-info">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="text-lg font-semibold text-gray-800">Adım ${stepData.stepNumber} / ${stepData.totalSteps}</h4>
-                            <span class="text-sm text-gray-500">${Math.round(progress)}% tamamlandı</span>
-                        </div>
-                        <div class="progress-bar bg-gray-200 h-2 rounded-full overflow-hidden">
-                            <div class="progress-fill bg-blue-500 h-full transition-all duration-500" 
-                                 style="width: ${progress}%"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Deneme Bilgisi -->
-                    <div class="attempt-info">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="text-lg font-semibold text-gray-800">Deneme Hakkı</h4>
-                            <span class="text-sm ${stepData.remainingAttempts <= 1 ? 'text-red-500' : stepData.remainingAttempts <= 2 ? 'text-orange-500' : 'text-green-500'}">
-                                ${stepData.remainingAttempts} / ${stepData.maxAttempts} kaldı
-                            </span>
-                        </div>
-                        <div class="attempt-dots flex gap-1">
-                            ${Array.from({length: stepData.maxAttempts}, (_, i) => `
-                                <div class="w-3 h-3 rounded-full ${
-                                    i < stepData.attempts ? 'bg-red-400' : 'bg-gray-200'
-                                }"></div>
-                            `).join('')}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Adım Açıklaması -->
-            <div class="step-description mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h4 class="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                    <span class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                        ${stepData.stepNumber}
-                    </span>
-                    Bu Adımda Yapılacak:
-                </h4>
-                <div class="text-blue-700 smart-content" data-content="${escapeHtml(stepData.stepDescription)}" id="interactive-step-desc"></div>
-            </div>
-            
-            <!-- Uyarı Mesajları -->
-            <div id="interactive-warning-container" class="mb-4">
-                <!-- Uyarı mesajları buraya gelecek -->
-            </div>
-            
-            <!-- Seçenekler - DÜZELTME: Daha güvenli HTML -->
-            <div class="options-section mb-6">
-                <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 12l2 2 4-4"/>
-                        <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
-                    </svg>
-                    Doğru çözüm adımını seçin:
-                </h4>
-                <div class="options-grid space-y-3" id="interactive-options-container">
-                    ${generateOptionsHTML(stepData)}
-                </div>
-            </div>
-            
-            <!-- Aksiyon Butonları -->
-            <div class="action-buttons flex flex-wrap gap-3 mb-4">
-                <button id="interactive-submit-btn" class="btn btn-primary flex-1" disabled>
-                    Seçimi Onayla
-                </button>
-                <button id="interactive-hint-btn" class="btn btn-secondary">
-                    💡 İpucu
-                </button>
-            </div>
-            
-            <!-- Sonuç Alanı -->
-            <div id="interactive-result-container" class="result-section hidden mb-4">
-                <!-- Sonuç mesajları buraya gelecek -->
-            </div>
-            
-            <!-- Navigasyon -->
-            <div class="navigation-section flex justify-between mt-6 pt-4 border-t">
-                <div class="text-sm text-gray-500">
-                    <p><strong>Kurallar:</strong></p>
-                    <ul class="text-xs mt-1 space-y-1">
-                        <li>• İlk adımda yanlış: Adımı tekrarlarsınız</li>
-                        <li>• Diğer adımlarda yanlış: Baştan başlarsınız</li>
-                        <li>• Toplam ${stepData.maxAttempts} deneme hakkınız var</li>
-                    </ul>
-                </div>
-                <div class="flex gap-2">
-                    <button id="interactive-reset-btn" class="btn btn-tertiary text-sm">
-                        🔄 Baştan Başla
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-}
 
-function generateOptionsHTML(stepData) {
-    if (!stepData.options || !Array.isArray(stepData.options)) {
-        console.error('Options verisi eksik:', stepData);
-        return '<p class="text-red-600">Seçenekler yüklenemedi</p>';
-    }
-    
-    return stepData.options.map((option, index) => {
-        const optionLetter = String.fromCharCode(65 + index);
-        const optionId = option.displayId !== undefined ? option.displayId : index;
-        
-        return `
-            <label class="option-label flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all duration-200" data-option-id="${optionId}">
-                <input type="radio" name="interactive-step-${stepData.stepNumber}" value="${optionId}" class="sr-only">
-                <div class="option-letter w-8 h-8 bg-gray-200 text-gray-700 rounded-full flex items-center justify-center font-bold text-sm mr-3 mt-0.5">
-                    ${optionLetter}
-                </div>
-                <div class="option-content flex-1">
-                    <div class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}" id="option-text-${optionId}"></div>
-                    ${option.latex ? `<div class="text-sm text-gray-600 mt-1 latex-content" data-latex="${escapeHtml(option.latex)}" id="option-latex-${optionId}"></div>` : ''}
-                </div>
-            </label>
-        `;
-    }).join('');
-}
 
 function shuffleArray(array) {
     const shuffled = [...array];
@@ -3042,110 +2340,7 @@ function highlightInteractiveOptions(result) {
     });
 }
 
-async function displayInteractiveCompletion(completionStats) {
-    const container = elements['solution-output'];
-    
-    if (!container) return;
-    
-    // Performans mesajı
-    let performanceMessage = '';
-    let performanceColor = 'text-green-600';
-    
-    switch(completionStats.performance) {
-        case 'excellent':
-            performanceMessage = '🏆 Mükemmel performans! Çok az hatayla tamamladınız.';
-            performanceColor = 'text-green-600';
-            break;
-        case 'good':
-            performanceMessage = '👍 İyi performans! Başarıyla tamamladınız.';
-            performanceColor = 'text-blue-600';
-            break;
-        case 'average':
-            performanceMessage = '📚 Ortalama performans. Pratik yaparak gelişebilirsiniz.';
-            performanceColor = 'text-yellow-600';
-            break;
-        case 'needs_improvement':
-            performanceMessage = '💪 Daha fazla pratik yaparak gelişebilirsiniz.';
-            performanceColor = 'text-orange-600';
-            break;
-    }
-    
-    container.innerHTML = `
-        <div class="interactive-completion text-center p-8 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
-            <div class="completion-icon text-6xl mb-4">🎉</div>
-            <h3 class="text-2xl font-bold text-green-800 mb-2">İnteraktif Çözüm Tamamlandı!</h3>
-            <p class="text-gray-700 mb-6">Tüm adımları başarıyla çözdünüz!</p>
-            
-            <!-- PERFORMANS BİLGİLERİ -->
-            <div class="performance-stats mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="stat-card p-4 bg-white rounded-lg border border-gray-200">
-                    <div class="stat-number text-2xl font-bold text-blue-600">${completionStats.totalSteps}</div>
-                    <div class="stat-label text-sm text-gray-600">Toplam Adım</div>
-                </div>
-                <div class="stat-card p-4 bg-white rounded-lg border border-gray-200">
-                    <div class="stat-number text-2xl font-bold ${completionStats.totalAttempts <= completionStats.totalSteps + 2 ? 'text-green-600' : 'text-orange-600'}">${completionStats.totalAttempts}</div>
-                    <div class="stat-label text-sm text-gray-600">Toplam Deneme</div>
-                </div>
-                <div class="stat-card p-4 bg-white rounded-lg border border-gray-200">
-                    <div class="stat-number text-2xl font-bold ${completionStats.successRate >= 80 ? 'text-green-600' : 'text-yellow-600'}">%${Math.round(completionStats.successRate)}</div>
-                    <div class="stat-label text-sm text-gray-600">Başarı Oranı</div>
-                </div>
-                <div class="stat-card p-4 bg-white rounded-lg border border-gray-200">
-                    <div class="stat-number text-2xl font-bold text-purple-600">${completionStats.totalTimeFormatted}</div>
-                    <div class="stat-label text-sm text-gray-600">Toplam Süre</div>
-                </div>
-            </div>
-            
-            <!-- PERFORMANS DEĞERLENDİRMESİ -->
-            <div class="performance-evaluation mb-6 p-4 bg-white rounded-lg border border-gray-200">
-                <h4 class="font-semibold text-gray-800 mb-2">Performans Değerlendirmesi</h4>
-                <p class="font-medium ${performanceColor}">${performanceMessage}</p>
-                
-                ${completionStats.performance !== 'excellent' ? `
-                    <div class="improvement-tips mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                        <h5 class="font-medium text-blue-800 mb-2">📈 Gelişim Önerileri:</h5>
-                        <ul class="text-sm text-blue-700 space-y-1">
-                            ${completionStats.successRate < 80 ? '<li>• Seçenekleri daha dikkatli okuyun</li>' : ''}
-                            ${completionStats.totalAttempts > completionStats.totalSteps + 3 ? '<li>• İlk denemede doğru cevap vermeye odaklanın</li>' : ''}
-                            <li>• Matematik adımlarını mantıklı sırayla düşünün</li>
-                            <li>• Pratik yaparak hızınızı artırın</li>
-                        </ul>
-                    </div>
-                ` : `
-                    <div class="excellence-message mt-3 p-3 bg-green-50 rounded border border-green-200">
-                        <p class="text-green-700 text-sm">
-                            🌟 Mükemmel çalışma! Matematik problemlerini çözmede çok iyisiniz.
-                        </p>
-                    </div>
-                `}
-            </div>
-            
-            <!-- AKSİYON BUTONLARI -->
-            <div class="action-buttons space-y-3">
-                <button id="interactive-new-problem-btn" class="btn btn-primary w-full">
-                    🎯 Yeni Problem Çöz
-                </button>
-                <button id="interactive-review-solution-btn" class="btn btn-secondary w-full">
-                    📋 Tam Çözümü Gözden Geçir
-                </button>
-                <button id="interactive-try-step-by-step-btn" class="btn btn-tertiary w-full">
-                    📝 Adım Adım Çözümü Dene
-                </button>
-                <button id="back-to-main-menu-btn" class="btn btn-quaternary w-full">
-                    🏠 Ana Menüye Dön
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Event listener'ları ekle
-    setupInteractiveCompletionListeners();
-    
-    // Math render
-    setTimeout(async () => {
-        await renderMathInContainer(container, false);
-    }, 50);
-}
+
 
 function setupInteractiveCompletionListeners() {
     const newProblemBtn = document.getElementById('interactive-new-problem-btn');
@@ -3214,6 +2409,7 @@ function showInteractiveHint(hint) {
 
 // Global fonksiyonlar
 window.makeApiCall = makeApiCall;
+window.solveProblem = solveProblem;
 window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
