@@ -27,7 +27,15 @@ export class AdvancedMathRenderer {
             simple: /^[\s\d\w+\-*/=<>()[\]{}^_.,!?]*$/,
             basicMath: /\\(frac|sqrt|sum|int|lim|log|sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\{[^}]*\}/g,
             advanced: /\\(begin|end|usepackage|newcommand|def|DeclareMathOperator|text|mathrm|mathbb|mathcal|mathfrak)/g,
-            delimiters: /(\$[^$]*\$|\\\([^)]*\\\)|\\\[[^\]]*\\\]|\$\$[^$]*\$\$)/g
+            // GÜNCELLENEN: Daha robust delimiter patterns
+            delimiters: /(\$\$[^$]*?\$\$|\$[^$\n]*?\$|\\\([^\\]*?\\\)|\\\[[^\\]*?\\\])/g,
+            // YENİ EKLEME: Balanced delimiter check
+            dollarSingle: /\$([^$\n]+?)\$/g,
+            dollarDouble: /\$\$([^$]+?)\$\$/g,
+            parentheses: /\\\(([^\\]+?)\\\)/g,
+            brackets: /\\\[([^\\]+?)\\\]/g,
+            // YENİ EKLEME: Nested structure detection
+            nestedBraces: /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
         };
         
         this.initializeRenderers();
@@ -203,15 +211,27 @@ export class AdvancedMathRenderer {
      */
     analyzeContentAdvanced(content) {
         const trimmed = content.trim();
-        
+    
         // 1. Boş içerik kontrolü
         if (!trimmed) {
             return { type: 'text', confidence: 0, reason: 'empty' };
         }
         
-        // 2. Açık LaTeX delimiter kontrolü
+        // 2. GÜNCELLENEN: Gelişmiş LaTeX delimiter kontrolü
         const latexMatches = trimmed.match(this.latexComplexity.delimiters) || [];
         const hasExplicitLatex = latexMatches.length > 0;
+        
+        // YENİ EKLEME: Delimiter balance check
+        const dollarCount = (trimmed.match(/\$/g) || []).length;
+        const parenOpenCount = (trimmed.match(/\\\(/g) || []).length;
+        const parenCloseCount = (trimmed.match(/\\\)/g) || []).length;
+        const bracketOpenCount = (trimmed.match(/\\\[/g) || []).length;
+        const bracketCloseCount = (trimmed.match(/\\\]/g) || []).length;
+        
+        // YENİ EKLEME: Unbalanced delimiter detection
+        const hasUnbalancedDelimiters = (dollarCount % 2 !== 0) || 
+                                    (parenOpenCount !== parenCloseCount) || 
+                                    (bracketOpenCount !== bracketCloseCount);
         
         // 3. Türkçe metin analizi
         const turkishScores = {
@@ -283,6 +303,57 @@ export class AdvancedMathRenderer {
             reason: 'default_text',
             details: { length: trimmed.length }
         };
+    }
+        /**
+     * YENİ EKLEME: Gelişmiş content analysis with context
+     */
+    analyzeContentWithContext(content) {
+        const cleaned = content.trim().replace(/\s+/g, ' ');
+        
+        // Türkçe metin analizi
+        const turkishWords = (cleaned.match(/[a-zA-ZçğıöşüÇĞIİÖŞÜ]+/g) || []).length;
+        const totalWords = cleaned.split(/\s+/).filter(word => word.length > 0).length;
+        const turkishRatio = totalWords > 0 ? turkishWords / totalWords : 0;
+        
+        // LaTeX içerik analizi
+        const latexMatches = cleaned.match(this.latexComplexity.delimiters) || [];
+        const mathSymbolCount = (cleaned.match(/[+\-*/=<>^_{}\\]/g) || []).length;
+        
+        // Karışık içerik tespiti
+        const isMixedContent = turkishRatio > 0.3 && latexMatches.length > 0;
+        const isPureTurkish = turkishRatio > 0.8 && latexMatches.length === 0;
+        const isPureLatex = turkishRatio < 0.2 && (latexMatches.length > 0 || mathSymbolCount > 2);
+        
+        return {
+            turkishRatio,
+            latexCount: latexMatches.length,
+            mathSymbolCount,
+            isMixedContent,
+            isPureTurkish,
+            isPureLatex,
+            totalWords,
+            confidence: this.calculateContextConfidence(turkishRatio, latexMatches.length, mathSymbolCount)
+        };
+    }
+
+    /**
+     * YENİ EKLEME: Context-aware confidence calculation
+     */
+    calculateContextConfidence(turkishRatio, latexCount, mathSymbolCount) {
+        let confidence = 0.5; // Base confidence
+        
+        // Türkçe içerik güveni
+        if (turkishRatio > 0.8) confidence += 0.3;
+        else if (turkishRatio > 0.5) confidence += 0.1;
+        
+        // LaTeX içerik güveni
+        if (latexCount > 0) confidence += 0.2;
+        if (mathSymbolCount > 2) confidence += 0.1;
+        
+        // Karışık içerik cezası
+        if (turkishRatio > 0.3 && latexCount > 0) confidence -= 0.1;
+        
+        return Math.min(Math.max(confidence, 0), 1);
     }
     
     /**
@@ -373,7 +444,8 @@ export class AdvancedMathRenderer {
      */
     async renderMixedContent(content, element, displayMode = false) {
         try {
-            const parts = this.splitMixedContentSafe(content);
+            const parts = this.splitContentWithStateMachine(content) || this.splitMixedContentSafe(content);
+
             element.innerHTML = '';
             element.classList.add('mixed-content-container');
             
@@ -430,14 +502,21 @@ export class AdvancedMathRenderer {
      */
     splitMixedContentSafe(content) {
         const parts = [];
-        
-        // Gelişmiş regex - daha güvenli
-        const latexPattern = /(\$[^$]+\$|\\\([^)]+\\\)|\\\[[^\]]+\\\])/g;
+    
+        // GÜNCELLENEN: Daha robust ve güvenli regex pattern
+        const latexPattern = /(\$\$[^$]*?\$\$|\$[^$\n]*?\$|\\\([^\\]*?\\\)|\\\[[^\\]*?\\\])/g;
         
         let lastIndex = 0;
         let match;
         let iteration = 0;
-        const maxIterations = 100; // Sonsuz döngü koruması
+        const maxIterations = 200; // Artırıldı daha karmaşık içerik için
+        
+        // YENİ EKLEME: Pre-validation
+        const contextAnalysis = this.analyzeContentWithContext(content);
+        if (!contextAnalysis.isMixedContent) {
+            // Karışık içerik değilse basit işlem
+            return [{ type: 'text', content: content }];
+        }
         
         while ((match = latexPattern.exec(content)) !== null && iteration < maxIterations) {
             iteration++;
@@ -499,6 +578,126 @@ export class AdvancedMathRenderer {
         
         console.log('Split result:', parts);
         return parts;
+    }
+
+        /**
+     * YENİ EKLEME: State machine based safer content splitting
+     */
+    splitContentWithStateMachine(content) {
+        const parts = [];
+        let currentText = '';
+        let state = 'TEXT'; // States: TEXT, DOLLAR_SINGLE, DOLLAR_DOUBLE, PAREN, BRACKET
+        let latexStart = 0;
+        let nestLevel = 0;
+        
+        for (let i = 0; i < content.length; i++) {
+            const char = content[i];
+            const nextChar = content[i + 1] || '';
+            const prevChar = content[i - 1] || '';
+            
+            switch (state) {
+                case 'TEXT':
+                    if (char === '$' && nextChar === '$') {
+                        // Double dollar başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'DOLLAR_DOUBLE';
+                        i++; // Skip next $
+                    } else if (char === '$' && prevChar !== '\\') {
+                        // Single dollar başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'DOLLAR_SINGLE';
+                    } else if (char === '\\' && nextChar === '(') {
+                        // Parentheses başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'PAREN';
+                        i++; // Skip (
+                    } else if (char === '\\' && nextChar === '[') {
+                        // Bracket başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'BRACKET';
+                        i++; // Skip [
+                    } else {
+                        currentText += char;
+                    }
+                    break;
+                    
+                case 'DOLLAR_SINGLE':
+                    if (char === '$' && prevChar !== '\\') {
+                        // Single dollar bitişi
+                        const latexContent = content.slice(latexStart + 1, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                    }
+                    break;
+                    
+                case 'DOLLAR_DOUBLE':
+                    if (char === '$' && nextChar === '$' && prevChar !== '\\') {
+                        // Double dollar bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip next $
+                    }
+                    break;
+                    
+                case 'PAREN':
+                    if (char === '\\' && nextChar === ')') {
+                        // Parentheses bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip )
+                    }
+                    break;
+                    
+                case 'BRACKET':
+                    if (char === '\\' && nextChar === ']') {
+                        // Bracket bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip ]
+                    }
+                    break;
+            }
+        }
+        
+        // Kalan metin
+        if (currentText.trim()) {
+            parts.push({ type: 'text', content: currentText });
+        }
+        
+        // Validation
+        if (state !== 'TEXT') {
+            console.warn('Unfinished LaTeX detected, falling back to original content');
+            return [{ type: 'text', content: content }];
+        }
+        
+        return parts.length > 0 ? parts : [{ type: 'text', content: content }];
     }
     
     /**
