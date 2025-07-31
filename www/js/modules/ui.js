@@ -1,4 +1,4 @@
-// www/js/modules/ui.js
+// www/js/modules/ui.js - Fixed Version with Real Question Processing
 import { ELEMENTS, APP_CONFIG } from '../core/Config.js';
 import { stateManager } from './stateManager.js';
 
@@ -61,8 +61,6 @@ export class UIManager {
         // Button events
         this.attachButtonEvents();
         
-        // Canvas events will be handled by CanvasManager
-        
         // Form events
         this.attachFormEvents();
         
@@ -108,12 +106,12 @@ export class UIManager {
      * Attach button event listeners
      */
     attachButtonEvents() {
-        // Main action buttons (these were missing!)
+        // Main action buttons - FIXED to use real QuestionProcessor
         this.attachButtonEvent('startFromPhotoBtn', () => this.handleStartFromPhoto());
         this.attachButtonEvent('recognizeHandwritingBtn', () => this.handleCanvasSubmit());
         this.attachButtonEvent('startFromTextBtn', () => this.handleTextSubmit());
         
-        // Solution action buttons (these were missing!)
+        // Solution action buttons
         this.attachButtonEvent('start-solving-workspace-btn', () => this.handleStartSolving());
         this.attachButtonEvent('solve-all-btn', () => this.handleInteractiveSolving());
         this.attachButtonEvent('show-full-solution-btn', () => this.handleShowFullSolution());
@@ -256,7 +254,7 @@ export class UIManager {
             if (uploadSelection) uploadSelection.classList.add('hidden');
             if (startFromPhotoBtn) startFromPhotoBtn.disabled = false;
             
-            // Store file data in state - THIS IS CRITICAL!
+            // Store file data in state
             console.log('🔥 Storing image data in state...');
             stateManager.setState('problem.source', base64);
             stateManager.setState('problem.sourceType', 'image');
@@ -342,19 +340,19 @@ export class UIManager {
     }
 
     /**
-     * Button event handlers
+     * Button event handlers - FIXED to use real QuestionProcessor
      */
     handleStartFromPhoto() {
-        console.log('handleStartFromPhoto called');
+        console.log('🔥 handleStartFromPhoto called');
         const source = stateManager.getState('problem.source');
-        console.log('Source check:', source);
+        console.log('🔥 Source check:', source ? source.length : 'null');
         
         if (!source) {
             this.showError('Lütfen önce bir resim yükleyin.');
             return;
         }
         
-        // Process the image directly
+        // Process the image using the real QuestionProcessor
         this.processQuestion('image');
     }
 
@@ -382,7 +380,7 @@ export class UIManager {
             stateManager.setState('problem.source', base64Data);
             stateManager.setState('problem.sourceType', 'canvas');
             
-            // Process the drawing
+            // Process the drawing using the real QuestionProcessor
             this.processQuestion('canvas');
             
         } catch (error) {
@@ -400,10 +398,69 @@ export class UIManager {
             return;
         }
         
-        console.log('Text input:', text);
+        console.log('🔥 Text input:', text);
         stateManager.setState('problem.source', text);
         stateManager.setState('problem.sourceType', 'text');
+        
+        // Process the text using the real QuestionProcessor
         this.processQuestion('text');
+    }
+
+    /**
+     * REAL QUESTION PROCESSING - This is the key fix!
+     */
+    async processQuestion(sourceType) {
+        try {
+            console.log('🔥 Starting real question processing for:', sourceType);
+            
+            this.showLoading('Soru işleniyor...');
+            
+            // Import and use the real QuestionProcessor
+            const { questionProcessor } = await import('../services/QuestionProcessor.js');
+            
+            const source = stateManager.getState('problem.source');
+            if (!source) {
+                throw new Error('Kaynak veri bulunamadı');
+            }
+            
+            console.log('🔥 Calling questionProcessor.processQuestion');
+            const result = await questionProcessor.processQuestion(sourceType, source);
+            
+            console.log('🔥 Question processing completed:', result);
+            
+            // Check if solution was stored in state
+            const storedSolution = stateManager.getState('problem.solution');
+            console.log('🔥 Final verification - solution stored:', !!storedSolution);
+            
+            if (storedSolution) {
+                // Switch to summary view to show the results
+                stateManager.setView('summary');
+                this.showSuccess('Soru başarıyla çözüldü!');
+            } else {
+                throw new Error('Çözüm state\'e kaydedilemedi');
+            }
+            
+        } catch (error) {
+            console.error('🔥 Question processing error:', error);
+            
+            // Show user-friendly error message
+            let errorMessage = 'Soru işlenirken bir hata oluştu.';
+            
+            if (error.message.includes('limit')) {
+                errorMessage = 'Günlük sorgu limitiniz doldu.';
+            } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                errorMessage = 'İnternet bağlantısı hatası. Lütfen bağlantınızı kontrol edin.';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = 'İşlem zaman aşımına uğradı. Lütfen tekrar deneyin.';
+            } else if (error.message.includes('not valid') || error.message.includes('invalid')) {
+                errorMessage = 'Görsel dosyası geçersiz. Lütfen farklı bir resim deneyin.';
+            }
+            
+            this.showError(errorMessage);
+            
+        } finally {
+            this.hideLoading();
+        }
     }
 
     handleStartSolving() {
@@ -479,20 +536,6 @@ export class UIManager {
         console.log('Text input:', value);
     }
 
-    handleTextSubmit() {
-        const keyboardInput = document.getElementById('keyboard-input');
-        const text = keyboardInput?.value.trim();
-        
-        if (!text) {
-            this.showError('Lütfen bir soru yazın.');
-            return;
-        }
-        
-        stateManager.setState('problem.source', text);
-        stateManager.setState('problem.sourceType', 'text');
-        this.processQuestion('text');
-    }
-
     /**
      * Canvas tool methods - integrated with CanvasManager
      */
@@ -560,63 +603,6 @@ export class UIManager {
     }
 
     /**
-     * Handle canvas drawing submission
-     */
-    async handleCanvasSubmit() {
-        try {
-            const { canvasManager } = await import('./canvasManager.js');
-            const mainCanvas = 'handwritingCanvas';
-            
-            if (canvasManager.isEmpty(mainCanvas)) {
-                this.showError('Lütfen önce bir şeyler çizin.');
-                return;
-            }
-            
-            const dataURL = canvasManager.toDataURL(mainCanvas);
-            if (!dataURL) {
-                this.showError('Canvas verisi alınamadı.');
-                return;
-            }
-            
-            // Store canvas data
-            const base64Data = dataURL.split(',')[1];
-            stateManager.setState('problem.source', base64Data);
-            stateManager.setState('problem.sourceType', 'canvas');
-            
-            // Process the drawing
-            this.processQuestion('canvas');
-            
-        } catch (error) {
-            console.error('Canvas submit error:', error);
-            this.showError('Canvas verisi işlenirken hata oluştu.');
-        }
-    }
-
-    /**
-     * Process question (placeholder - will be moved to dedicated service)
-     */
-    async processQuestion(sourceType) {
-        try {
-            this.showLoading('Soru işleniyor...');
-            // This will be implemented in a dedicated QuestionProcessor service
-            console.log(`Processing question from ${sourceType}`);
-            
-            // Simulate processing
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // For now, just switch to summary view
-            stateManager.setView('summary');
-            this.showSuccess('Soru başarıyla işlendi!');
-            
-        } catch (error) {
-            console.error('Question processing error:', error);
-            this.showError('Soru işlenirken bir hata oluştu.');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    /**
      * UI state management methods
      */
     updateLoadingState(loading, message) {
@@ -642,7 +628,6 @@ export class UIManager {
      * Notification methods
      */
     showLoading(message = 'Yükleniyor...') {
-        // Implementation for loading indicator
         console.log(`Loading: ${message}`);
         
         // Find or create loading indicator
@@ -675,15 +660,11 @@ export class UIManager {
 
     showError(message, persistent = false) {
         console.error('UI Error:', message);
-        
-        // Create or update error notification
         this.showNotification(message, 'error', persistent);
     }
 
     showSuccess(message) {
         console.log('UI Success:', message);
-        
-        // Create or update success notification
         this.showNotification(message, 'success');
     }
 
