@@ -38,9 +38,48 @@ const stateManager = new StateManager();
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-const masterSolutionPrompt = `Solve the math problem and respond in the following JSON format.
+const masterSolutionPrompt = `MATEMATIK PROBLEM ÇÖZÜCÜ - KATKI KURALLARI
 
-CRITICAL: ALL RESPONSES MUST BE IN TURKISH LANGUAGE. Mathematical expressions must follow the exact LaTeX format compatible with MathJax v3 and KaTeX renderer.
+🚨 KRİTİK TALİMATLAR - MUTLAKA TAKİP ET:
+
+1. YANIT FORMATI GEREKSİNİMLERİ:
+   - Yanıt SADECE geçerli JSON olmalı
+   - JSON'dan önce veya sonra ASLA ekstra metin yazma
+   - Tüm string'ler için çift tırnak kullan
+   - Sondaki virgülleri kaldır
+   - Karakter kaçışlarını doğru yap (\\n, \\", \\\\)
+
+2. ALAN ÖZEL KURALLARI - MUTLAKA UYULACAK:
+   
+   adimAciklamasi alanı için:
+   ✅ SADECE Türkçe metin: "Verilen değerleri yerine koy"
+   ❌ YASAK: √, ∫, ∑, π, α, β, θ, ≤, ≥, ≠, ±, $, $$, \\(, \\), \\[, \\]
+   ❌ YASAK: \\frac, \\sqrt, \\sum, \\int, herhangi bir LaTeX komut
+   
+   ipucu alanı için:
+   ✅ SADECE Türkçe metin: "Bu adımda işlem sırasına dikkat et"
+   ❌ YASAK: Tüm matematik sembolleri ve LaTeX komutları
+   
+   cozum_lateks alanı için:
+   ✅ SADECE LaTeX: "$$x = \\frac{a + b}{c}$$"
+   ✅ MUTLAKA $$ ile başla ve bitir
+   ❌ YASAK: Türkçe kelimeler bu alanda
+
+3. ZORUNLU DOĞRULAMA KELİMELERİ:
+   - Türkçe alanlarda kullan: "hesapla", "bul", "belirle", "çöz", "yerine koy"
+   - Matematik sembolleri yerine kelime kullan: "karekök" (√ değil), "pi sayısı" (π değil)
+
+4. ÖRNEK DOĞRU FORMAT:
+   ✅ "adimAciklamasi": "Denklemin sol tarafındaki değerleri topla"
+   ❌ "adimAciklamasi": "x + y = 5 denklemini çöz"
+   
+   ✅ "cozum_lateks": "$$x + y = 5$$"
+   ❌ "cozum_lateks": "x + y = 5"
+
+5. JSON ŞEMA GEREKSİNİMLERİ:
+   - problemOzeti, adimlar ve tamCozumLateks alanları MUTLAKA olmalı
+   - adimlar array'i boş olmamalı
+   - Her adımda adimAciklamasi ve cozum_lateks MUTLAKA olmalı
 
 INTELLIGENT STEP CREATION RULES:
 - Analyze the problem complexity and create appropriate number of steps
@@ -48,14 +87,6 @@ INTELLIGENT STEP CREATION RULES:
 - Multiple choice questions: Focus on the logical reasoning, not checking each option separately
 - Calculation problems: Break into natural mathematical steps
 - Complex proofs: More detailed steps are acceptable
-
-ROADMAP CONTENT RULES FOR adimAciklamasi AND ipucu:
-- ABSOLUTELY NO LaTeX expressions in adimAciklamasi and ipucu fields
-- Use ONLY verbal explanations in Turkish
-- Be brief and direct about what to think or do
-- Focus on the thinking process, not showing calculations
-- Example GOOD: "Hangi sayının rasyonel olmadığını belirlemek için kök altındaki sayıları incele"
-- Example BAD: "√2 ifadesini kontrol et" (no LaTeX symbols)
 
 JSON SCHEMA:
 {
@@ -1830,16 +1861,32 @@ async function handleNewProblem(sourceType) {
         }
         
         const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
-                
+        
         if (solution) {
-            // YENİ EKLEME: SmartGuide'ı da sıfırla (yeni problem için)
-            smartGuide.reset();
+            // YENİ EKLEME: Final validation before using solution
+            const finalValidation = validateApiResponse(solution);
             
-            stateManager.setSolution(solution);
-            stateManager.setView('summary');
-            showSuccess("Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.", false);
-            
-            await FirestoreManager.incrementQueryCount();
+            if (finalValidation.valid || finalValidation.correctedResponse) {
+                const finalSolution = finalValidation.correctedResponse || solution;
+                
+                // SmartGuide'ı sıfırla
+                smartGuide.reset();
+                
+                stateManager.setSolution(finalSolution);
+                stateManager.setView('summary');
+                
+                // YENİ EKLEME: Başarı mesajına validation bilgisi ekle
+                const successMessage = finalValidation.warnings.length > 0 ? 
+                    "Problem çözüldü! (Bazı düzeltmeler uygulandı)" : 
+                    "Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.";
+                
+                showSuccess(successMessage, false);
+                
+                await FirestoreManager.incrementQueryCount();
+            } else {
+                console.error('Final validation failed:', finalValidation.errors);
+                showError("API yanıtı geçersiz format içeriyor. Lütfen tekrar deneyin.", false);
+            }
         } else {
             showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
         }
@@ -1851,6 +1898,242 @@ async function handleNewProblem(sourceType) {
         showError("Problem analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.", false);
     } finally {
         showLoading(false);
+    }
+}
+/**
+ * YENİ EKLEME: API yanıt doğrulama şeması
+ */
+const responseValidationSchema = {
+    required: ["problemOzeti", "adimlar", "tamCozumLateks"],
+    properties: {
+        problemOzeti: {
+            required: ["verilenler", "istenen"],
+            verilenler: { type: "array", minItems: 1 },
+            istenen: { type: "string", minLength: 1 }
+        },
+        adimlar: {
+            type: "array",
+            minItems: 1,
+            itemSchema: {
+                required: ["adimAciklamasi", "cozum_lateks"],
+                adimAciklamasi: { 
+                    type: "string",
+                    forbiddenChars: /[\$\\√∫∑π±≤≥≠αβθγδ]/g,
+                    minLength: 5
+                },
+                cozum_lateks: { 
+                    type: "string",
+                    requiredPattern: /^\$\$.*\$\$$/,
+                    minLength: 4
+                },
+                ipucu: { 
+                    type: "string",
+                    forbiddenChars: /[\$\\√∫∑π±≤≥≠αβθγδ]/g,
+                    optional: true
+                }
+            }
+        },
+        tamCozumLateks: {
+            type: "array",
+            minItems: 1
+        }
+    }
+};
+
+/**
+ * YENİ EKLEME: API yanıtını doğrulama fonksiyonu
+ */
+function validateApiResponse(response) {
+    const errors = [];
+    const warnings = [];
+    
+    try {
+        // 1. Temel yapı kontrolü
+        if (!response || typeof response !== 'object') {
+            errors.push('Geçersiz JSON yapısı');
+            return { valid: false, errors, warnings, correctedResponse: null };
+        }
+        
+        // 2. Zorunlu alan kontrolü
+        responseValidationSchema.required.forEach(field => {
+            if (!response[field]) {
+                errors.push(`Zorunlu alan eksik: ${field}`);
+            }
+        });
+        
+        // 3. problemOzeti kontrolü
+        if (response.problemOzeti) {
+            if (!response.problemOzeti.verilenler || !Array.isArray(response.problemOzeti.verilenler)) {
+                errors.push('problemOzeti.verilenler array olmalı');
+            }
+            if (!response.problemOzeti.istenen || typeof response.problemOzeti.istenen !== 'string') {
+                errors.push('problemOzeti.istenen string olmalı');
+            }
+        }
+        
+        // 4. adimlar array kontrolü
+        if (response.adimlar) {
+            if (!Array.isArray(response.adimlar) || response.adimlar.length === 0) {
+                errors.push('adimlar boş olmayan array olmalı');
+            } else {
+                response.adimlar.forEach((step, index) => {
+                    // adimAciklamasi kontrolü
+                    if (!step.adimAciklamasi) {
+                        errors.push(`Adım ${index + 1}: adimAciklamasi eksik`);
+                    } else {
+                        const forbiddenMatches = step.adimAciklamasi.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
+                        if (forbiddenMatches) {
+                            errors.push(`Adım ${index + 1}: adimAciklamasi'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
+                        }
+                        if (step.adimAciklamasi.length < 5) {
+                            warnings.push(`Adım ${index + 1}: adimAciklamasi çok kısa`);
+                        }
+                    }
+                    
+                    // cozum_lateks kontrolü
+                    if (!step.cozum_lateks) {
+                        errors.push(`Adım ${index + 1}: cozum_lateks eksik`);
+                    } else {
+                        if (!step.cozum_lateks.startsWith('$$') || !step.cozum_lateks.endsWith('$$')) {
+                            errors.push(`Adım ${index + 1}: cozum_lateks $$ ile başlayıp bitmeli`);
+                        }
+                        if (step.cozum_lateks.length < 4) {
+                            errors.push(`Adım ${index + 1}: cozum_lateks çok kısa`);
+                        }
+                    }
+                    
+                    // ipucu kontrolü (opsiyonel)
+                    if (step.ipucu) {
+                        const forbiddenMatches = step.ipucu.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
+                        if (forbiddenMatches) {
+                            errors.push(`Adım ${index + 1}: ipucu'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 5. tamCozumLateks kontrolü
+        if (response.tamCozumLateks) {
+            if (!Array.isArray(response.tamCozumLateks) || response.tamCozumLateks.length === 0) {
+                errors.push('tamCozumLateks boş olmayan array olmalı');
+            }
+        }
+        
+        return { 
+            valid: errors.length === 0, 
+            errors, 
+            warnings,
+            correctedResponse: errors.length > 0 ? autoCorrectResponse(response, errors) : response
+        };
+        
+    } catch (validationError) {
+        errors.push(`Doğrulama hatası: ${validationError.message}`);
+        return { valid: false, errors, warnings, correctedResponse: null };
+    }
+}
+
+/**
+ * YENİ EKLEME: Otomatik düzeltme fonksiyonu
+ */
+function autoCorrectResponse(response, errors) {
+    let corrected = JSON.parse(JSON.stringify(response));
+    
+    try {
+        // adimlar düzeltmeleri
+        if (corrected.adimlar && Array.isArray(corrected.adimlar)) {
+            corrected.adimlar.forEach((step, index) => {
+                // adimAciklamasi düzeltme
+                if (step.adimAciklamasi) {
+                    step.adimAciklamasi = cleanTextFromMathSymbols(step.adimAciklamasi);
+                }
+                
+                // ipucu düzeltme
+                if (step.ipucu) {
+                    step.ipucu = cleanTextFromMathSymbols(step.ipucu);
+                }
+                
+                // cozum_lateks format düzeltme
+                if (step.cozum_lateks) {
+                    if (!step.cozum_lateks.startsWith('$$')) {
+                        step.cozum_lateks = `$$${step.cozum_lateks.replace(/^\$+|\$+$/g, '')}$$`;
+                    }
+                    if (!step.cozum_lateks.endsWith('$$') && step.cozum_lateks.startsWith('$$')) {
+                        step.cozum_lateks = step.cozum_lateks + '$$';
+                    }
+                }
+            });
+        }
+        
+        // Eksik alanları varsayılan değerlerle doldur
+        if (!corrected.problemOzeti) {
+            corrected.problemOzeti = {
+                verilenler: ["Problem verisi analiz edildi"],
+                istenen: "Problemin çözümü"
+            };
+        }
+        
+        if (!corrected.tamCozumLateks || !Array.isArray(corrected.tamCozumLateks)) {
+            corrected.tamCozumLateks = ["$$\\text{Çözüm adımları üretildi}$$"];
+        }
+        
+        return corrected;
+        
+    } catch (correctionError) {
+        console.error('Otomatik düzeltme hatası:', correctionError);
+        return response; // Orijinali döndür
+    }
+}
+
+/**
+ * YENİ EKLEME: Metinden matematik sembollerini temizleme
+ */
+function cleanTextFromMathSymbols(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    return text
+        // LaTeX komutlarını kaldır
+        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+        .replace(/\\[a-zA-Z]+/g, '')
+        // Matematik sembollerini kaldır
+        .replace(/[\$\\√∫∑π±≤≥≠αβθγδ]/g, '')
+        // Delimiterleri kaldır
+        .replace(/\$+/g, '')
+        .replace(/\\\(/g, '').replace(/\\\)/g, '')
+        .replace(/\\\[/g, '').replace(/\\\]/g, '')
+        // Fazla boşlukları temizle
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * YENİ EKLEME: JSON parse'ı güvenli hale getirme
+ */
+function safeJsonParse(text) {
+    try {
+        // Önce temel temizlik
+        let cleaned = text.trim();
+        
+        // JSON dışındaki metinleri kaldır
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            cleaned = jsonMatch[0];
+        } else {
+            throw new Error('JSON yapısı bulunamadı');
+        }
+        
+        // Yaygın JSON hatalarını düzelt
+        cleaned = cleaned
+            .replace(/,(\s*[}\]])/g, '$1') // Sondaki virgülleri kaldır
+            .replace(/\\n/g, '\\\\n') // Newline escape düzelt
+            .replace(/\\"/g, '\\\\"') // Quote escape düzelt
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Control karakterleri kaldır
+        
+        return JSON.parse(cleaned);
+        
+    } catch (parseError) {
+        console.error('JSON parse hatası:', parseError.message);
+        throw new Error(`JSON parse başarısız: ${parseError.message}`);
     }
 }
 
@@ -1873,22 +2156,44 @@ export async function makeApiCall(payload) {
             const content = data.candidates[0].content.parts[0].text;
             
             try {
-                const jsonMatch = content.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    return JSON.parse(jsonMatch[0]);
+                // GÜNCELLENEN: Güvenli JSON parse kullan
+                const parsedContent = safeJsonParse(content);
+                
+                // YENİ EKLEME: Yanıtı doğrula
+                const validation = validateApiResponse(parsedContent);
+                
+                if (!validation.valid) {
+                    console.warn('API yanıt doğrulama hataları:', validation.errors);
+                    console.warn('API yanıt uyarıları:', validation.warnings);
+                    
+                    // Düzeltilmiş yanıt varsa onu kullan
+                    if (validation.correctedResponse) {
+                        console.log('Otomatik düzeltilmiş yanıt kullanılıyor');
+                        return validation.correctedResponse;
+                    } else {
+                        throw new Error(`Yanıt doğrulama başarısız: ${validation.errors.join(', ')}`);
+                    }
                 }
+                
+                // Uyarıları logla
+                if (validation.warnings.length > 0) {
+                    console.warn('API yanıt uyarıları:', validation.warnings);
+                }
+                
+                return parsedContent;
+                
             } catch (parseError) {
-                console.warn('JSON parse hatası:', parseError);
+                console.error('JSON parse hatası:', parseError);
+                throw new Error(`Yanıt işleme hatası: ${parseError.message}`);
             }
         }
         
-        throw new Error('Geçersiz API yanıtı');
+        throw new Error('Geçersiz API yanıtı - content bulunamadı');
     } catch (error) {
         console.error('API çağrısı hatası:', error);
         throw error;
     }
 }
-
 // --- YARDIMCI FONKSİYONLAR ---
 async function handleQueryDecrement() {
     const userData = stateManager.getStateValue('user');
