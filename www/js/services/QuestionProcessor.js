@@ -524,3 +524,7 @@ export class QuestionProcessor {
 
 // Create and export singleton instance
 export const questionProcessor = new QuestionProcessor();
+
+if (typeof window !== 'undefined') {
+    window.questionProcessor = questionProcessor;
+}

@@ -60,6 +60,18 @@ export class CanvasManager {
             console.warn(`Canvas not found: ${canvasId}`);
             return false;
         }
+        const context = canvas.getContext('2d');
+    
+        // Store canvas references
+        this.canvases.set(canvasId, canvas);
+        this.contexts.set(canvasId, context);
+        this.history.set(canvasId, []);
+        this.isDrawing.set(canvasId, false);
+        
+        // Set default settings
+        this.applyCanvasSettings(canvasId, this.defaultSettings);
+        
+        console.log(`Canvas initialized: ${canvasId}`);
 
         try {
             const ctx = canvas.getContext('2d');
@@ -85,6 +97,15 @@ export class CanvasManager {
         } catch (error) {
             console.error(`Canvas initialization failed for ${canvasId}:`, error);
             return false;
+        }
+    }
+    applyCanvasSettings(canvasId, settings) {
+        const context = this.contexts.get(canvasId);
+        if (context) {
+            context.strokeStyle = settings.penColor;
+            context.lineWidth = settings.penWidth;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
         }
     }
 
