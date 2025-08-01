@@ -497,19 +497,51 @@ export class UIManager {
         }
     }
 
-    handleInteractiveSolving() {
+    async handleInteractiveSolving() {
         console.log('handleInteractiveSolving called');
         const solution = stateManager.getState('problem.solution');
         console.log('Solution check in handleInteractiveSolving:', solution);
         
-        if (solution) {
-            stateManager.setView('interactive');
-        } else {
+        if (!solution) {
             console.log('No solution found, showing error');
             this.showError('Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.');
+            return;
+        }
+
+        try {
+            // Import and initialize interactive solution service
+            const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
+            
+            console.log('Initializing interactive solution...');
+            await interactiveSolutionService.initializeInteractiveSolution(solution);
+            
+            // Set view to interactive
+            stateManager.setView('interactive');
+            
+        } catch (error) {
+            console.error('Interactive solution initialization error:', error);
+            this.showError('İnteraktif çözüm başlatılamadı. Lütfen tekrar deneyin.');
         }
     }
-
+    async handleInteractiveInit(solution) {
+        try {
+            console.log('Initializing interactive mode with solution:', solution);
+            
+            // Import interactive solution service
+            const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
+            
+            // Initialize the interactive solution
+            await interactiveSolutionService.initializeInteractiveSolution(solution);
+            
+        } catch (error) {
+            console.error('Interactive mode initialization error:', error);
+            
+            this.showError('İnteraktif çözüm başlatılamadı. Tam çözüme yönlendiriliyorsunuz.');
+            setTimeout(() => {
+                stateManager.setView('result');
+            }, 2000);
+        }
+    }
     handleShowFullSolution() {
         console.log('handleShowFullSolution called');
         const solution = stateManager.getState('problem.solution');

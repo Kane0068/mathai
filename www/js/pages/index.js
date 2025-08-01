@@ -6,6 +6,7 @@ import { smartGuideService } from '../services/SmartGuideService.js';
 import { makeApiCall } from '../utils/ApiBridge.js';
 import { DebugHelper } from '../utils/DebugHelper.js';
 import { LegacyBridge } from '../utils/LegacyBridge.js';
+import { interactiveSolutionService } from '../services/InteractiveSolutionService.js';
 
 /**
  * Main Index Page Controller
@@ -130,6 +131,9 @@ class IndexPageController {
         const solution = stateManager.getState('problem.solution');
         if (solution) {
             this.handleInteractiveInit(solution);
+        } else {
+            console.error('No solution available for interactive mode');
+            stateManager.setView('summary');
         }
     }
 
@@ -219,7 +223,8 @@ class IndexPageController {
     async handleInteractiveInit(solution) {
         try {
             console.log('Initializing interactive mode with solution:', solution);
-            await this.renderInteractiveSolution(solution);
+            await interactiveSolutionService.initializeInteractiveSolution(solution);
+            
         } catch (error) {
             console.error('Interactive mode initialization error:', error);
             
@@ -419,12 +424,20 @@ class IndexPageController {
     setupVisibilityHandlers() {
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                // Pause services when page becomes hidden
                 if (smartGuideService.isActive()) {
                     smartGuideService.pause();
                 }
+                if (interactiveSolutionService.isInteractiveActive()) {
+                    interactiveSolutionService.pause();
+                }
             } else {
+                // Resume services when page becomes visible
                 if (smartGuideService.isActive()) {
                     smartGuideService.resume();
+                }
+                if (interactiveSolutionService.isInteractiveActive()) {
+                    interactiveSolutionService.resume();
                 }
             }
         });
@@ -474,6 +487,7 @@ class IndexPageController {
 
     destroy() {
         smartGuideService.destroy();
+        interactiveSolutionService.destroy();
         this.initialized = false;
         console.log('Index page controller destroyed');
     }
@@ -501,3 +515,4 @@ window.app = app;
 window.stateManager = stateManager;
 window.DebugHelper = DebugHelper;
 window.smartGuideService = smartGuideService;
+window.interactiveSolutionService = interactiveSolutionService;

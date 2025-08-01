@@ -1,12 +1,13 @@
-// www/js/services/MathRenderer.js
+// www/js/services/MathRenderer.js - Fixed Version
 
 export class MathRenderer {
     constructor() {
         this.mathJaxReady = false;
-        this.katexReady = false; // KaTeX için hazırlandı, ancak şu an kullanılmıyor
+        this.katexReady = false;
         this.renderQueue = [];
         this.cache = new Map();
         this.initialized = false;
+        this.fallbackMode = false;
 
         // Türkçe metin tanıma desenleri
         this.turkishPatterns = {
@@ -36,21 +37,116 @@ export class MathRenderer {
         if (this.initialized) return;
 
         try {
-            await this.loadMathJax();
+            // Önce KaTeX'i dene
+            if (await this.tryKaTeX()) {
+                console.log('KaTeX render modu aktif');
+                this.initialized = true;
+                return;
+            }
+
+            // KaTeX yoksa MathJax'i dene
+            if (await this.tryMathJax()) {
+                console.log('MathJax render modu aktif');
+                this.initialized = true;
+                return;
+            }
+
+            // Her ikisi de yoksa fallback moda geç
+            console.warn('Ne MathJax ne de KaTeX bulunamadı, fallback moduna geçiliyor');
+            this.fallbackMode = true;
             this.initialized = true;
-            console.log('MathRenderer başarıyla başlatıldı');
+            
         } catch (error) {
             console.error('MathRenderer başlatılamadı:', error);
-            throw error;
+            this.fallbackMode = true;
+            this.initialized = true;
         }
+    }
+
+    /**
+     * KaTeX kütüphanesini kontrol et ve kullan
+     */
+    async tryKaTeX() {
+        if (typeof window.katex !== 'undefined') {
+            this.katexReady = true;
+            console.log('KaTeX mevcut ve hazır');
+            return true;
+        }
+
+        // KaTeX'i yüklemeyi dene
+        try {
+            if (!document.querySelector('link[href*="katex"]')) {
+                const katexCSS = document.createElement('link');
+                katexCSS.rel = 'stylesheet';
+                katexCSS.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+                document.head.appendChild(katexCSS);
+            }
+
+            if (!document.querySelector('script[src*="katex"]')) {
+                await this.loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js');
+            }
+
+            this.katexReady = typeof window.katex !== 'undefined';
+            return this.katexReady;
+        } catch (error) {
+            console.warn('KaTeX yüklenemedi:', error);
+            return false;
+        }
+    }
+
+    /**
+     * MathJax kütüphanesini kontrol et ve kullan
+     */
+    async tryMathJax() {
+        // MathJax zaten yüklü mü kontrol et
+        if (typeof window.MathJax !== 'undefined') {
+            // MathJax'in hazır olup olmadığını kontrol et
+            if (this.isMathJaxReady()) {
+                this.mathJaxReady = true;
+                console.log('MathJax mevcut ve hazır');
+                return true;
+            }
+        }
+
+        // MathJax'i yüklemeyi dene
+        try {
+            await this.loadMathJax();
+            return this.mathJaxReady;
+        } catch (error) {
+            console.warn('MathJax yüklenemedi:', error);
+            return false;
+        }
+    }
+
+    /**
+     * MathJax'in hazır olup olmadığını kontrol et
+     */
+    isMathJaxReady() {
+        return window.MathJax && 
+               window.MathJax.startup && 
+               window.MathJax.startup.ready && 
+               (window.MathJax.typesetPromise || window.MathJax.typeset);
+    }
+
+    /**
+     * Script yükleme yardımcı fonksiyonu
+     */
+    loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
     }
 
     /**
      * MathJax kütüphanesini yükler.
      */
     async loadMathJax() {
-        return new Promise((resolve) => {
-            if (window.MathJax) {
+        return new Promise((resolve, reject) => {
+            if (window.MathJax && this.isMathJaxReady()) {
                 this.mathJaxReady = true;
                 resolve();
                 return;
@@ -85,23 +181,37 @@ export class MathRenderer {
             mathJaxScript.async = true;
             
             mathJaxScript.onload = () => {
-                console.log('MathJax betiği başarıyla yüklendi');
+                console.log('MathJax betiği yüklendi');
+                // Startup'ın tamamlanmasını bekle
+                setTimeout(() => {
+                    if (this.isMathJaxReady()) {
+                        this.mathJaxReady = true;
+                        resolve();
+                    } else {
+                        console.warn('MathJax yüklendi ama hazır değil');
+                        reject(new Error('MathJax not ready after load'));
+                    }
+                }, 1000);
             };
 
             mathJaxScript.onerror = () => {
-                console.error('MathJax yüklenemedi, temel render moduna geçiliyor.');
-                this.mathJaxReady = false;
-                resolve(); // Hata olsa bile devam et, MathJax olmadan çalışsın
+                console.error('MathJax yüklenemedi');
+                reject(new Error('MathJax script load failed'));
             };
             
             document.head.appendChild(mathJaxScript);
+
+            // Timeout ekle
+            setTimeout(() => {
+                if (!this.mathJaxReady) {
+                    reject(new Error('MathJax load timeout'));
+                }
+            }, 10000);
         });
     }
 
     /**
      * Bir element içindeki matematiksel içeriği render eder.
-     * @param {HTMLElement} element - Matematik içeriği olan element.
-     * @param {Object} options - Render seçenekleri.
      */
     async renderContent(element, options = {}) {
         if (!element) {
@@ -122,20 +232,113 @@ export class MathRenderer {
             }
 
             // Zaten var olan matematiksel içeriği de render et
-            if (this.mathJaxReady && window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
-                await window.MathJax.typesetPromise([element]);
-            }
+            await this.renderMathInElement(element);
+            
         } catch (error) {
             console.error('Matematik render hatası:', error);
-            this.renderFallback(element); // Hata durumunda düz metin göster
+            this.renderFallback(element);
         }
     }
 
     /**
-     * Akıllı içeriği (Türkçe metin ve LaTeX karışımı) render eder.
-     * @param {HTMLElement} element 
-     * @param {string} content 
-     * @param {Object} options 
+     * Element içindeki mevcut matematik içeriğini render et
+     */
+    async renderMathInElement(element) {
+        if (this.katexReady && window.katex) {
+            // KaTeX ile render
+            this.renderWithKaTeX(element);
+        } else if (this.mathJaxReady && this.isMathJaxReady()) {
+            // MathJax ile render
+            await this.renderWithMathJaxSafe(element);
+        } else {
+            // Fallback render
+            console.log('Math render: Fallback modunda');
+        }
+    }
+
+    /**
+     * Güvenli MathJax render
+     */
+    async renderWithMathJaxSafe(element) {
+        try {
+            if (!window.MathJax || !this.isMathJaxReady()) {
+                console.warn('MathJax hazır değil');
+                return;
+            }
+
+            // typesetPromise varsa kullan
+            if (typeof window.MathJax.typesetPromise === 'function') {
+                await window.MathJax.typesetPromise([element]);
+            }
+            // Yoksa typeset fonksiyonunu dene
+            else if (typeof window.MathJax.typeset === 'function') {
+                window.MathJax.typeset([element]);
+            }
+            // Hub varsa (MathJax v2 uyumluluğu)
+            else if (window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
+                window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, element]);
+            }
+            else {
+                console.warn('MathJax render fonksiyonu bulunamadı');
+                throw new Error('No MathJax render function available');
+            }
+
+            console.log('MathJax render başarılı');
+        } catch (error) {
+            console.warn('MathJax render hatası:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * KaTeX ile render
+     */
+    renderWithKaTeX(element) {
+        try {
+            // KaTeX auto-render extension kullan
+            if (window.renderMathInElement) {
+                window.renderMathInElement(element, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ]
+                });
+            } else {
+                // Manuel KaTeX render
+                this.manualKaTeXRender(element);
+            }
+            console.log('KaTeX render başarılı');
+        } catch (error) {
+            console.warn('KaTeX render hatası:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Manuel KaTeX render
+     */
+    manualKaTeXRender(element) {
+        const mathElements = element.querySelectorAll('.math, [data-math]');
+        mathElements.forEach(mathEl => {
+            const mathText = mathEl.textContent || mathEl.getAttribute('data-math');
+            if (mathText) {
+                try {
+                    const rendered = window.katex.renderToString(mathText, {
+                        throwOnError: false,
+                        displayMode: mathEl.classList.contains('display-math')
+                    });
+                    mathEl.innerHTML = rendered;
+                } catch (e) {
+                    console.warn('KaTeX render hatası:', e);
+                }
+            }
+        });
+    }
+
+    /**
+     * Akıllı içeriği render eder.
      */
     async renderSmartContent(element, content, options = {}) {
         if (!content) return;
@@ -143,23 +346,51 @@ export class MathRenderer {
         try {
             const analysis = this.analyzeContent(content);
 
-            if (analysis.hasComplexMath) {
-                await this.renderWithMathJax(element, content, options);
-            } else if (analysis.hasBasicMath) {
-                this.renderBasicMath(element, content, options);
+            if (analysis.hasComplexMath || analysis.hasBasicMath) {
+                if (this.katexReady) {
+                    this.renderWithKaTeXContent(element, content);
+                } else if (this.mathJaxReady) {
+                    await this.renderWithMathJaxContent(element, content);
+                } else {
+                    this.renderBasicMath(element, content, options);
+                }
             } else {
                 this.renderPlainText(element, content, options);
             }
         } catch (error) {
             console.error('Akıllı içerik render hatası:', error);
-            element.textContent = content; // Hata durumunda içeriği düz metin olarak ata
+            element.textContent = content;
         }
     }
 
     /**
-     * Render stratejisini belirlemek için içeriği analiz eder.
-     * @param {string} content 
-     * @returns {Object} Analiz sonuçları.
+     * KaTeX ile içerik render
+     */
+    renderWithKaTeXContent(element, content) {
+        element.innerHTML = this.preprocessContent(content);
+        
+        // KaTeX auto-render varsa kullan
+        if (window.renderMathInElement) {
+            window.renderMathInElement(element, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ]
+            });
+        }
+    }
+
+    /**
+     * MathJax ile içerik render
+     */
+    async renderWithMathJaxContent(element, content) {
+        element.innerHTML = this.preprocessContent(content);
+        element.classList.add('tex2jax_process');
+        await this.renderWithMathJaxSafe(element);
+    }
+
+    /**
+     * İçeriği analiz eder
      */
     analyzeContent(content) {
         const analysis = {
@@ -190,28 +421,7 @@ export class MathRenderer {
     }
 
     /**
-     * İçeriği MathJax ile render eder.
-     */
-    async renderWithMathJax(element, content) {
-        if (!this.mathJaxReady || !window.MathJax) {
-            console.warn('MathJax hazır değil, temel render moduna geçiliyor.');
-            this.renderBasicMath(element, content);
-            return;
-        }
-
-        try {
-            element.innerHTML = this.preprocessContent(content);
-            element.classList.add('tex2jax_process');
-            await window.MathJax.typesetPromise([element]);
-            console.log('MathJax render işlemi tamamlandı.');
-        } catch (error) {
-            console.error('MathJax render hatası, temel render moduna geçiliyor:', error);
-            this.renderBasicMath(element, content);
-        }
-    }
-
-    /**
-     * Temel matematik ifadelerini MathJax olmadan render eder.
+     * Temel matematik ifadelerini render eder.
      */
     renderBasicMath(element, content) {
         let formatted = content
@@ -223,35 +433,64 @@ export class MathRenderer {
     }
 
     /**
-     * Düz metni Türkçe desteğiyle render eder.
+     * Düz metni render eder.
      */
     renderPlainText(element, content) {
         element.textContent = content;
     }
 
     /**
-     * Render öncesi içeriği ön işler.
+     * İçeriği ön işler.
      */
     preprocessContent(content) {
         return content
-            .replace(/\$\$\s*\$\$/g, '') // Boş matematik bloklarını kaldır
-            .replace(/\$\s*\$/g, '')     // Boş inline matematik ifadelerini kaldır
-            .replace(/\\{2,}/g, '\\')   // Birden fazla backslash'ı düzelt
-            .replace(/\s+/g, ' ')       // Boşlukları normalleştir
+            .replace(/\$\$\s*\$\$/g, '')
+            .replace(/\$\s*\$/g, '')
+            .replace(/\\{2,}/g, '\\')
+            .replace(/\s+/g, ' ')
             .trim();
     }
 
     /**
-     * Matematik render işlemi başarısız olduğunda yedek içeriği gösterir.
+     * Fallback render
      */
     renderFallback(element) {
         const smartElements = element.querySelectorAll('.smart-content[data-content]');
         smartElements.forEach(smartElement => {
             const content = smartElement.getAttribute('data-content');
             if (content) {
-                smartElement.textContent = content;
+                // Basit matematiksel sembolleri Unicode ile değiştir
+                let processedContent = content
+                    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+                    .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
+                    .replace(/\\pi/g, 'π')
+                    .replace(/\\alpha/g, 'α')
+                    .replace(/\\beta/g, 'β')
+                    .replace(/\\gamma/g, 'γ')
+                    .replace(/\\delta/g, 'δ')
+                    .replace(/\\theta/g, 'θ')
+                    .replace(/\\lambda/g, 'λ')
+                    .replace(/\\mu/g, 'μ')
+                    .replace(/\\sigma/g, 'σ')
+                    .replace(/\\phi/g, 'φ')
+                    .replace(/\\omega/g, 'ω')
+                    .replace(/\\sum/g, '∑')
+                    .replace(/\\int/g, '∫')
+                    .replace(/\\infty/g, '∞')
+                    .replace(/\\le/g, '≤')
+                    .replace(/\\ge/g, '≥')
+                    .replace(/\\ne/g, '≠')
+                    .replace(/\\pm/g, '±')
+                    .replace(/\\times/g, '×')
+                    .replace(/\\div/g, '÷')
+                    .replace(/\$\$([^$]+)\$\$/g, '$1')
+                    .replace(/\$([^$]+)\$/g, '$1');
+
+                smartElement.textContent = processedContent;
             }
         });
+
+        console.log('Fallback render uygulandı');
     }
 
     /**
@@ -288,7 +527,6 @@ export class MathRenderer {
         summaryHTML += '</div>';
         container.innerHTML = summaryHTML;
 
-        // Zamanlayıcı ile render işleminin DOM güncellendikten sonra çalışmasını sağla
         setTimeout(() => this.renderContent(container), 50);
     }
 
@@ -310,9 +548,9 @@ export class MathRenderer {
                 html += `
                     <div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">
                         <div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>
-                        ${step.aciklama ? `<div class="step-explanation mb-2"><strong>Açıklama:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.aciklama)}"></span></div>` : ''}
-                        ${step.islem ? `<div class="step-operation mb-2"><strong>İşlem:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.islem)}"></span></div>` : ''}
-                        ${step.sonuc ? `<div class="step-result"><strong>Sonuç:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.sonuc)}"></span></div>` : ''}
+                        ${step.adimAciklamasi ? `<div class="step-explanation mb-2"><strong>Açıklama:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.adimAciklamasi)}"></span></div>` : ''}
+                        ${step.cozum_lateks ? `<div class="step-formula mb-2"><strong>Formül:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.cozum_lateks)}"></span></div>` : ''}
+                        ${step.ipucu ? `<div class="step-hint"><strong>İpucu:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.ipucu)}"></span></div>` : ''}
                     </div>`;
             });
         }
@@ -360,6 +598,7 @@ export class MathRenderer {
         return {
             mathJaxReady: this.mathJaxReady,
             katexReady: this.katexReady,
+            fallbackMode: this.fallbackMode,
             cacheSize: this.cache.size,
             queueSize: this.renderQueue.length,
             initialized: this.initialized
