@@ -500,20 +500,19 @@ export class UIManager {
     async handleInteractiveSolving() {
         console.log('handleInteractiveSolving called');
         const solution = stateManager.getState('problem.solution');
-        console.log('Solution check in handleInteractiveSolving:', solution);
         
         if (!solution) {
-            console.log('No solution found, showing error');
             this.showError('Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.');
             return;
         }
 
         try {
-            // Import and initialize interactive solution service
-            const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
+            // Import with proper destructuring
+            const module = await import('../services/InteractiveSolutionService.js');
+            const interactiveService = module.interactiveSolutionService;
             
             console.log('Initializing interactive solution...');
-            await interactiveSolutionService.initializeInteractiveSolution(solution);
+            await interactiveService.initializeInteractiveSolution(solution);
             
             // Set view to interactive
             stateManager.setView('interactive');
