@@ -62,42 +62,42 @@ export class InteractiveSolutionService {
      */
     async setupInteractiveWorkspace() {
         this.container = document.getElementById('solution-output') || 
-                        document.getElementById('result-container');
+                    document.getElementById('result-container');
         
         if (!this.container) {
             throw new Error('Interactive solution container not found');
         }
 
-        // Create the interactive interface
+        // SORUN: Bu HTML'de 'interactive-step-container' id'si eksik!
         let html = `
-            <div class="interactive-solution-workspace">
+            <div class="interactive-solution-workspace" id="interactive-solution-display">
                 <!-- Header Section -->
                 <div class="flex justify-between items-center mb-6">
                     <div>
                         <h3 class="text-2xl font-bold text-gray-800">İnteraktif Çözüm</h3>
                         <p class="text-gray-600">Her adımda doğru seçeneği seçerek problemi çözün</p>
                     </div>
-                    <button id="back-to-main-menu-btn" class="btn btn-secondary">
+                    <button id="back-to-summary-btn" class="btn btn-secondary">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                         </svg>
-                        Ana Menü
+                        Özete Dön
                     </button>
                 </div>
 
                 <!-- Progress Section -->
                 <div class="progress-section mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <!-- Step Progress -->
+                        <!-- Current Step -->
                         <div class="text-center">
                             <div class="text-2xl font-bold text-blue-600" id="current-step-display">1</div>
-                            <div class="text-sm text-gray-600">/ <span id="total-steps-display">${this.solution.adimlar.length}</span> Adım</div>
+                            <div class="text-sm text-gray-600">/ <span id="total-steps-display">3</span> Adım</div>
                         </div>
                         
-                        <!-- Attempts Progress -->
+                        <!-- Attempts Used -->
                         <div class="text-center">
                             <div class="text-2xl font-bold text-orange-600" id="attempts-display">0</div>
-                            <div class="text-sm text-gray-600">/ ${this.maxAttempts} Deneme</div>
+                            <div class="text-sm text-gray-600">/ <span id="max-attempts-display">3</span> Deneme</div>
                         </div>
                         
                         <!-- Success Rate -->
@@ -109,35 +109,154 @@ export class InteractiveSolutionService {
                     
                     <!-- Progress Bar -->
                     <div class="mt-4">
-                        <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>İlerleme</span>
-                            <span id="progress-percentage">0%</span>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">İlerleme</span>
+                            <span class="text-sm font-medium text-blue-600" id="progress-percentage">0%</span>
                         </div>
-                        <div class="progress-bar bg-gray-200 rounded-full h-3">
-                            <div class="progress-fill bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500" 
-                                 style="width: 0%" id="progress-fill"></div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500" 
+                                id="progress-fill" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Interactive Step Container -->
-                <div id="interactive-step-container" class="mb-6">
-                    <!-- Step content will be inserted here -->
-                </div>
+                <!-- STEP DISPLAY CONTAINER - Bu eksikti! -->
+                <div id="interactive-step-container" class="step-container mb-6">
+                    
+                    <!-- Step Card -->
+                    <div class="step-card bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                        
+                        <!-- Step Header -->
+                        <div class="step-header mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-xl font-bold text-gray-800" id="step-title">
+                                    Adım 1/3: Düzgün Altıgenin Alanını Hesaplama
+                                </h4>
+                                <div class="step-indicator bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                                    İlk Adım
+                                </div>
+                            </div>
+                            
+                            <!-- Step Description -->
+                            <div class="step-description p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400 mb-4">
+                                <h5 class="font-medium text-blue-800 mb-2">Bu Adımda:</h5>
+                                <div class="text-blue-700" id="step-description">
+                                    Düzgün altıgenin alanını hesaplamak için önce kenar uzunluğunu bulmalıyız.
+                                </div>
+                            </div>
+                        </div>
 
-                <!-- Feedback Area -->
-                <div id="feedback-area" class="hidden mb-4">
-                    <!-- Feedback messages will appear here -->
+                        <!-- Step Mathematics -->
+                        <div class="step-content mb-6" id="step-math-content">
+                            <div class="math-content p-3 bg-gray-50 rounded-lg border">
+                                <div class="text-center" id="step-formula">
+                                    $$A = \frac{3\sqrt{3}}{2} \cdot a^2$$
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Question Section -->
+                        <div class="step-question mb-6">
+                            <h5 class="font-semibold text-gray-800 mb-4 text-lg">
+                                Bu adımda hangi yaklaşımı kullanmalısınız?
+                            </h5>
+                            <p class="text-gray-600 mb-4" id="step-question-detail">
+                                Düzgün altıgenin alanını hesaplamak için doğru formülü seçin:
+                            </p>
+                        </div>
+
+                        <!-- OPTIONS CONTAINER - 2 Yanlış + 1 Doğru -->
+                        <div class="options-container space-y-4" id="step-options">
+                            
+                            <!-- Option A - Doğru Seçenek -->
+                            <button class="option-btn w-full p-5 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group"
+                                    data-option-id="0"
+                                    data-is-correct="true"
+                                    data-step="0">
+                                <div class="flex items-start space-x-4">
+                                    <div class="option-letter bg-gray-200 text-gray-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                                        A
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="option-text font-semibold text-gray-800 mb-2 text-lg">
+                                            Düzgün altıgen alan formülünü doğru uygula
+                                        </div>
+                                        <div class="option-explanation text-gray-600 mb-3">
+                                            Kenar uzunluğunu bulup düzgün altıgen alan formülü A = (3√3/2) × a² kullan
+                                        </div>
+                                        <div class="option-formula p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                            <div class="text-center math-display">
+                                                $$A = \frac{3\sqrt{3}}{2} \times a^2$$
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            <!-- Option B - Yanlış Seçenek 1 -->
+                            <button class="option-btn w-full p-5 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-red-300 hover:bg-red-50 transition-all duration-200 group"
+                                    data-option-id="1"
+                                    data-is-correct="false"
+                                    data-step="0">
+                                <div class="flex items-start space-x-4">
+                                    <div class="option-letter bg-gray-200 text-gray-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
+                                        B
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="option-text font-semibold text-gray-800 mb-2 text-lg">
+                                            Dörtgen alan formülünü kullan
+                                        </div>
+                                        <div class="option-explanation text-gray-600 mb-3">
+                                            Altıgeni dörtgen gibi düşünüp A = a × b formülünü uygula
+                                        </div>
+                                        <div class="option-formula p-3 bg-red-50 rounded-lg border border-red-200">
+                                            <div class="text-center math-display">
+                                                $$A = a \times b$$
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            <!-- Option C - Yanlış Seçenek 2 -->
+                            <button class="option-btn w-full p-5 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-red-300 hover:bg-red-50 transition-all duration-200 group"
+                                    data-option-id="2"
+                                    data-is-correct="false"
+                                    data-step="0">
+                                <div class="flex items-start space-x-4">
+                                    <div class="option-letter bg-gray-200 text-gray-700 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
+                                        C
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="option-text font-semibold text-gray-800 mb-2 text-lg">
+                                            Daire alan formülünü kullan
+                                        </div>
+                                        <div class="option-explanation text-gray-600 mb-3">
+                                            Altıgeni daire gibi düşünüp A = πr² formülünü uygula
+                                        </div>
+                                        <div class="option-formula p-3 bg-red-50 rounded-lg border border-red-200">
+                                            <div class="text-center math-display">
+                                                $$A = \pi r^2$$
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="action-buttons flex flex-wrap gap-3 justify-center mt-6">
-                    <button id="interactive-hint-btn" class="btn btn-tertiary">
+                <div class="action-buttons flex flex-wrap gap-4 justify-center mt-6">
+                    <button id="interactive-hint-btn" class="btn btn-outline">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
                         </svg>
                         İpucu Al
                     </button>
+                    
                     <button id="interactive-reset-btn" class="btn btn-secondary">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -145,7 +264,19 @@ export class InteractiveSolutionService {
                         Yeniden Başla
                     </button>
                 </div>
+
+                <!-- Feedback Section -->
+                <div id="feedback-container" class="feedback-section mt-6 hidden">
+                    <div class="feedback-card p-4 rounded-lg border">
+                        <div class="feedback-content">
+                            <h6 class="font-bold mb-2" id="feedback-title">Geri Bildirim</h6>
+                            <p id="feedback-message">Seçiminize göre geri bildirim burada görünecek.</p>
+                        </div>
+                    </div>
+                </div>
+
             </div>
+
         `;
 
         this.container.innerHTML = html;
@@ -166,14 +297,32 @@ export class InteractiveSolutionService {
 
         this.currentStep = stepIndex;
         const step = this.solution.adimlar[stepIndex];
+        
+        // DÜZELTME: Container'ı kontrol et ve yazdır
         const stepContainer = document.getElementById('interactive-step-container');
         
-        if (!stepContainer) return;
+        if (!stepContainer) {
+            console.error('interactive-step-container element not found!');
+            console.log('Available containers:', document.querySelectorAll('[id*="container"]'));
+            
+            // Manuel container oluştur
+            const fallbackContainer = document.getElementById('solution-output');
+            if (fallbackContainer) {
+                const newStepContainer = document.createElement('div');
+                newStepContainer.id = 'interactive-step-container';
+                newStepContainer.className = 'step-container mb-6';
+                fallbackContainer.appendChild(newStepContainer);
+                console.log('Fallback step container created');
+            }
+            return;
+        }
+
+        console.log('Step container found, showing step:', stepIndex);
 
         // Generate options for this step
         const options = await this.generateStepOptions(stepIndex);
         
-        // Create step HTML
+        // Create step HTML - DÜZELTME: Daha basit HTML yapısı
         let stepHTML = `
             <div class="step-card bg-white rounded-xl shadow-lg border border-gray-200 p-6">
                 <!-- Step Header -->
@@ -183,78 +332,71 @@ export class InteractiveSolutionService {
                             Adım ${stepIndex + 1}/${this.solution.adimlar.length}
                         </h4>
                         <div class="step-indicator bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                            ${this.currentStep === 0 ? 'İlk Adım' : `${stepIndex + 1}. Adım`}
+                            ${stepIndex === 0 ? 'İlk Adım' : `${stepIndex + 1}. Adım`}
                         </div>
                     </div>
                     
                     ${step.adimAciklamasi ? `
                         <div class="step-description p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400 mb-4">
                             <h5 class="font-medium text-blue-800 mb-2">Bu Adımda:</h5>
-                            <div class="smart-content text-blue-700" data-content="${this.escapeHtml(step.adimAciklamasi)}"></div>
+                            <div class="text-blue-700">${step.adimAciklamasi}</div>
                         </div>
                     ` : ''}
                 </div>
 
-                <!-- Step Question -->
-                <div class="step-question mb-6">
-                    <h5 class="font-semibold text-gray-800 mb-3">
-                        ${stepIndex === 0 ? 'İlk adım için doğru yaklaşımı seçin:' : 'Bu adım için doğru işlemi seçin:'}
-                    </h5>
+                <!-- Step Content -->
+                <div class="step-content mb-6">
+                    ${step.cozum_lateks ? `
+                        <div class="math-content mb-4 p-3 bg-gray-50 rounded-lg">
+                            ${step.cozum_lateks}
+                        </div>
+                    ` : ''}
                 </div>
 
                 <!-- Options -->
-                <div class="options-container space-y-3">
-        `;
-
-        // Add option buttons
-        options.forEach((option, index) => {
-            const optionLetter = String.fromCharCode(65 + index); // A, B, C
-            stepHTML += `
-                <button class="option-label w-full p-4 text-left bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group"
-                        data-option-id="${option.id}"
-                        data-is-correct="${option.isCorrect}"
-                        data-step="${stepIndex}">
-                    <div class="flex items-start space-x-4">
-                        <div class="option-letter bg-gray-200 text-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                            ${optionLetter}
-                        </div>
-                        <div class="flex-1">
-                            <div class="option-text font-medium text-gray-800 mb-2">
-                                ${option.text}
-                            </div>
-                            ${option.explanation ? `
-                                <div class="option-explanation text-sm text-gray-600">
-                                    ${option.explanation}
+                <div class="step-options">
+                    <h5 class="font-semibold text-gray-800 mb-4">Bu adımda ne yapmalısınız?</h5>
+                    <div class="options-grid space-y-3">
+                        ${options.map((option, index) => `
+                            <button class="option-btn w-full p-4 text-left bg-white border-2 border-gray-200 rounded-lg hover:border-blue-400 transition-colors" 
+                                    data-step="${stepIndex}" 
+                                    data-option-id="${option.id}" 
+                                    data-is-correct="${option.isCorrect}">
+                                <div class="flex items-start">
+                                    <div class="option-letter bg-gray-100 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium mr-3">
+                                        ${String.fromCharCode(65 + index)}
+                                    </div>
+                                    <div class="option-content flex-1">
+                                        <div class="font-medium text-gray-800">${option.text}</div>
+                                        ${option.explanation ? `<div class="text-sm text-gray-600 mt-1">${option.explanation}</div>` : ''}
+                                    </div>
                                 </div>
-                            ` : ''}
-                            ${option.formula ? `
-                                <div class="option-formula mt-2 p-2 bg-white rounded border text-center">
-                                    <div class="smart-content" data-content="${this.escapeHtml(option.formula)}"></div>
-                                </div>
-                            ` : ''}
-                        </div>
+                            </button>
+                        `).join('')}
                     </div>
-                </button>
-            `;
-        });
-
-        stepHTML += `
                 </div>
             </div>
         `;
 
+        // DÜZELTME: HTML'i container'a ekle ve event listener'ları bağla
         stepContainer.innerHTML = stepHTML;
-
-        // Update progress indicators
+        
+        // Event listeners ekle
+        this.attachOptionListeners();
+        
+        // Progress göstergelerini güncelle
         this.updateProgressIndicators();
 
-        // Render math content
+        // LaTeX render et
         setTimeout(async () => {
-            await mathRenderer.renderContent(stepContainer);
+            try {
+                await mathRenderer.renderContent(stepContainer);
+            } catch (error) {
+                console.warn('Math rendering failed:', error);
+            }
         }, 100);
 
-        // Attach option event listeners
-        this.attachOptionListeners();
+        console.log('Step displayed successfully:', stepIndex);
     }
 
     /**

@@ -6,8 +6,7 @@ import { smartGuideService } from '../services/SmartGuideService.js';
 import { makeApiCall } from '../utils/ApiBridge.js';
 import { DebugHelper } from '../utils/DebugHelper.js';
 import { LegacyBridge } from '../utils/LegacyBridge.js';
-//const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
-import { interactiveSolutionService } from '../utils/InteractiveSolutionService.js';
+const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
 
 /**
  * Main Index Page Controller
