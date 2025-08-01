@@ -1,1215 +1,897 @@
-// www/js/modules/advancedMathRenderer.js
-// Complete Advanced Math Renderer with Comprehensive Fallback System
+// =================================================================================
+//  MathAi - Gelişmiş Matematiksel İfade Render Modülü
+//  MathJax v3 + KaTeX Hybrid Sistem - Türkçe Optimized
+// =================================================================================
 
-import { simpleMathRenderer } from '../services/SimpleMathRenderer.js';
-
+/**
+ * Gelişmiş Hybrid Math Renderer - MathJax v3 & KaTeX
+ * Türkçe metin + LaTeX karışık içerik için optimize edilmiş
+ */
 export class AdvancedMathRenderer {
     constructor() {
         this.mathJaxReady = false;
         this.katexReady = false;
-        this.initialized = false;
-        this.fallbackMode = false;
-        this.renderMode = 'unknown'; // 'mathjax', 'katex', 'simple'
-        this.initializationAttempts = 0;
-        this.maxInitAttempts = 3;
+        this.renderQueue = [];
+        this.cache = new Map();
         
-        // Initialize fallback renderer immediately
-        this.fallbackRenderer = simpleMathRenderer;
-        
-        // Configuration
-        this.config = {
-            mathJaxTimeout: 15000,
-            katexTimeout: 10000,
-            enableDebugLogs: true
+        // Türkçe metin tanıma patterns
+        this.turkishPatterns = {
+            words: /\b(değer|değeri|olduğu|olduğuna|göre|için|ile|den|dan|da|de|bu|şu|o|ve|veya|eğer|ise|durumda|durumunda|sonuç|sonucu|cevap|cevabı|problem|problemi|soru|sorusu|çözüm|çözümü|adım|adımı|hesapla|hesaplama|bul|bulma|kaç|kaçtır|nedir|neye|nasıl|kimse|kimde|nerede|ne|neler|hangi|hangisi)\b/gi,
+            chars: /[ğüşıöçĞÜŞİÖÇ]/g,
+            verbs: /\b(olur|olacak|oluyor|olmuş|gelir|gider|yapar|yapıyor|eder|ediyor|alır|alıyor|verir|veriyor)\b/gi,
+            numbers: /\b(bir|iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yüz|bin|milyon|birinci|ikinci|üçüncü)\b/gi
         };
+        
+        // LaTeX complexity patterns
+        this.latexComplexity = {
+            simple: /^[\s\d\w+\-*/=<>()[\]{}^_.,!?]*$/,
+            basicMath: /\\(frac|sqrt|sum|int|lim|log|sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan)\{[^}]*\}/g,
+            advanced: /\\(begin|end|usepackage|newcommand|def|DeclareMathOperator|text|mathrm|mathbb|mathcal|mathfrak)/g,
+            // GÜNCELLENEN: Daha robust delimiter patterns
+            delimiters: /(\$\$[^$]*?\$\$|\$[^$\n]*?\$|\\\([^\\]*?\\\)|\\\[[^\\]*?\\\])/g,
+            // YENİ EKLEME: Balanced delimiter check
+            dollarSingle: /\$([^$\n]+?)\$/g,
+            dollarDouble: /\$\$([^$]+?)\$\$/g,
+            parentheses: /\\\(([^\\]+?)\\\)/g,
+            brackets: /\\\[([^\\]+?)\\\]/g,
+            // YENİ EKLEME: Nested structure detection
+            nestedBraces: /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
+        };
+        
+        this.initializeRenderers();
     }
-
+    
     /**
-     * Initialize the math renderer with comprehensive error handling
+     * Render sistemlerini başlat
      */
-    async init() {
-        if (this.initialized) return true;
-
-        this.initializationAttempts++;
-        this.log('🔧 Initializing AdvancedMathRenderer...', `Attempt ${this.initializationAttempts}/${this.maxInitAttempts}`);
-
-        try {
-            // Try KaTeX first (faster and more reliable)
-            if (await this.tryInitKaTeX()) {
-                this.renderMode = 'katex';
-                this.log('✅ KaTeX render mode active');
-            }
-            // Then try MathJax
-            else if (await this.tryInitMathJax()) {
-                this.renderMode = 'mathjax';
-                this.log('✅ MathJax render mode active');
-            }
-            // Fall back to simple renderer
-            else {
-                this.renderMode = 'simple';
-                this.fallbackMode = true;
-                this.log('⚠️ Using simple math renderer (fallback mode)');
-            }
-
-            this.initialized = true;
-            return true;
-
-        } catch (error) {
-            this.log('❌ AdvancedMathRenderer initialization failed:', error);
-            
-            if (this.initializationAttempts < this.maxInitAttempts) {
-                this.log(`🔄 Retrying initialization... (${this.initializationAttempts}/${this.maxInitAttempts})`);
-                await this.delay(1000);
-                return await this.init();
-            }
-            
-            // Final fallback
-            this.renderMode = 'simple';
-            this.fallbackMode = true;
-            this.initialized = true;
-            this.log('🆘 Using simple renderer as final fallback');
-            return true;
+    async initializeRenderers() {
+        await this.initializeMathJax();
+        this.initializeKaTeX();
+        this.processQueue();
+    }
+    
+    /**
+     * MathJax v3 başlatma
+     */
+    async initializeMathJax() {
+        if (typeof MathJax !== 'undefined') {
+            this.mathJaxReady = true;
+            return;
         }
-    }
-
-    /**
-     * Try to initialize KaTeX
-     */
-    async tryInitKaTeX() {
-        try {
-            this.log('🔍 Checking KaTeX availability...');
-            
-            // Check if KaTeX is already available
-            if (typeof window.katex !== 'undefined') {
-                this.katexReady = true;
-                this.log('✅ KaTeX already loaded');
-                return true;
-            }
-
-            // Try to load KaTeX CSS
-            if (!document.querySelector('link[href*="katex"]')) {
-                const katexCSS = document.createElement('link');
-                katexCSS.rel = 'stylesheet';
-                katexCSS.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
-                katexCSS.crossOrigin = 'anonymous';
-                document.head.appendChild(katexCSS);
-                this.log('📄 KaTeX CSS loaded');
-            }
-
-            // Try to load KaTeX JS
-            if (!document.querySelector('script[src*="katex"]')) {
-                await this.loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js');
-                this.log('📄 KaTeX JS loaded');
-            }
-
-            // Try to load KaTeX auto-render extension
-            if (!document.querySelector('script[src*="auto-render"]')) {
-                try {
-                    await this.loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js');
-                    this.log('📄 KaTeX auto-render loaded');
-                } catch (e) {
-                    this.log('⚠️ KaTeX auto-render failed to load (non-critical)');
-                }
-            }
-
-            // Verify KaTeX loaded successfully
-            await this.delay(500); // Give it time to initialize
-            this.katexReady = typeof window.katex !== 'undefined';
-            
-            if (this.katexReady) {
-                this.log('✅ KaTeX initialization successful');
-                return true;
-            } else {
-                this.log('❌ KaTeX failed to initialize');
-                return false;
-            }
-
-        } catch (error) {
-            this.log('⚠️ KaTeX initialization failed:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Try to initialize MathJax
-     */
-    async tryInitMathJax() {
-        try {
-            this.log('🔍 Checking MathJax availability...');
-            
-            // Check if MathJax is available and ready
-            if (window.MathJax && this.isMathJaxReady()) {
-                this.mathJaxReady = true;
-                this.log('✅ MathJax already loaded and ready');
-                return true;
-            }
-
-            // Configure MathJax before loading
-            this.configureMathJax();
-
-            // Load MathJax
-            await this.loadMathJaxScript();
-            
-            return this.mathJaxReady;
-
-        } catch (error) {
-            this.log('⚠️ MathJax initialization failed:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Configure MathJax before loading
-     */
-    configureMathJax() {
+        
+        // MathJax v3 konfigürasyonu
         window.MathJax = {
             tex: {
                 inlineMath: [['$', '$'], ['\\(', '\\)']],
                 displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 processEscapes: true,
                 processEnvironments: true,
+                processRefs: true,
                 tags: 'ams',
-                tagSide: 'right',
-                tagIndent: '0.8em',
-                multlineWidth: '85%',
-                labels: {},
-                formatError: (jax, err) => {
-                    this.log('MathJax format error:', err);
-                    return jax.formatError(err);
+                macros: {
+                    '\\R': '\\mathbb{R}',
+                    '\\C': '\\mathbb{C}',
+                    '\\N': '\\mathbb{N}',
+                    '\\Z': '\\mathbb{Z}',
+                    '\\Q': '\\mathbb{Q}',
+                    '\\T': '\\text{#1}',
+                    '\\tr': '\\text{#1}'
+                },
+                packages: {
+                    '[+]': ['ams', 'newcommand', 'configmacros', 'action', 'unicode']
                 }
             },
+            svg: {
+                fontCache: 'global',
+                displayAlign: 'left',
+                displayIndent: '0'
+            },
             options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'annotation', 'annotation-xml'],
-                includeHtmlTags: ['#comment'],
-                ignoreHtmlClass: 'tex2jax_ignore',
-                processHtmlClass: 'tex2jax_process',
-                renderActions: {
-                    addMenu: [0, '', '']
+                ignoreHtmlClass: 'tex2jax_ignore|mathjax_ignore',
+                processHtmlClass: 'tex2jax_process|mathjax_process|smart-content',
+                enableMenu: true,
+                menuOptions: {
+                    settings: {
+                        assistiveMml: true,
+                        collapsible: false,
+                        explorer: true
+                    }
                 }
             },
             startup: {
                 ready: () => {
-                    this.log('🔧 MathJax startup ready');
+                    console.log('MathJax v3 hazır');
                     this.mathJaxReady = true;
-                    
-                    // Call original MathJax ready
-                    if (window.MathJax.startup && window.MathJax.startup.defaultReady) {
-                        window.MathJax.startup.defaultReady();
-                    }
+                    MathJax.startup.defaultReady();
+                    this.processQueue();
+                },
+                pageReady: () => {
+                    return MathJax.startup.document.state() < MathJax.STATE.READY ? 
+                           MathJax.startup.document.ready() : Promise.resolve();
                 }
             },
             loader: {
                 load: ['[tex]/ams', '[tex]/newcommand', '[tex]/configmacros']
             }
         };
-    }
-
-    /**
-     * Load MathJax script with timeout and error handling
-     */
-    async loadMathJaxScript() {
-        return new Promise((resolve, reject) => {
-            // Check if already loading
-            if (document.querySelector('script[src*="mathjax"]')) {
-                // Wait for existing script to load
-                const checkReady = () => {
-                    if (this.isMathJaxReady()) {
-                        this.mathJaxReady = true;
-                        resolve();
-                    } else {
-                        setTimeout(checkReady, 100);
-                    }
-                };
-                checkReady();
-                return;
-            }
-
-            // Load MathJax script
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-            script.async = true;
-            script.crossOrigin = 'anonymous';
-            
-            script.onload = () => {
-                this.log('📄 MathJax script loaded');
-                // Wait for startup to complete
-                const checkReady = () => {
-                    if (this.isMathJaxReady()) {
-                        this.mathJaxReady = true;
-                        this.log('✅ MathJax ready');
-                        resolve();
-                    } else {
-                        setTimeout(checkReady, 100);
-                    }
-                };
-                setTimeout(checkReady, 500);
-            };
-
-            script.onerror = () => {
-                this.log('❌ MathJax script load failed');
-                reject(new Error('MathJax script load failed'));
-            };
-            
-            document.head.appendChild(script);
-
-            // Timeout after configured time
-            setTimeout(() => {
-                if (!this.mathJaxReady) {
-                    this.log('⏰ MathJax load timeout');
-                    reject(new Error('MathJax load timeout'));
-                }
-            }, this.config.mathJaxTimeout);
-        });
-    }
-
-    /**
-     * Check if MathJax is ready for use
-     */
-    isMathJaxReady() {
-        return window.MathJax && 
-               window.MathJax.startup && 
-               window.MathJax.startup.ready &&
-               (typeof window.MathJax.typesetPromise === 'function' || 
-                typeof window.MathJax.typeset === 'function');
-    }
-
-    /**
-     * Load a script dynamically with error handling
-     */
-    loadScript(src) {
-        return new Promise((resolve, reject) => {
-            // Check if already loaded
-            if (document.querySelector(`script[src="${src}"]`)) {
-                resolve();
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = src;
-            script.async = true;
-            script.crossOrigin = 'anonymous';
-            script.onload = resolve;
-            script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-            document.head.appendChild(script);
-
-            // Timeout
-            setTimeout(() => {
-                reject(new Error(`Script load timeout: ${src}`));
-            }, 10000);
-        });
-    }
-
-    /**
-     * Main render function - automatically chooses best available renderer
-     */
-    async render(content, element, options = {}) {
-        if (!element) {
-            this.log('❌ No element provided for rendering');
-            return false;
-        }
-
-        if (!content) {
-            this.log('❌ No content provided for rendering');
-            return false;
-        }
-
-        try {
-            await this.init();
-
-            this.log(`🎨 Rendering with mode: ${this.renderMode}`, content);
-
-            switch (this.renderMode) {
-                case 'katex':
-                    return await this.renderWithKaTeX(content, element, options);
-                
-                case 'mathjax':
-                    return await this.renderWithMathJax(content, element, options);
-                
-                case 'simple':
-                default:
-                    return await this.renderWithSimple(content, element, options);
-            }
-
-        } catch (error) {
-            this.log('❌ Render error, falling back to simple renderer:', error);
-            return await this.renderWithSimple(content, element, options);
-        }
-    }
-
-    /**
-     * Render with KaTeX
-     */
-    async renderWithKaTeX(content, element, options = {}) {
-        try {
-            if (!this.katexReady || typeof window.katex === 'undefined') {
-                throw new Error('KaTeX not available');
-            }
-
-            // Set content first
-            element.innerHTML = this.preprocessContent(content);
-
-            // Use KaTeX auto-render if available
-            if (typeof window.renderMathInElement === 'function') {
-                window.renderMathInElement(element, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\(', right: '\\)', display: false},
-                        {left: '\\[', right: '\\]', display: true}
-                    ],
-                    throwOnError: false,
-                    errorColor: '#cc0000',
-                    strict: false,
-                    trust: false,
-                    macros: {
-                        "\\f": "#1f(#2)"
-                    }
-                });
-            } else {
-                // Manual KaTeX rendering
-                this.manualKaTeXRender(element);
-            }
-
-            this.log('✅ KaTeX render successful');
-            return true;
-
-        } catch (error) {
-            this.log('⚠️ KaTeX render failed:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Manual KaTeX rendering for when auto-render is not available
-     */
-    manualKaTeXRender(element) {
-        const mathRegex = /\$\$([^$]+)\$\$|\$([^$]+)\$/g;
-        const html = element.innerHTML;
         
-        const processedHtml = html.replace(mathRegex, (match, displayMath, inlineMath) => {
-            try {
-                const mathText = displayMath || inlineMath;
-                const isDisplay = !!displayMath;
-                
-                return window.katex.renderToString(mathText, {
-                    displayMode: isDisplay,
-                    throwOnError: false,
-                    errorColor: '#cc0000',
-                    strict: false,
-                    trust: false
-                });
-            } catch (e) {
-                this.log('KaTeX render error for:', match, e);
-                return `<span style="color: #cc0000;">[Math Error: ${match}]</span>`;
-            }
+        // MathJax v3 script yükle
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
+        script.async = true;
+        document.head.appendChild(script);
+        
+        // Promise ile yüklenmesini bekle
+        return new Promise((resolve) => {
+            script.onload = () => {
+                setTimeout(() => {
+                    if (this.mathJaxReady) resolve();
+                }, 100);
+            };
         });
-
-        element.innerHTML = processedHtml;
     }
-
+    
     /**
-     * Render with MathJax
+     * KaTeX başlatma kontrolü
      */
-    async renderWithMathJax(content, element, options = {}) {
-        try {
-            if (!this.mathJaxReady || !this.isMathJaxReady()) {
-                throw new Error('MathJax not available');
-            }
-
-            // Set content first
-            element.innerHTML = this.preprocessContent(content);
-            element.classList.add('tex2jax_process');
-
-            // Use the best available MathJax function
-            if (typeof window.MathJax.typesetPromise === 'function') {
-                await window.MathJax.typesetPromise([element]);
-            } else if (typeof window.MathJax.typeset === 'function') {
-                window.MathJax.typeset([element]);
-            } else if (window.MathJax.Hub && typeof window.MathJax.Hub.Queue === 'function') {
-                // MathJax v2 compatibility
-                return new Promise((resolve) => {
-                    window.MathJax.Hub.Queue(['Typeset', window.MathJax.Hub, element], resolve);
-                });
-            } else {
-                throw new Error('No MathJax render function available');
-            }
-
-            this.log('✅ MathJax render successful');
-            return true;
-
-        } catch (error) {
-            this.log('⚠️ MathJax render failed:', error);
-            throw error;
+    initializeKaTeX() {
+        this.katexReady = typeof katex !== 'undefined';
+        if (this.katexReady) {
+            console.log('KaTeX hazır');
         }
     }
-
+    
     /**
-     * Render with simple fallback renderer
+     * Ana render fonksiyonu - Hybrid sistem
      */
-    async renderWithSimple(content, element, options = {}) {
-        try {
-            // Set the content as data attribute for simple renderer
-            element.setAttribute('data-content', content);
-            element.classList.add('smart-content');
-
-            // Use the simple renderer
-            await this.fallbackRenderer.renderContent(element.parentElement || element, options);
-
-            this.log('✅ Simple render successful');
+    async render(content, element, displayMode = false) {
+        if (!content || !element) {
+            console.warn('Render: İçerik veya element eksik');
+            return false;
+        }
+        
+        // Cache kontrolü
+        const cacheKey = `${content}-${displayMode}`;
+        if (this.cache.has(cacheKey)) {
+            element.innerHTML = this.cache.get(cacheKey);
             return true;
-
+        }
+        
+        try {
+            // İçerik analizi
+            const analysis = this.analyzeContentAdvanced(content);
+            console.log('Content Analysis:', { content, analysis });
+            
+            let result = false;
+            
+            switch (analysis.type) {
+                case 'text':
+                    result = this.renderPlainText(content, element);
+                    break;
+                    
+                case 'simple_math':
+                    // Basit matematik için KaTeX (hızlı)
+                    result = await this.renderWithKaTeX(content, element, displayMode);
+                    if (!result && this.mathJaxReady) {
+                        // KaTeX başarısız olursa MathJax'e fallback
+                        result = await this.renderWithMathJax(content, element, displayMode);
+                    }
+                    break;
+                    
+                case 'complex_math':
+                    // Karmaşık matematik için MathJax (güvenilir)
+                    result = await this.renderWithMathJax(content, element, displayMode);
+                    break;
+                    
+                case 'mixed':
+                    result = await this.renderMixedContent(content, element, displayMode);
+                    break;
+                    
+                default:
+                    // Auto-detection
+                    result = await this.renderAuto(content, element, displayMode);
+            }
+            
+            // Başarılı render'ı cache'le
+            if (result && element.innerHTML) {
+                this.cache.set(cacheKey, element.innerHTML);
+            }
+            
+            return result;
+            
         } catch (error) {
-            this.log('❌ Simple render failed:', error);
-            // Last resort - just set text content
-            element.textContent = content;
+            console.error('Render hatası:', error);
+            this.renderFallback(content, element, error);
             return false;
         }
     }
-
+    
     /**
-     * Preprocess content for better rendering
+     * Gelişmiş içerik analizi - Türkçe optimized
      */
-    preprocessContent(content) {
-        if (typeof content !== 'string') return content;
-
-        return content
-            // Clean up empty math blocks
-            .replace(/\$\$\s*\$\$/g, '')
-            .replace(/\$\s*\$/g, '')
-            
-            // Fix multiple backslashes
-            .replace(/\\{2,}/g, '\\')
-            
-            // Normalize whitespace
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    /**
-     * Analyze content to determine rendering strategy
-     */
-    analyzeContent(content) {
-        if (typeof content !== 'string') return { 
-            isLatex: false, 
-            isMathExpression: false, 
-            isPlainText: true, 
-            isMixed: false,
-            confidence: 0 
+    analyzeContentAdvanced(content) {
+        const trimmed = content.trim();
+    
+        // 1. Boş içerik kontrolü
+        if (!trimmed) {
+            return { type: 'text', confidence: 0, reason: 'empty' };
+        }
+        
+        // 2. GÜNCELLENEN: Gelişmiş LaTeX delimiter kontrolü
+        const latexMatches = trimmed.match(this.latexComplexity.delimiters) || [];
+        const hasExplicitLatex = latexMatches.length > 0;
+        
+        // YENİ EKLEME: Delimiter balance check
+        const dollarCount = (trimmed.match(/\$/g) || []).length;
+        const parenOpenCount = (trimmed.match(/\\\(/g) || []).length;
+        const parenCloseCount = (trimmed.match(/\\\)/g) || []).length;
+        const bracketOpenCount = (trimmed.match(/\\\[/g) || []).length;
+        const bracketCloseCount = (trimmed.match(/\\\]/g) || []).length;
+        
+        // YENİ EKLEME: Unbalanced delimiter detection
+        const hasUnbalancedDelimiters = (dollarCount % 2 !== 0) || 
+                                    (parenOpenCount !== parenCloseCount) || 
+                                    (bracketOpenCount !== bracketCloseCount);
+        
+        // 3. Türkçe metin analizi
+        const turkishScores = {
+            words: (trimmed.match(this.turkishPatterns.words) || []).length,
+            chars: (trimmed.match(this.turkishPatterns.chars) || []).length,
+            verbs: (trimmed.match(this.turkishPatterns.verbs) || []).length,
+            numbers: (trimmed.match(this.turkishPatterns.numbers) || []).length
         };
-
-        const hasLatexDelimiters = /\$\$.*?\$\$|\$.*?\$|\\[()[\]]/.test(content);
-        const hasLatexCommands = /\\[a-zA-Z]+/.test(content);
-        const hasMathSymbols = /[+\-*/=<>^_{}()[\]]/.test(content);
-        const hasTurkishText = /[ğüşıöçĞÜŞİÖÇ]/.test(content) || 
-                              /\b(ve|veya|ile|için|olan|olur|değer|sonuç)\b/.test(content);
-
-        const isLatex = hasLatexDelimiters || hasLatexCommands;
-        const isMathExpression = hasMathSymbols && !hasTurkishText;
-        const isPlainText = !isLatex && !isMathExpression;
-        const isMixed = hasTurkishText && (isLatex || isMathExpression);
-
-        let confidence = 0;
-        if (isLatex) confidence += hasLatexDelimiters ? 0.8 : 0.6;
-        if (isMathExpression) confidence += 0.4;
-        if (isMixed) confidence += 0.3;
-        confidence = Math.min(confidence, 1);
-
+        
+        const turkishScore = turkishScores.words * 3 + 
+                            turkishScores.chars * 2 + 
+                            turkishScores.verbs * 2 + 
+                            turkishScores.numbers * 1;
+        
+        const hasTurkishText = turkishScore > 0;
+        
+        // 4. LaTeX komplekslik analizi
+        const hasAdvancedLatex = this.latexComplexity.advanced.test(trimmed);
+        const hasBasicMath = this.latexComplexity.basicMath.test(trimmed);
+        const isSimpleText = this.latexComplexity.simple.test(trimmed);
+        
+        // 5. Karar algoritması
+        if (hasExplicitLatex && hasTurkishText) {
+            return {
+                type: 'mixed',
+                confidence: 0.95,
+                reason: 'explicit_latex_with_turkish',
+                details: { latexMatches: latexMatches.length, turkishScore }
+            };
+        }
+        
+        if (hasExplicitLatex || hasAdvancedLatex) {
+            const complexity = hasAdvancedLatex ? 'complex_math' : 
+                              hasBasicMath ? 'simple_math' : 'simple_math';
+            return {
+                type: complexity,
+                confidence: 0.9,
+                reason: 'explicit_math',
+                details: { hasAdvanced: hasAdvancedLatex, hasBasic: hasBasicMath }
+            };
+        }
+        
+        if (hasTurkishText && isSimpleText) {
+            return {
+                type: 'text',
+                confidence: 0.85,
+                reason: 'turkish_text',
+                details: { turkishScore }
+            };
+        }
+        
+        // 6. Basit matematik ifadesi kontrolü
+        const mathIndicators = ['+', '-', '*', '/', '=', '<', '>', '^', '_'];
+        const hasMathSymbols = mathIndicators.some(symbol => trimmed.includes(symbol));
+        
+        if (hasMathSymbols && !hasTurkishText) {
+            return {
+                type: 'simple_math',
+                confidence: 0.7,
+                reason: 'math_symbols',
+                details: { symbols: mathIndicators.filter(s => trimmed.includes(s)) }
+            };
+        }
+        
+        // 7. Default: plain text
         return {
-            isLatex,
-            isMathExpression,
-            isPlainText,
-            isMixed,
-            confidence,
-            hasLatexDelimiters,
-            hasLatexCommands,
-            hasMathSymbols,
-            hasTurkishText
+            type: 'text',
+            confidence: 0.5,
+            reason: 'default_text',
+            details: { length: trimmed.length }
+        };
+    }
+        /**
+     * YENİ EKLEME: Gelişmiş content analysis with context
+     */
+    analyzeContentWithContext(content) {
+        const cleaned = content.trim().replace(/\s+/g, ' ');
+        
+        // Türkçe metin analizi
+        const turkishWords = (cleaned.match(/[a-zA-ZçğıöşüÇĞIİÖŞÜ]+/g) || []).length;
+        const totalWords = cleaned.split(/\s+/).filter(word => word.length > 0).length;
+        const turkishRatio = totalWords > 0 ? turkishWords / totalWords : 0;
+        
+        // LaTeX içerik analizi
+        const latexMatches = cleaned.match(this.latexComplexity.delimiters) || [];
+        const mathSymbolCount = (cleaned.match(/[+\-*/=<>^_{}\\]/g) || []).length;
+        
+        // Karışık içerik tespiti
+        const isMixedContent = turkishRatio > 0.3 && latexMatches.length > 0;
+        const isPureTurkish = turkishRatio > 0.8 && latexMatches.length === 0;
+        const isPureLatex = turkishRatio < 0.2 && (latexMatches.length > 0 || mathSymbolCount > 2);
+        
+        return {
+            turkishRatio,
+            latexCount: latexMatches.length,
+            mathSymbolCount,
+            isMixedContent,
+            isPureTurkish,
+            isPureLatex,
+            totalWords,
+            confidence: this.calculateContextConfidence(turkishRatio, latexMatches.length, mathSymbolCount)
         };
     }
 
     /**
-     * Render problem summary with best available renderer
+     * YENİ EKLEME: Context-aware confidence calculation
      */
-    async renderProblemSummary(problemOzeti, container) {
-        if (!problemOzeti || !container) return false;
-
+    calculateContextConfidence(turkishRatio, latexCount, mathSymbolCount) {
+        let confidence = 0.5; // Base confidence
+        
+        // Türkçe içerik güveni
+        if (turkishRatio > 0.8) confidence += 0.3;
+        else if (turkishRatio > 0.5) confidence += 0.1;
+        
+        // LaTeX içerik güveni
+        if (latexCount > 0) confidence += 0.2;
+        if (mathSymbolCount > 2) confidence += 0.1;
+        
+        // Karışık içerik cezası
+        if (turkishRatio > 0.3 && latexCount > 0) confidence -= 0.1;
+        
+        return Math.min(Math.max(confidence, 0), 1);
+    }
+    
+    /**
+     * KaTeX ile render
+     */
+    async renderWithKaTeX(content, element, displayMode = false) {
+        if (!this.katexReady) {
+            console.warn('KaTeX hazır değil');
+            return false;
+        }
+        
         try {
-            await this.init();
-
-            if (this.renderMode === 'simple') {
-                return await this.fallbackRenderer.renderProblemSummary(problemOzeti, container);
-            }
-
-            // Use advanced rendering for MathJax/KaTeX modes
-            const { verilenler, istenen } = problemOzeti;
-            let summaryHTML = `
-                <div class="problem-summary bg-blue-50 p-4 rounded-lg mb-4">
-                    <h3 class="font-semibold text-blue-800 mb-2">Problem Özeti:</h3>`;
-
-            if (verilenler && verilenler.length > 0) {
-                summaryHTML += `
-                    <div class="mb-2">
-                        <strong>Verilenler:</strong>
-                        <ul class="list-disc list-inside ml-4">
-                            ${verilenler.map((veri, index) => `
-                                <li class="smart-content" data-content="${this.escapeHtml(veri)}" id="verilen-${index}"></li>
-                            `).join('')}
-                        </ul>
-                    </div>`;
-            }
-
-            if (istenen) {
-                summaryHTML += `
-                    <div>
-                        <strong>İstenen:</strong> 
-                        <span class="smart-content" data-content="${this.escapeHtml(istenen)}" id="istenen-content"></span>
-                    </div>`;
-            }
-
-            summaryHTML += '</div>';
-            container.innerHTML = summaryHTML;
-
-            // Render smart content elements
-            const smartElements = container.querySelectorAll('.smart-content[data-content]');
-            for (const element of smartElements) {
-                const content = element.getAttribute('data-content');
-                if (content) {
-                    await this.render(content, element);
+            // İçeriği temizle
+            const cleanedContent = this.cleanLatexContent(content);
+            
+            const options = {
+                displayMode: displayMode,
+                throwOnError: false,
+                output: 'html',
+                trust: true,
+                strict: false,
+                macros: {
+                    '\\R': '\\mathbb{R}',
+                    '\\C': '\\mathbb{C}',
+                    '\\N': '\\mathbb{N}',
+                    '\\tr': '\\text{#1}'
                 }
-            }
-
+            };
+            
+            katex.render(cleanedContent, element, options);
+            this.applyStyles(element, displayMode, 'katex');
+            
+            console.log('KaTeX render başarılı:', cleanedContent);
             return true;
-
+            
         } catch (error) {
-            this.log('❌ Problem summary render failed:', error);
-            return await this.fallbackRenderer.renderProblemSummary(problemOzeti, container);
+            console.warn('KaTeX render hatası:', error.message);
+            element.classList.add('katex-error');
+            return false;
         }
     }
-
+    
     /**
-     * Render full solution with best available renderer
+     * MathJax v3 ile render
      */
-    async renderFullSolution(solution, container) {
-        if (!solution || !container) return false;
-
+    async renderWithMathJax(content, element, displayMode = false) {
+        if (!this.mathJaxReady) {
+            console.warn('MathJax hazır değil, kuyruğa ekleniyor');
+            this.addToQueue(content, element, displayMode);
+            return false;
+        }
+        
         try {
-            await this.init();
+            // İçeriği temizle ve hazırla
+            const cleanedContent = this.cleanLatexContent(content);
+            const mathContent = displayMode ? `\\[${cleanedContent}\\]` : `\\(${cleanedContent}\\)`;
+            
+            // Geçici element oluştur
+            const tempElement = document.createElement('div');
+            tempElement.innerHTML = mathContent;
+            tempElement.classList.add('mathjax_process');
+            
+            // Sayfaya ekle (MathJax'in görmesi için)
+            document.body.appendChild(tempElement);
+            
+            // MathJax ile render et
+            await MathJax.typesetPromise([tempElement]);
+            
+            // Sonucu ana element'e kopyala
+            element.innerHTML = tempElement.innerHTML;
+            
+            // Geçici element'i kaldır
+            document.body.removeChild(tempElement);
+            
+            this.applyStyles(element, displayMode, 'mathjax');
+            
+            console.log('MathJax render başarılı:', cleanedContent);
+            return true;
+            
+        } catch (error) {
+            console.error('MathJax render hatası:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Karışık içerik render (Türkçe + LaTeX)
+     */
+    async renderMixedContent(content, element, displayMode = false) {
+        try {
+            const parts = this.splitContentWithStateMachine(content) || this.splitMixedContentSafe(content);
 
-            if (this.renderMode === 'simple') {
-                return await this.fallbackRenderer.renderFullSolution(solution, container);
+            element.innerHTML = '';
+            element.classList.add('mixed-content-container');
+            
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                const partElement = document.createElement('span');
+                
+                if (part.type === 'latex') {
+                    partElement.className = 'latex-inline-part';
+                    
+                    // Basit LaTeX için KaTeX, karmaşık için MathJax
+                    const isSimple = !this.latexComplexity.advanced.test(part.content);
+                    
+                    let rendered = false;
+                    if (isSimple && this.katexReady) {
+                        rendered = await this.renderWithKaTeX(part.content, partElement, false);
+                    }
+                    
+                    if (!rendered && this.mathJaxReady) {
+                        rendered = await this.renderWithMathJax(part.content, partElement, false);
+                    }
+                    
+                    if (!rendered) {
+                        partElement.textContent = `$${part.content}$`;
+                        partElement.classList.add('render-failed');
+                    }
+                    
+                } else {
+                    partElement.className = 'text-inline-part';
+                    partElement.textContent = part.content;
+                }
+                
+                element.appendChild(partElement);
+                
+                // Boşluk ekle (son part değilse)
+                if (i < parts.length - 1 && part.type === 'latex') {
+                    const space = document.createTextNode(' ');
+                    element.appendChild(space);
+                }
             }
-
-            // Use advanced rendering for MathJax/KaTeX modes
-            let html = `
-                <div class="full-solution-container">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-bold text-gray-800">Tam Çözüm</h3>
-                        <button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>
-                    </div>`;
-
-            if (solution.adimlar && solution.adimlar.length > 0) {
-                solution.adimlar.forEach((step, index) => {
-                    html += `
-                        <div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">
-                            <div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>
-                            ${step.adimAciklamasi ? `<div class="step-explanation mb-2"><strong>Açıklama:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.adimAciklamasi)}"></span></div>` : ''}
-                            ${step.cozum_lateks ? `<div class="step-formula mb-2"><strong>Formül:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.cozum_lateks)}"></span></div>` : ''}
-                            ${step.ipucu ? `<div class="step-hint"><strong>İpucu:</strong> <span class="smart-content" data-content="${this.escapeHtml(step.ipucu)}"></span></div>` : ''}
-                        </div>`;
+            
+            this.applyStyles(element, displayMode, 'mixed');
+            console.log('Mixed content render başarılı:', parts.length, 'parça');
+            return true;
+            
+        } catch (error) {
+            console.error('Mixed content render hatası:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Güvenli karışık içerik ayırma
+     */
+    splitMixedContentSafe(content) {
+        const parts = [];
+    
+        // GÜNCELLENEN: Daha robust ve güvenli regex pattern
+        const latexPattern = /(\$\$[^$]*?\$\$|\$[^$\n]*?\$|\\\([^\\]*?\\\)|\\\[[^\\]*?\\\])/g;
+        
+        let lastIndex = 0;
+        let match;
+        let iteration = 0;
+        const maxIterations = 200; // Artırıldı daha karmaşık içerik için
+        
+        // YENİ EKLEME: Pre-validation
+        const contextAnalysis = this.analyzeContentWithContext(content);
+        if (!contextAnalysis.isMixedContent) {
+            // Karışık içerik değilse basit işlem
+            return [{ type: 'text', content: content }];
+        }
+        
+        while ((match = latexPattern.exec(content)) !== null && iteration < maxIterations) {
+            iteration++;
+            
+            // Önceki metin kısmı
+            if (match.index > lastIndex) {
+                const textPart = content.slice(lastIndex, match.index);
+                if (textPart.trim()) {
+                    parts.push({ 
+                        type: 'text', 
+                        content: textPart,
+                        start: lastIndex,
+                        end: match.index
+                    });
+                }
+            }
+            
+            // LaTeX kısmı
+            let latexContent = match[1];
+            
+            // Delimiterleri temizle
+            if (latexContent.startsWith('$') && latexContent.endsWith('$')) {
+                latexContent = latexContent.slice(1, -1);
+            } else if (latexContent.startsWith('\\(') && latexContent.endsWith('\\)')) {
+                latexContent = latexContent.slice(2, -2);
+            } else if (latexContent.startsWith('\\[') && latexContent.endsWith('\\]')) {
+                latexContent = latexContent.slice(2, -2);
+            }
+            
+            if (latexContent.trim()) {
+                parts.push({ 
+                    type: 'latex', 
+                    content: latexContent.trim(),
+                    start: match.index,
+                    end: match.index + match[0].length
                 });
             }
-
-            if (solution.sonuclar && solution.sonuclar.length > 0) {
-                html += `
-                    <div class="final-results p-4 bg-green-50 rounded-lg border border-green-200">
-                        <h4 class="font-semibold text-green-800 mb-2">Final Sonuçlar:</h4>
-                        <ul class="list-disc list-inside">
-                            ${solution.sonuclar.map((sonuc, index) => `
-                                <li class="smart-content" data-content="${this.escapeHtml(sonuc)}" id="sonuc-${index}"></li>
-                            `).join('')}
-                        </ul>
-                    </div>`;
-            }
-
-            html += '</div>';
-            container.innerHTML = html;
-
-            // Render smart content elements
-            const smartElements = container.querySelectorAll('.smart-content[data-content]');
-            for (const element of smartElements) {
-                const content = element.getAttribute('data-content');
-                if (content) {
-                    await this.render(content, element);
-                }
-            }
-
-            return true;
-
-        } catch (error) {
-            this.log('❌ Full solution render failed:', error);
-            return await this.fallbackRenderer.renderFullSolution(solution, container);
-        }
-    }
-
-    /**
-     * Render content in container (legacy compatibility)
-     */
-    async renderContent(container, options = {}) {
-        if (!container) return false;
-
-        try {
-            await this.init();
-
-            // Find and render smart content elements
-            const smartElements = container.querySelectorAll('.smart-content[data-content]');
             
-            for (const element of smartElements) {
-                const content = element.getAttribute('data-content');
-                if (content) {
-                    await this.render(content, element, options);
-                }
+            lastIndex = match.index + match[0].length;
+        }
+        
+        // Kalan metin
+        if (lastIndex < content.length) {
+            const remainingText = content.slice(lastIndex);
+            if (remainingText.trim()) {
+                parts.push({ 
+                    type: 'text', 
+                    content: remainingText,
+                    start: lastIndex,
+                    end: content.length
+                });
             }
+        }
+        
+        // Eğer hiç LaTeX bulunmadıysa, tüm içeriği text olarak döndür
+        if (parts.length === 0) {
+            parts.push({ type: 'text', content: content });
+        }
+        
+        console.log('Split result:', parts);
+        return parts;
+    }
 
-            // Also process any existing math content in the container
-            if (this.renderMode === 'mathjax' && this.mathJaxReady) {
-                try {
-                    if (typeof window.MathJax.typesetPromise === 'function') {
-                        await window.MathJax.typesetPromise([container]);
-                    } else if (typeof window.MathJax.typeset === 'function') {
-                        window.MathJax.typeset([container]);
+        /**
+     * YENİ EKLEME: State machine based safer content splitting
+     */
+    splitContentWithStateMachine(content) {
+        const parts = [];
+        let currentText = '';
+        let state = 'TEXT'; // States: TEXT, DOLLAR_SINGLE, DOLLAR_DOUBLE, PAREN, BRACKET
+        let latexStart = 0;
+        let nestLevel = 0;
+        
+        for (let i = 0; i < content.length; i++) {
+            const char = content[i];
+            const nextChar = content[i + 1] || '';
+            const prevChar = content[i - 1] || '';
+            
+            switch (state) {
+                case 'TEXT':
+                    if (char === '$' && nextChar === '$') {
+                        // Double dollar başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'DOLLAR_DOUBLE';
+                        i++; // Skip next $
+                    } else if (char === '$' && prevChar !== '\\') {
+                        // Single dollar başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'DOLLAR_SINGLE';
+                    } else if (char === '\\' && nextChar === '(') {
+                        // Parentheses başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'PAREN';
+                        i++; // Skip (
+                    } else if (char === '\\' && nextChar === '[') {
+                        // Bracket başlangıcı
+                        if (currentText.trim()) {
+                            parts.push({ type: 'text', content: currentText });
+                            currentText = '';
+                        }
+                        latexStart = i;
+                        state = 'BRACKET';
+                        i++; // Skip [
+                    } else {
+                        currentText += char;
                     }
-                } catch (e) {
-                    this.log('MathJax container render warning:', e);
-                }
-            } else if (this.renderMode === 'katex' && this.katexReady) {
-                try {
-                    if (typeof window.renderMathInElement === 'function') {
-                        window.renderMathInElement(container, {
-                            delimiters: [
-                                {left: '$$', right: '$$', display: true},
-                                {left: '$', right: '$', display: false}
-                            ],
-                            throwOnError: false
-                        });
+                    break;
+                    
+                case 'DOLLAR_SINGLE':
+                    if (char === '$' && prevChar !== '\\') {
+                        // Single dollar bitişi
+                        const latexContent = content.slice(latexStart + 1, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
                     }
-                } catch (e) {
-                    this.log('KaTeX container render warning:', e);
-                }
+                    break;
+                    
+                case 'DOLLAR_DOUBLE':
+                    if (char === '$' && nextChar === '$' && prevChar !== '\\') {
+                        // Double dollar bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip next $
+                    }
+                    break;
+                    
+                case 'PAREN':
+                    if (char === '\\' && nextChar === ')') {
+                        // Parentheses bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip )
+                    }
+                    break;
+                    
+                case 'BRACKET':
+                    if (char === '\\' && nextChar === ']') {
+                        // Bracket bitişi
+                        const latexContent = content.slice(latexStart + 2, i);
+                        if (latexContent.trim()) {
+                            parts.push({ type: 'latex', content: latexContent });
+                        }
+                        state = 'TEXT';
+                        i++; // Skip ]
+                    }
+                    break;
             }
-
-            return true;
-
-        } catch (error) {
-            this.log('❌ Container render failed:', error);
-            // Fallback to simple renderer
-            return await this.fallbackRenderer.renderContent(container, options);
+        }
+        
+        // Kalan metin
+        if (currentText.trim()) {
+            parts.push({ type: 'text', content: currentText });
+        }
+        
+        // Validation
+        if (state !== 'TEXT') {
+            console.warn('Unfinished LaTeX detected, falling back to original content');
+            return [{ type: 'text', content: content }];
+        }
+        
+        return parts.length > 0 ? parts : [{ type: 'text', content: content }];
+    }
+    
+    /**
+     * LaTeX içeriğini temizle
+     */
+    cleanLatexContent(content) {
+        if (!content || typeof content !== 'string') return '';
+        
+        let cleaned = content
+            // Dış delimiterleri kaldır
+            .replace(/^\$+|\$+$/g, '')
+            .replace(/^\\\(|\\\)$/g, '')
+            .replace(/^\\\[|\\\]$/g, '')
+            .trim();
+        
+        // Çoklu boşlukları temizle
+        cleaned = cleaned.replace(/\s+/g, ' ');
+        
+        // Türkçe karakterleri koruma
+        cleaned = cleaned.replace(/\\text\{([^}]*)\}/g, (match, text) => {
+            return `\\text{${text}}`;
+        });
+        
+        return cleaned;
+    }
+    
+    /**
+     * Düz metin render
+     */
+    renderPlainText(content, element) {
+        element.textContent = content;
+        element.classList.add('math-text', 'plain-text');
+        return true;
+    }
+    
+    /**
+     * Auto render - akıllı algılama
+     */
+    async renderAuto(content, element, displayMode = false) {
+        // Önce KaTeX ile dene
+        if (this.katexReady) {
+            const katexResult = await this.renderWithKaTeX(content, element, displayMode);
+            if (katexResult) return true;
+        }
+        
+        // KaTeX başarısız olursa MathJax ile dene
+        if (this.mathJaxReady) {
+            const mathJaxResult = await this.renderWithMathJax(content, element, displayMode);
+            if (mathJaxResult) return true;
+        }
+        
+        // Her ikisi de başarısız olursa plain text
+        return this.renderPlainText(content, element);
+    }
+    
+    /**
+     * Fallback render
+     */
+    renderFallback(content, element, error) {
+        element.innerHTML = `
+            <div class="render-error">
+                <span class="error-content">${this.escapeHtml(content)}</span>
+                <small class="error-message">Render hatası: ${error.message}</small>
+            </div>
+        `;
+        element.classList.add('math-render-error');
+    }
+    
+    /**
+     * Stilleri uygula
+     */
+    applyStyles(element, displayMode, renderer) {
+        element.classList.add(`math-rendered`, `rendered-by-${renderer}`);
+        
+        if (displayMode) {
+            element.classList.add('math-display');
+            element.style.display = 'block';
+            element.style.textAlign = 'center';
+            element.style.margin = '1rem auto';
+        } else {
+            element.classList.add('math-inline');
+            element.style.display = 'inline-block';
+            element.style.verticalAlign = 'middle';
+            element.style.margin = '0 2px';
+        }
+        
+        // Renderer-specific styles
+        if (renderer === 'katex') {
+            element.style.lineHeight = '1.6';
+        } else if (renderer === 'mathjax') {
+            element.style.lineHeight = '1.8';
         }
     }
-
+    
     /**
-     * Utility function to delay execution
+     * Render kuyruğu yönetimi
      */
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    addToQueue(content, element, displayMode) {
+        this.renderQueue.push({ content, element, displayMode });
     }
-
-    /**
-     * Logging utility with debug control
-     */
-    log(...args) {
-        if (this.config.enableDebugLogs) {
-            console.log('[AdvancedMathRenderer]', ...args);
+    
+    async processQueue() {
+        if (!this.mathJaxReady || this.renderQueue.length === 0) return;
+        
+        console.log(`İşleniyor: ${this.renderQueue.length} render görev(ler)i`);
+        
+        const queue = [...this.renderQueue];
+        this.renderQueue = [];
+        
+        for (const item of queue) {
+            await this.render(item.content, item.element, item.displayMode);
         }
     }
-
+    
     /**
-     * Clear cache and reset state
+     * Container render - toplu işlem
      */
-    clearCache() {
-        this.log('🧹 AdvancedMathRenderer cache cleared');
+    async renderContainer(container, displayMode = false) {
+        if (!container) return;
+        
+        // data-latex attribute'u olan elementler
+        const latexElements = container.querySelectorAll('[data-latex]');
+        for (const element of latexElements) {
+            const latex = element.getAttribute('data-latex');
+            if (latex) {
+                await this.render(latex, element, displayMode);
+            }
+        }
+        
+        // .smart-content sınıfı olan elementler
+        const smartElements = container.querySelectorAll('.smart-content');
+        for (const element of smartElements) {
+            const content = element.getAttribute('data-content') || 
+                           element.textContent || 
+                           element.innerHTML;
+            if (content) {
+                await this.render(content, element, false);
+            }
+        }
+        
+        // .latex-content sınıfı olan elementler
+        const latexContentElements = container.querySelectorAll('.latex-content');
+        for (const element of latexContentElements) {
+            const content = element.getAttribute('data-latex') || 
+                           element.textContent || 
+                           element.innerHTML;
+            if (content) {
+                await this.render(content, element, displayMode);
+            }
+        }
     }
-
+    
     /**
-     * Escape HTML characters
+     * HTML escape
      */
     escapeHtml(text) {
-        if (typeof text !== 'string') return text;
-        
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
-
+    
     /**
-     * Get renderer statistics and status
+     * Cache temizleme
+     */
+    clearCache() {
+        this.cache.clear();
+        console.log('Render cache temizlendi');
+    }
+    
+    /**
+     * Debug bilgileri
      */
     getStats() {
         return {
-            initialized: this.initialized,
-            renderMode: this.renderMode,
             mathJaxReady: this.mathJaxReady,
             katexReady: this.katexReady,
-            fallbackMode: this.fallbackMode,
-            initializationAttempts: this.initializationAttempts,
-            availableRenderers: {
-                mathjax: this.mathJaxReady,
-                katex: this.katexReady,
-                simple: true
-            },
-            fallbackRendererStats: this.fallbackRenderer ? this.fallbackRenderer.getStats() : null
+            queueLength: this.renderQueue.length,
+            cacheSize: this.cache.size
         };
-    }
-
-    /**
-     * Check if renderer is ready
-     */
-    isReady() {
-        return this.initialized;
-    }
-
-    /**
-     * Get current render mode
-     */
-    getRenderMode() {
-        return this.renderMode;
-    }
-
-    /**
-     * Check if in fallback mode
-     */
-    isFallbackMode() {
-        return this.fallbackMode;
-    }
-
-    /**
-     * Force fallback mode
-     */
-    forceFallbackMode() {
-        this.renderMode = 'simple';
-        this.fallbackMode = true;
-        this.log('🔧 Forced fallback mode activated');
-    }
-
-    /**
-     * Try to upgrade render mode (attempt to load better renderers)
-     */
-    async tryUpgradeRenderMode() {
-        if (this.renderMode === 'simple') {
-            // Try to load KaTeX or MathJax
-            if (await this.tryInitKaTeX()) {
-                this.renderMode = 'katex';
-                this.fallbackMode = false;
-                this.log('⬆️ Upgraded to KaTeX render mode');
-                return 'katex';
-            } else if (await this.tryInitMathJax()) {
-                this.renderMode = 'mathjax';
-                this.fallbackMode = false;
-                this.log('⬆️ Upgraded to MathJax render mode');
-                return 'mathjax';
-            }
-        }
-        return this.renderMode;
-    }
-
-    /**
-     * Test render functionality
-     */
-    async test() {
-        this.log('🧪 Testing AdvancedMathRenderer...');
-        
-        const testContent = '$x = \\frac{1}{2}$';
-        const testElement = document.createElement('div');
-        testElement.style.position = 'absolute';
-        testElement.style.left = '-9999px';
-        document.body.appendChild(testElement);
-        
-        try {
-            const success = await this.render(testContent, testElement);
-            this.log(`${success ? '✅' : '❌'} Test render ${success ? 'successful' : 'failed'}`);
-            this.log('Rendered content:', testElement.innerHTML);
-            
-            // Clean up
-            document.body.removeChild(testElement);
-            
-            return success;
-        } catch (error) {
-            this.log('❌ Test render failed:', error);
-            if (testElement.parentNode) {
-                document.body.removeChild(testElement);
-            }
-            return false;
-        }
-    }
-
-    /**
-     * Reset renderer state
-     */
-    reset() {
-        this.mathJaxReady = false;
-        this.katexReady = false;
-        this.initialized = false;
-        this.fallbackMode = false;
-        this.renderMode = 'unknown';
-        this.initializationAttempts = 0;
-        this.log('🔄 AdvancedMathRenderer reset');
-    }
-
-    /**
-     * Destroy and cleanup
-     */
-    destroy() {
-        this.reset();
-        this.log('🗑️ AdvancedMathRenderer destroyed');
-    }
-
-    /**
-     * Additional utility methods for debugging
-     */
-    logStatus() {
-        console.log('📊 AdvancedMathRenderer Status:', this.getStats());
-    }
-
-    /**
-     * Check what math libraries are available in the browser
-     */
-    checkAvailableLibraries() {
-        const available = {
-            MathJax: typeof window.MathJax !== 'undefined',
-            KaTeX: typeof window.katex !== 'undefined',
-            MathJaxReady: this.isMathJaxReady(),
-            KaTeXAutoRender: typeof window.renderMathInElement !== 'undefined',
-            MathJaxVersion: window.MathJax ? (window.MathJax.version || 'unknown') : 'not loaded',
-            KaTeXVersion: window.katex ? (window.katex.version || 'unknown') : 'not loaded'
-        };
-        
-        this.log('📚 Available Math Libraries:', available);
-        return available;
-    }
-
-    /**
-     * Enable or disable debug logging
-     */
-    setDebugMode(enabled) {
-        this.config.enableDebugLogs = enabled;
-        this.log(`🐛 Debug mode ${enabled ? 'enabled' : 'disabled'}`);
-    }
-
-    /**
-     * Get configuration
-     */
-    getConfig() {
-        return { ...this.config };
-    }
-
-    /**
-     * Update configuration
-     */
-    updateConfig(newConfig) {
-        this.config = { ...this.config, ...newConfig };
-        this.log('⚙️ Configuration updated:', this.config);
-    }
-
-    /**
-     * Benchmark render performance
-     */
-    async benchmark() {
-        const testCases = [
-            '$x = 1$',
-            '$\\frac{a}{b} = \\frac{c}{d}$',
-            '$\\sum_{i=1}^{n} x_i$',
-            '$\\int_0^1 f(x) dx$',
-            '$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$'
-        ];
-
-        const results = {};
-        
-        for (const testCase of testCases) {
-            const element = document.createElement('div');
-            element.style.position = 'absolute';
-            element.style.left = '-9999px';
-            document.body.appendChild(element);
-            
-            const startTime = performance.now();
-            
-            try {
-                await this.render(testCase, element);
-                const endTime = performance.now();
-                results[testCase] = {
-                    success: true,
-                    time: endTime - startTime,
-                    renderMode: this.renderMode
-                };
-            } catch (error) {
-                const endTime = performance.now();
-                results[testCase] = {
-                    success: false,
-                    time: endTime - startTime,
-                    error: error.message,
-                    renderMode: this.renderMode
-                };
-            }
-            
-            document.body.removeChild(element);
-        }
-
-        this.log('🏁 Benchmark results:', results);
-        return results;
-    }
-
-    /**
-     * Health check - comprehensive system status
-     */
-    async healthCheck() {
-        const health = {
-            timestamp: new Date().toISOString(),
-            initialized: this.initialized,
-            renderMode: this.renderMode,
-            fallbackMode: this.fallbackMode,
-            libraries: this.checkAvailableLibraries(),
-            stats: this.getStats(),
-            testResults: {}
-        };
-
-        // Run basic test
-        try {
-            health.testResults.basicTest = await this.test();
-        } catch (error) {
-            health.testResults.basicTest = false;
-            health.testResults.basicTestError = error.message;
-        }
-
-        // Check each render mode
-        const originalMode = this.renderMode;
-        
-        // Test simple mode
-        this.renderMode = 'simple';
-        try {
-            const element = document.createElement('div');
-            element.style.position = 'absolute';
-            element.style.left = '-9999px';
-            document.body.appendChild(element);
-            
-            health.testResults.simpleMode = await this.render('$x = 1$', element);
-            document.body.removeChild(element);
-        } catch (error) {
-            health.testResults.simpleMode = false;
-            health.testResults.simpleModeError = error.message;
-        }
-
-        // Test KaTeX if available
-        if (this.katexReady) {
-            this.renderMode = 'katex';
-            try {
-                const element = document.createElement('div');
-                element.style.position = 'absolute';
-                element.style.left = '-9999px';
-                document.body.appendChild(element);
-                
-                health.testResults.katexMode = await this.render('$x = 1$', element);
-                document.body.removeChild(element);
-            } catch (error) {
-                health.testResults.katexMode = false;
-                health.testResults.katexModeError = error.message;
-            }
-        }
-
-        // Test MathJax if available
-        if (this.mathJaxReady) {
-            this.renderMode = 'mathjax';
-            try {
-                const element = document.createElement('div');
-                element.style.position = 'absolute';
-                element.style.left = '-9999px';
-                document.body.appendChild(element);
-                
-                health.testResults.mathjaxMode = await this.render('$x = 1$', element);
-                document.body.removeChild(element);
-            } catch (error) {
-                health.testResults.mathjaxMode = false;
-                health.testResults.mathjaxModeError = error.message;
-            }
-        }
-
-        // Restore original mode
-        this.renderMode = originalMode;
-
-        // Overall health assessment
-        health.overall = this.initialized && (
-            health.testResults.simpleMode || 
-            health.testResults.katexMode || 
-            health.testResults.mathjaxMode
-        ) ? 'healthy' : 'unhealthy';
-
-        this.log('🏥 Health check results:', health);
-        return health;
-    }
-
-    /**
-     * Performance monitoring
-     */
-    startPerformanceMonitoring() {
-        this.performanceData = {
-            renderCount: 0,
-            totalRenderTime: 0,
-            averageRenderTime: 0,
-            errors: 0,
-            startTime: Date.now()
-        };
-
-        // Override render method to collect metrics
-        const originalRender = this.render.bind(this);
-        this.render = async (content, element, options = {}) => {
-            const startTime = performance.now();
-            this.performanceData.renderCount++;
-            
-            try {
-                const result = await originalRender(content, element, options);
-                const endTime = performance.now();
-                const renderTime = endTime - startTime;
-                
-                this.performanceData.totalRenderTime += renderTime;
-                this.performanceData.averageRenderTime = 
-                    this.performanceData.totalRenderTime / this.performanceData.renderCount;
-                
-                return result;
-            } catch (error) {
-                this.performanceData.errors++;
-                throw error;
-            }
-        };
-
-        this.log('📊 Performance monitoring started');
-    }
-
-    /**
-     * Get performance metrics
-     */
-    getPerformanceMetrics() {
-        if (!this.performanceData) {
-            return null;
-        }
-
-        const uptime = Date.now() - this.performanceData.startTime;
-        
-        return {
-            ...this.performanceData,
-            uptime,
-            renderRate: this.performanceData.renderCount / (uptime / 1000), // renders per second
-            errorRate: this.performanceData.errors / this.performanceData.renderCount
-        };
-    }
-
-    /**
-     * Stop performance monitoring
-     */
-    stopPerformanceMonitoring() {
-        if (this.performanceData) {
-            this.log('📊 Performance monitoring stopped. Final metrics:', this.getPerformanceMetrics());
-            delete this.performanceData;
-        }
-    }
-
-    /**
-     * Create a minimal test page for debugging
-     */
-    createTestPage() {
-        const testHTML = `
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AdvancedMathRenderer Test</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .test-case { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
-        .test-input { font-family: monospace; background: #f5f5f5; padding: 5px; }
-        .test-output { margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #ddd; }
-        .error { color: red; }
-        .success { color: green; }
-    </style>
-</head>
-<body>
-    <h1>AdvancedMathRenderer Test Page</h1>
-    <div id="test-results"></div>
-    
-    <script type="module">
-        import { advancedMathRenderer } from './js/modules/advancedMathRenderer.js';
-        
-        const testCases = [
-            '$x = 1$',
-            '$\\frac{a}{b} = c$',
-            '$\\sqrt{16} = 4$',
-            '$\\sum_{i=1}^{n} x_i$',
-            'Normal text with $inline$ math',
-            'Turkish text: değer = $\\pi$'
-        ];
-        
-        async function runTests() {
-            const resultsDiv = document.getElementById('test-results');
-            
-            for (const testCase of testCases) {
-                const testDiv = document.createElement('div');
-                testDiv.className = 'test-case';
-                
-                const inputDiv = document.createElement('div');
-                inputDiv.className = 'test-input';
-                inputDiv.textContent = 'Input: ' + testCase;
-                
-                const outputDiv = document.createElement('div');
-                outputDiv.className = 'test-output';
-                
-                try {
-                    const success = await advancedMathRenderer.render(testCase, outputDiv);
-                    const status = document.createElement('div');
-                    status.className = success ? 'success' : 'error';
-                    status.textContent = success ? '✅ Success' : '❌ Failed';
-                    
-                    testDiv.appendChild(inputDiv);
-                    testDiv.appendChild(status);
-                    testDiv.appendChild(outputDiv);
-                } catch (error) {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'error';
-                    errorDiv.textContent = '❌ Error: ' + error.message;
-                    
-                    testDiv.appendChild(inputDiv);
-                    testDiv.appendChild(errorDiv);
-                }
-                
-                resultsDiv.appendChild(testDiv);
-            }
-            
-            // Show stats
-            const statsDiv = document.createElement('div');
-            statsDiv.innerHTML = '<h2>Renderer Stats</h2><pre>' + 
-                JSON.stringify(advancedMathRenderer.getStats(), null, 2) + '</pre>';
-            resultsDiv.appendChild(statsDiv);
-        }
-        
-        runTests();
-    </script>
-</body>
-</html>`;
-
-        return testHTML;
     }
 }
 
-// Create and export singleton instance
+// Singleton instance oluştur
 export const advancedMathRenderer = new AdvancedMathRenderer();
 
-// Legacy compatibility - also export as mathRenderer
-export const mathRenderer = advancedMathRenderer;
+// Backward compatibility için eski interface
+export const mathRenderer = {
+    render: (content, element, displayMode) => advancedMathRenderer.render(content, element, displayMode),
+    renderContainer: (container, displayMode) => advancedMathRenderer.renderContainer(container, displayMode),
+    isSimpleText: (content) => {
+        const analysis = advancedMathRenderer.analyzeContentAdvanced(content);
+        return analysis.type === 'text';
+    }
+};
 
-// Make available globally for debugging
-if (typeof window !== 'undefined') {
-    window.advancedMathRenderer = advancedMathRenderer;
-    window.mathRenderer = mathRenderer; // Legacy global access
-    
-    // Global debug helpers
-    window.mathRendererTest = () => advancedMathRenderer.test();
-    window.mathRendererHealth = () => advancedMathRenderer.healthCheck();
-    window.mathRendererBenchmark = () => advancedMathRenderer.benchmark();
-    window.mathRendererStats = () => advancedMathRenderer.getStats();
-}
+// Global erişim için
+window.advancedMathRenderer = advancedMathRenderer;

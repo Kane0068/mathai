@@ -1,6 +1,6 @@
 // Dosya Adı: www/js/modules/errorHandler.js
 
-export class ErrorHandler {
+export class AdvancedErrorHandler {
     constructor() {
         this.maxRetries = 2; // Maksimum deneme sayısı
         this.retryDelay = 1500; // Denemeler arası bekleme süresi

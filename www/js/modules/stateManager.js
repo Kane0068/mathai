@@ -1,350 +1,126 @@
-// www/js/modules/stateManager.js
-import { VIEWS, ELEMENTS } from '../core/Config.js';
-
 export class StateManager {
     constructor() {
         this.state = {
-            currentView: VIEWS.UPLOAD,
             user: null,
-            problem: {
-                source: null,
-                sourceType: null,
-                summary: null,
-                solution: null,
-                currentStep: 0
+            problem: { solution: null },
+            ui: { 
+                view: 'setup', 
+                isLoading: false, 
+                error: null, 
+                inputMode: 'photo', 
+                handwritingInputType: 'keyboard',
+                interactiveStep: 0 
             },
-            ui: {
-                loading: false,
-                loadingMessage: '',
-                error: null
-            },
-            canvas: {
-                currentTool: 'pen',
-                mode: 'drawing' // 'drawing' or 'text'
-            }
         };
-        
-        this.listeners = new Map();
-        this.elements = new Map();
-        this.viewElements = this.initializeViewElements();
+        this.subscribers = new Set();
+        this.middleware = [this.loggerMiddleware];
     }
 
-    // Initialize DOM element references
-    initializeElements() {
-        Object.entries(ELEMENTS).forEach(([key, id]) => {
-            const element = document.getElementById(id);
-            if (element) {
-                this.elements.set(key, element);
-            } else {
-                console.warn(`Element not found: ${id}`);
-            }
-        });
+    subscribe(callback) {
+        this.subscribers.add(callback);
+        callback(this.state); // Abone olduğunda ilk durumu hemen gönder
+        return () => this.subscribers.delete(callback); // Abonelikten çıkma fonksiyonu
     }
 
-    // Get DOM element by key
-    getElement(key) {
-        return this.elements.get(key);
-    }
+    dispatch(action) {
+        const prevState = this.state;
+        const newState = this.reducer(prevState, action);
 
-    // Define which DOM elements are visible for each view
-    initializeViewElements() {
-        return {
-            [VIEWS.UPLOAD]: {
-                show: [
-                    'upload-container',
-                    'upload-selection',
-                    'handwriting-container'
-                ],
-                hide: [
-                    'question-summary-container',
-                    'top-action-buttons',
-                    'solving-workspace',
-                    'result-container',
-                    'preview-container'
-                ]
-            },
-            [VIEWS.SUMMARY]: {
-                show: [
-                    'question-summary-container',
-                    'top-action-buttons'
-                ],
-                hide: [
-                    'upload-container',
-                    'solving-workspace',
-                    'result-container'
-                ]
-            },
-            [VIEWS.SOLVING]: {
-                show: [
-                    'question-summary-container',
-                    'solving-workspace'
-                ],
-                hide: [
-                    'upload-container',
-                    'top-action-buttons',
-                    'result-container'
-                ]
-            },
-            [VIEWS.INTERACTIVE]: {
-                show: [
-                    'solving-workspace'
-                ],
-                hide: [
-                    'upload-container',
-                    'question-summary-container',
-                    'top-action-buttons',
-                    'result-container'
-                ]
-            },
-            [VIEWS.RESULT]: {
-                show: [
-                    'result-container'
-                ],
-                hide: [
-                    'upload-container',
-                    'question-summary-container',
-                    'top-action-buttons',
-                    'solving-workspace'
-                ]
-            }
-        };
-    }
-
-    // Set application state
-    setState(key, value) {
-        const keys = key.split('.');
-        let current = this.state;
-        
-        for (let i = 0; i < keys.length - 1; i++) {
-            if (!current[keys[i]]) {
-                current[keys[i]] = {};
-            }
-            current = current[keys[i]];
+        // DÖNGÜ KIRICI: Eğer state objesinin referansı değişmediyse, hiçbir şey yapma.
+        if (newState === prevState) {
+            return;
         }
-        
-        const lastKey = keys[keys.length - 1];
-        const oldValue = current[lastKey];
-        current[lastKey] = value;
-        
-        // Notify listeners
-        this.notifyListeners(key, value, oldValue);
-        
-        // Special logging for user data
-        if (key === 'user' || key.startsWith('user.')) {
-            console.log(`User state updated: ${key}`, value);
-        } else {
-            console.log(`State updated: ${key}`, value);
+
+        this.middleware.forEach(mw => mw(action, prevState, newState));
+        this.state = newState;
+        this.subscribers.forEach(cb => cb(newState));
+    }
+
+    reducer(state, action) {
+        const newUser = this.userReducer(state.user, action);
+        const newProblem = this.problemReducer(state.problem, action);
+        const newUi = this.uiReducer(state.ui, action);
+
+        if (state.user === newUser && state.problem === newProblem && state.ui === newUi) {
+            return state; // Hiçbir alt state değişmedi, mevcut objeyi döndür.
+        }
+        return { user: newUser, problem: newProblem, ui: newUi };
+    }
+
+    // Alt Reducer'lar: Her biri kendi state parçasından sorumludur.
+    userReducer(state, action) {
+        switch (action.type) {
+            case 'SET_USER': return action.payload;
+            case 'RESET': return state; // User'ı sıfırlama, sadece problem ve UI'ı sıfırla
+            default: return state;
         }
     }
 
-    // Get application state
-    getState(key = null) {
-        if (!key) return this.state;
-        
-        const keys = key.split('.');
-        let current = this.state;
-        
-        for (const k of keys) {
-            if (current === null || current === undefined) return undefined;
-            current = current[k];
+    problemReducer(state, action) {
+        switch (action.type) {
+            case 'SET_SOLUTION': return { ...state, solution: action.payload };
+            case 'RESET': return { solution: null };
+            default: return state;
         }
-        
-        return current;
     }
 
-    // Convenience method for getting state values
+    uiReducer(state, action) {
+        switch (action.type) {
+            case 'SET_VIEW':
+                return state.view === action.payload ? state : { ...state, view: action.payload };
+            case 'SET_INPUT_MODE':
+                return state.inputMode === action.payload ? state : { ...state, inputMode: action.payload };
+            case 'SET_HANDWRITING_INPUT_TYPE':
+                return state.handwritingInputType === action.payload ? state : { ...state, handwritingInputType: action.payload };
+            case 'SET_LOADING':
+                if (state.isLoading === action.payload.status && state.loadingMessage === action.payload.message) return state;
+                return { ...state, isLoading: action.payload.status, loadingMessage: action.payload.message || '' };
+            case 'SET_ERROR':
+                return { ...state, isLoading: false, error: action.payload };
+            case 'CLEAR_ERROR':
+                return state.error === null ? state : { ...state, error: null };
+            case 'NEXT_INTERACTIVE_STEP':
+                 return { ...state, interactiveStep: state.interactiveStep + 1 };
+            case 'SET_INTERACTIVE_STEP':
+                 return { ...state, interactiveStep: action.payload };
+            case 'RESET':
+                return { 
+                    view: 'setup', 
+                    isLoading: false, 
+                    error: null, 
+                    inputMode: 'photo', 
+                    handwritingInputType: 'keyboard', // Varsayılan olarak klavye girişi
+                    interactiveStep: 0 
+                };
+            default: return state;
+        }
+    }
+
+    loggerMiddleware(action, prevState, newState) {
+        console.group(`%cState Action: %c${action.type}`, 'color: gray;', 'color: blue; font-weight: bold;');
+        console.log('%cPayload:', 'color: #9E9E9E;', action.payload);
+        console.log('%cPrevious State:', 'color: #FF9800;', prevState);
+        console.log('%cNew State:', 'color: #4CAF50;', newState);
+        console.groupEnd();
+    }
+
+    // DÜZELTME: getStateValue metodunu ekle
     getStateValue(key) {
-        return this.getState(key);
+        return this.state[key];
     }
 
-    // Convenience method for setting solution (used by old code)
-    setSolution(solutionData) {
-        console.log('setSolution called with:', solutionData);
-        this.setState('problem.solution', solutionData);
-        console.log('Solution set in state, verification:', this.getState('problem.solution'));
-    }
-
-    // Debug method to check current state
-    debugState() {
-        console.log('=== STATE DEBUG ===');
-        console.log('Full state:', this.state);
-        console.log('Problem state:', this.state.problem);
-        console.log('Solution:', this.state.problem?.solution);
-        console.log('==================');
-    }
-
-    // Set current view and handle UI transitions
-    setView(view) {
-        if (!Object.values(VIEWS).includes(view)) {
-            console.warn(`Invalid view: ${view}`);
-            return;
-        }
-
-        const oldView = this.state.currentView;
-        this.setState('currentView', view);
-        
-        // Handle view transitions
-        this.handleViewTransition(oldView, view);
-        
-        console.log(`View changed: ${oldView} -> ${view}`);
-    }
-
-    // Handle DOM element visibility for view transitions
-    handleViewTransition(oldView, newView) {
-        const viewConfig = this.viewElements[newView];
-        if (!viewConfig) {
-            console.warn(`No view configuration found for: ${newView}`);
-            return;
-        }
-
-        // Hide elements
-        viewConfig.hide.forEach(elementId => {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.classList.add('hidden');
-            }
-        });
-
-        // Show elements
-        viewConfig.show.forEach(elementId => {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.classList.remove('hidden');
-            }
-        });
-
-        // Handle specific view logic
-        this.handleViewSpecificLogic(newView);
-    }
-
-    // Handle view-specific initialization logic
-    handleViewSpecificLogic(view) {
-        switch (view) {
-            case VIEWS.UPLOAD:
-                this.resetProblem();
-                break;
-            case VIEWS.SUMMARY:
-                this.updateQuestionSummary();
-                break;
-            case VIEWS.SOLVING:
-                this.initializeSolvingWorkspace();
-                break;
-            case VIEWS.INTERACTIVE:
-                this.initializeInteractiveMode();
-                break;
-            case VIEWS.RESULT:
-                this.displayResults();
-                break;
-        }
-    }
-
-    // Reset problem state
-    resetProblem() {
-        this.setState('problem', {
-            source: null,
-            sourceType: null,
-            summary: null,
-            solution: null,
-            currentStep: 0
-        });
-    }
-
-    // Update question summary display
-    updateQuestionSummary() {
-        const problem = this.getState('problem');
-        if (problem && problem.summary) {
-            // This will be handled by UIManager
-            this.notifyListeners('view.summary.update', problem.summary);
-        }
-    }
-
-    // Initialize solving workspace
-    initializeSolvingWorkspace() {
-        const problem = this.getState('problem');
-        if (problem && problem.solution) {
-            this.notifyListeners('view.solving.init', problem.solution);
-        }
-    }
-
-    // Initialize interactive mode
-    initializeInteractiveMode() {
-        const problem = this.getState('problem');
-        if (problem && problem.solution) {
-            this.notifyListeners('view.interactive.init', problem.solution);
-        }
-    }
-
-    // Display results
-    displayResults() {
-        const problem = this.getState('problem');
-        if (problem && problem.solution) {
-            this.notifyListeners('view.result.display', problem.solution);
-        }
-    }
-
-    // Add state change listener
-    addListener(key, callback) {
-        if (!this.listeners.has(key)) {
-            this.listeners.set(key, []);
-        }
-        this.listeners.get(key).push(callback);
-    }
-
-    // Remove state change listener
-    removeListener(key, callback) {
-        if (this.listeners.has(key)) {
-            const callbacks = this.listeners.get(key);
-            const index = callbacks.indexOf(callback);
-            if (index > -1) {
-                callbacks.splice(index, 1);
-            }
-        }
-    }
-
-    // Notify listeners of state changes
-    notifyListeners(key, newValue, oldValue = null) {
-        if (this.listeners.has(key)) {
-            this.listeners.get(key).forEach(callback => {
-                try {
-                    callback(newValue, oldValue);
-                } catch (error) {
-                    console.error(`Listener error for key ${key}:`, error);
-                }
-            });
-        }
-    }
-
-    // Get current view
-    getCurrentView() {
-        return this.state.currentView;
-    }
-
-    // Check if specific view is active
-    isView(view) {
-        return this.state.currentView === view;
-    }
-
-    // Set loading state
-    setLoading(loading, message = '') {
-        this.setState('ui.loading', loading);
-        this.setState('ui.loadingMessage', message);
-    }
-
-    // Set error state
-    setError(error) {
-        this.setState('ui.error', error);
-    }
-
-    // Clear error state
-    clearError() {
-        this.setState('ui.error', null);
-    }
-
-    // Debug method to log current state
-    logState() {
-        console.log('Current State:', JSON.stringify(this.state, null, 2));
-    }
+    // Action Creators
+    setUser = (user) => this.dispatch({ type: 'SET_USER', payload: user });
+    setSolution = (solutionData) => this.dispatch({ type: 'SET_SOLUTION', payload: solutionData });
+    setLoading = (status, message = '') => this.dispatch({ type: 'SET_LOADING', payload: { status, message } });
+    setError = (errorMessage) => this.dispatch({ type: 'SET_ERROR', payload: errorMessage });
+    clearError = () => this.dispatch({ type: 'CLEAR_ERROR' });
+    setView = (view) => this.dispatch({ type: 'SET_VIEW', payload: view });
+    setInputMode = (mode) => this.dispatch({ type: 'SET_INPUT_MODE', payload: mode });
+    setHandwritingInputType = (type) => this.dispatch({ type: 'SET_HANDWRITING_INPUT_TYPE', payload: type });
+    setInteractiveStep = (step) => this.dispatch({ type: 'SET_INTERACTIVE_STEP', payload: step });
+    nextInteractiveStep = () => this.dispatch({ type: 'NEXT_INTERACTIVE_STEP' });
+    reset = () => this.dispatch({ type: 'RESET' });
 }
 
-// Create and export singleton instance
-export const stateManager = new StateManager();
+// export const stateManager = new StateManager();

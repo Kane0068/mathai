@@ -1,767 +1,408 @@
-// www/js/modules/ui.js - Fixed Version with Real Question Processing
-import { ELEMENTS, APP_CONFIG } from '../core/Config.js';
-import { stateManager } from './stateManager.js';
+// =================================================================================
+//  MathAi - UI Modülü - Düzeltilmiş Error Handling
+//  Tamam butonu sorunu çözüldü
+// =================================================================================
 
-export class UIManager {
-    constructor() {
-        this.elements = new Map();
-        this.eventListeners = new Map();
-        this.initialized = false;
+import { advancedMathRenderer } from './advancedMathRenderer.js';
+
+/**
+ * Ekranda bir yükleme mesajı gösterir.
+ * @param {string|false} message - Gösterilecek mesaj. false ise gizler.
+ */
+export function showLoading(message) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    // EĞER message 'false' ise, yükleme ekranını gizle ve fonksiyondan çık.
+    if (message === false) {
+        resultContainer.classList.add('hidden');
+        return;
+    }
+    
+    // Önceki hata mesajını ve butonları temizle
+    statusMessage.innerHTML = `
+         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 animate-spin"></div>
+         <p class="text-gray-600 font-medium">${message}</p>
+    `;
+    statusMessage.className = 'flex items-center justify-center space-x-3 p-4 bg-gray-50 rounded-lg';
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
+}
+
+/**
+ * Ekranda bir başarı mesajı gösterir.
+ * @param {string} message - Gösterilecek başarı mesajı.
+ * @param {boolean} autoHide - Mesajın otomatik olarak gizlenip gizlenmeyeceği.
+ * @param {number} hideDelay - Otomatik gizleme için beklenecek süre (ms).
+ */
+export function showSuccess(message, autoHide = true, hideDelay = 3000) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    // Eğer çözüm view'larındaysa (fullSolution, interactive, solving) başarı mesajını gösterme
+    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
+    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
+        return; // Başarı mesajını gösterme
     }
 
-    /**
-     * Initialize UI Manager
-     */
-    init() {
-        if (this.initialized) return;
-        
-        try {
-            this.initializeElements();
-            this.attachEventListeners();
-            this.setupStateListeners();
-            this.initialized = true;
-            console.log('UIManager initialized successfully');
-        } catch (error) {
-            console.error('UIManager initialization failed:', error);
-            throw error;
-        }
-    }
+    statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
+    statusMessage.innerHTML = `
+        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <p class="font-medium text-center">${message}</p>
+    `;
 
-    /**
-     * Initialize DOM element references
-     */
-    initializeElements() {
-        Object.entries(ELEMENTS).forEach(([key, id]) => {
-            const element = document.getElementById(id);
-            if (element) {
-                this.elements.set(key, element);
-            } else {
-                console.warn(`Element not found: ${id} (${key})`);
-            }
-        });
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
 
-        // Initialize stateManager elements
-        stateManager.initializeElements();
-    }
-
-    /**
-     * Get DOM element by key
-     */
-    getElement(key) {
-        return this.elements.get(key) || stateManager.getElement(key);
-    }
-
-    /**
-     * Attach all event listeners
-     */
-    attachEventListeners() {
-        // Upload/File selection events
-        this.attachFileEvents();
-        
-        // Button events
-        this.attachButtonEvents();
-        
-        // Form events
-        this.attachFormEvents();
-        
-        // Global events
-        this.attachGlobalEvents();
-    }
-
-    /**
-     * Attach file upload related events
-     */
-    attachFileEvents() {
-        // File input change events
-        const imageUploader = this.getElement('imageUploader');
-        const cameraUploader = this.getElement('cameraUploader');
-        
-        if (imageUploader) {
-            this.addEventListener(imageUploader, 'change', (e) => this.handleFileSelect(e.target.files[0]));
-        }
-        
-        if (cameraUploader) {
-            this.addEventListener(cameraUploader, 'change', (e) => this.handleFileSelect(e.target.files[0]));
-        }
-
-        // File selection buttons
-        const selectFileBtn = this.getElement('selectFileBtn');
-        const takePhotoBtn = this.getElement('takePhotoBtn');
-        const changePhotoBtn = this.getElement('changePhotoBtn');
-        
-        if (selectFileBtn) {
-            this.addEventListener(selectFileBtn, 'click', () => imageUploader?.click());
-        }
-        
-        if (takePhotoBtn) {
-            this.addEventListener(takePhotoBtn, 'click', () => cameraUploader?.click());
-        }
-        
-        if (changePhotoBtn) {
-            this.addEventListener(changePhotoBtn, 'click', () => this.resetFileSelection());
-        }
-    }
-
-    /**
-     * Attach button event listeners
-     */
-    attachButtonEvents() {
-        // Main action buttons - FIXED to use real QuestionProcessor
-        this.attachButtonEvent('startFromPhotoBtn', () => this.handleStartFromPhoto());
-        this.attachButtonEvent('recognizeHandwritingBtn', () => this.handleCanvasSubmit());
-        this.attachButtonEvent('startFromTextBtn', () => this.handleTextSubmit());
-        
-        // Solution action buttons
-        this.attachButtonEvent('start-solving-workspace-btn', () => this.handleStartSolving());
-        this.attachButtonEvent('solve-all-btn', () => this.handleInteractiveSolving());
-        this.attachButtonEvent('show-full-solution-btn', () => this.handleShowFullSolution());
-        this.attachButtonEvent('new-question-btn', () => this.handleNewQuestion());
-        this.attachButtonEvent('goBackBtn', () => this.handleGoBack());
-
-        // File selection buttons
-        this.attachButtonEvent('selectFileBtn', () => this.getElement('imageUploader')?.click());
-        this.attachButtonEvent('takePhotoBtn', () => this.getElement('cameraUploader')?.click());
-        this.attachButtonEvent('changePhotoBtn', () => this.resetFileSelection());
-
-        // Canvas tool buttons
-        this.attachButtonEvent('hw-pen-btn', () => this.setCanvasTool('pen'));
-        this.attachButtonEvent('hw-eraser-btn', () => this.setCanvasTool('eraser'));
-        this.attachButtonEvent('hw-clear-btn', () => this.clearCanvas());
-        this.attachButtonEvent('hw-undo-btn', () => this.undoCanvas());
-        
-        // Mode switching buttons
-        this.attachButtonEvent('photo-mode-btn', () => this.handleModeSwitch('photo'));
-        this.attachButtonEvent('handwriting-mode-btn', () => this.handleModeSwitch('handwriting'));
-        this.attachButtonEvent('switchToCanvasBtn', () => this.handleInputTypeSwitch('canvas'));
-        this.attachButtonEvent('switchToKeyboardBtn', () => this.handleInputTypeSwitch('keyboard'));
-        
-        // Logout button
-        this.attachButtonEvent('logout-btn', () => this.handleLogout());
-    }
-
-    /**
-     * Attach form related events
-     */
-    attachFormEvents() {
-        // Text input events
-        const keyboardInput = document.getElementById('keyboard-input');
-        if (keyboardInput) {
-            this.addEventListener(keyboardInput, 'input', (e) => this.handleTextInput(e.target.value));
-            this.addEventListener(keyboardInput, 'keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    this.handleTextSubmit();
-                }
-            });
-        }
-    }
-
-    /**
-     * Attach global events
-     */
-    attachGlobalEvents() {
-        // Back to main menu buttons (using event delegation)
-        document.addEventListener('click', (event) => {
-            if (event.target && event.target.id === 'back-to-main-menu-btn') {
-                stateManager.setView('summary');
-            }
-        });
-
-        // Logout buttons
-        document.addEventListener('click', (event) => {
-            if (event.target && event.target.matches('[data-action="logout"]')) {
-                this.handleLogout();
-            }
-        });
-    }
-
-    /**
-     * Setup state change listeners
-     */
-    setupStateListeners() {
-        // Listen for loading state changes
-        stateManager.addListener('ui.loading', (loading, message) => {
-            this.updateLoadingState(loading, message);
-        });
-
-        // Listen for error state changes
-        stateManager.addListener('ui.error', (error) => {
-            this.updateErrorState(error);
-        });
-
-        // Listen for view changes
-        stateManager.addListener('currentView', (newView) => {
-            this.handleViewChange(newView);
-        });
-    }
-
-    /**
-     * Helper method to attach button events safely
-     */
-    attachButtonEvent(elementId, handler) {
-        const element = document.getElementById(elementId);
-        if (element) {
-            this.addEventListener(element, 'click', handler);
-        }
-    }
-
-    /**
-     * Add event listener with cleanup tracking
-     */
-    addEventListener(element, event, handler) {
-        element.addEventListener(event, handler);
-        
-        // Track listeners for cleanup
-        const key = `${element.id || 'unnamed'}_${event}`;
-        if (!this.eventListeners.has(key)) {
-            this.eventListeners.set(key, []);
-        }
-        this.eventListeners.get(key).push({ element, event, handler });
-    }
-
-    /**
-     * Handle file selection
-     */
-    async handleFileSelect(file) {
-        if (!file) return;
-        
-        console.log('🔥 File selected:', file.name, file.size, file.type);
-        
-        // Validate file
-        const validation = this.validateFile(file);
-        if (!validation.valid) {
-            this.showError(validation.message);
-            return;
-        }
-
-        try {
-            this.showLoading('Dosya yükleniyor...');
-            
-            const base64 = await this.fileToBase64(file);
-            console.log('🔥 File converted to base64, length:', base64.length);
-            
-            const imagePreview = this.getElement('imagePreview');
-            const previewContainer = this.getElement('previewContainer');
-            const uploadSelection = this.getElement('uploadSelection');
-            const startFromPhotoBtn = this.getElement('startFromPhotoBtn');
-            
-            // Show preview
-            if (imagePreview) {
-                imagePreview.src = `data:${file.type};base64,${base64}`;
-            }
-            
-            if (previewContainer) previewContainer.classList.remove('hidden');
-            if (uploadSelection) uploadSelection.classList.add('hidden');
-            if (startFromPhotoBtn) startFromPhotoBtn.disabled = false;
-            
-            // Store file data in state
-            console.log('🔥 Storing image data in state...');
-            stateManager.setState('problem.source', base64);
-            stateManager.setState('problem.sourceType', 'image');
-            
-            // Verify it was stored
-            const storedSource = stateManager.getState('problem.source');
-            console.log('🔥 Verification - source stored:', storedSource ? storedSource.length : 'null');
-            
-            this.showSuccess('Dosya başarıyla yüklendi!');
-            
-        } catch (error) {
-            console.error('🔥 File selection error:', error);
-            this.showError('Dosya yüklenirken bir hata oluştu.');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    /**
-     * Validate uploaded file
-     */
-    validateFile(file) {
-        if (file.size > APP_CONFIG.api.maxFileSize) {
-            return {
-                valid: false,
-                message: `Dosya boyutu ${APP_CONFIG.api.maxFileSize / (1024 * 1024)}MB'dan büyük olamaz.`
-            };
-        }
-        
-        if (!APP_CONFIG.api.supportedImageTypes.includes(file.type)) {
-            return {
-                valid: false,
-                message: 'Sadece JPEG, PNG, GIF ve WebP dosyaları desteklenir.'
-            };
-        }
-        
-        return { valid: true };
-    }
-
-    /**
-     * Convert file to base64
-     */
-    fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    /**
-     * Reset file selection UI
-     */
-    resetFileSelection() {
-        const previewContainer = this.getElement('previewContainer');
-        const uploadSelection = this.getElement('uploadSelection');
-        const startFromPhotoBtn = this.getElement('startFromPhotoBtn');
-        
-        if (previewContainer) previewContainer.classList.add('hidden');
-        if (uploadSelection) uploadSelection.classList.remove('hidden');
-        if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
-        
-        // Clear state
-        stateManager.setState('problem.source', null);
-        stateManager.setState('problem.sourceType', null);
-    }
-
-    /**
-     * Handle mode switching (photo/handwriting)
-     */
-    handleModeSwitch(mode) {
-        stateManager.setState('inputMode', mode);
-        console.log(`Switched to ${mode} mode`);
-    }
-
-    /**
-     * Handle input type switching (canvas/keyboard)
-     */
-    handleInputTypeSwitch(type) {
-        stateManager.setState('handwritingInputType', type);
-        console.log(`Switched to ${type} input`);
-    }
-
-    /**
-     * Button event handlers - FIXED to use real QuestionProcessor
-     */
-    handleStartFromPhoto() {
-        console.log('🔥 handleStartFromPhoto called');
-        const source = stateManager.getState('problem.source');
-        console.log('🔥 Source check:', source ? source.length : 'null');
-        
-        if (!source) {
-            this.showError('Lütfen önce bir resim yükleyin.');
-            return;
-        }
-        
-        // Process the image using the real QuestionProcessor
-        this.processQuestion('image');
-    }
-
-    /**
-     * Handle canvas drawing submission
-     */
-    async handleCanvasSubmit() {
-        try {
-            const { canvasManager } = await import('./canvasManager.js');
-            const mainCanvas = 'handwritingCanvas';
-            
-            if (canvasManager.isEmpty(mainCanvas)) {
-                this.showError('Lütfen önce bir şeyler çizin.');
-                return;
-            }
-            
-            const dataURL = canvasManager.toDataURL(mainCanvas);
-            if (!dataURL) {
-                this.showError('Canvas verisi alınamadı.');
-                return;
-            }
-            
-            // Store canvas data
-            const base64Data = dataURL.split(',')[1];
-            stateManager.setState('problem.source', base64Data);
-            stateManager.setState('problem.sourceType', 'canvas');
-            
-            // Process the drawing using the real QuestionProcessor
-            this.processQuestion('canvas');
-            
-        } catch (error) {
-            console.error('Canvas submit error:', error);
-            this.showError('Canvas verisi işlenirken hata oluştu.');
-        }
-    }
-
-    handleTextSubmit() {
-        const keyboardInput = document.getElementById('keyboard-input');
-        const text = keyboardInput?.value.trim();
-        
-        if (!text) {
-            this.showError('Lütfen bir soru yazın.');
-            return;
-        }
-        
-        console.log('🔥 Text input:', text);
-        stateManager.setState('problem.source', text);
-        stateManager.setState('problem.sourceType', 'text');
-        
-        // Process the text using the real QuestionProcessor
-        this.processQuestion('text');
-    }
-
-    /**
-     * REAL QUESTION PROCESSING - This is the key fix!
-     */
-    async processQuestion(sourceType) {
-        try {
-            console.log('🔥 Starting real question processing for:', sourceType);
-            
-            this.showLoading('Soru işleniyor...');
-            
-            // Import and use the real QuestionProcessor
-            const { questionProcessor } = await import('../services/QuestionProcessor.js');
-            
-            const source = stateManager.getState('problem.source');
-            if (!source) {
-                throw new Error('Kaynak veri bulunamadı');
-            }
-            
-            console.log('🔥 Calling questionProcessor.processQuestion');
-            const result = await questionProcessor.processQuestion(sourceType, source);
-            
-            console.log('🔥 Question processing completed:', result);
-            
-            // Check if solution was stored in state
-            const storedSolution = stateManager.getState('problem.solution');
-            console.log('🔥 Final verification - solution stored:', !!storedSolution);
-            
-            if (storedSolution) {
-                // Switch to summary view to show the results
-                stateManager.setView('summary');
-                this.showSuccess('Soru başarıyla çözüldü!');
-            } else {
-                throw new Error('Çözüm state\'e kaydedilemedi');
-            }
-            
-        } catch (error) {
-            console.error('🔥 Question processing error:', error);
-            
-            // Show user-friendly error message
-            let errorMessage = 'Soru işlenirken bir hata oluştu.';
-            
-            if (error.message.includes('limit')) {
-                errorMessage = 'Günlük sorgu limitiniz doldu.';
-            } else if (error.message.includes('network') || error.message.includes('fetch')) {
-                errorMessage = 'İnternet bağlantısı hatası. Lütfen bağlantınızı kontrol edin.';
-            } else if (error.message.includes('timeout')) {
-                errorMessage = 'İşlem zaman aşımına uğradı. Lütfen tekrar deneyin.';
-            } else if (error.message.includes('not valid') || error.message.includes('invalid')) {
-                errorMessage = 'Görsel dosyası geçersiz. Lütfen farklı bir resim deneyin.';
-            }
-            
-            this.showError(errorMessage);
-            
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    handleStartSolving() {
-        console.log('handleStartSolving called');
-        const solution = stateManager.getState('problem.solution');
-        console.log('Solution check in handleStartSolving:', solution);
-        
-        if (solution) {
-            // Initialize the smart guide and then set view
-            this.initializeSmartGuideWorkspace(solution);
-        } else {
-            console.log('No solution found, showing error');
-            this.showError('Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.');
-        }
-    }
-
-    /**
-     * Initialize smart guide workspace for "I Will Solve It Myself"
-     */
-    async initializeSmartGuideWorkspace(solution) {
-        try {
-            // Import and initialize smart guide service
-            const { smartGuideService } = await import('../services/SmartGuideService.js');
-            
-            console.log('Initializing smart guide workspace...');
-            await smartGuideService.initializeGuidance(solution);
-            
-            // Set view to solving
-            stateManager.setView('solving');
-            
-        } catch (error) {
-            console.error('Smart guide initialization error:', error);
-            this.showError('Çözüm alanı başlatılamadı. Lütfen tekrar deneyin.');
-        }
-    }
-
-    async handleInteractiveSolving() {
-        console.log('handleInteractiveSolving called');
-        const solution = stateManager.getState('problem.solution');
-        
-        if (!solution) {
-            this.showError('Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.');
-            return;
-        }
-
-        try {
-            // Import with proper destructuring
-            const module = await import('../services/InteractiveSolutionService.js');
-            const interactiveService = module.interactiveSolutionService;
-            
-            console.log('Initializing interactive solution...');
-            await interactiveService.initializeInteractiveSolution(solution);
-            
-            // Set view to interactive
-            stateManager.setView('interactive');
-            
-        } catch (error) {
-            console.error('Interactive solution initialization error:', error);
-            this.showError('İnteraktif çözüm başlatılamadı. Lütfen tekrar deneyin.');
-        }
-    }
-    async handleInteractiveInit(solution) {
-        try {
-            console.log('Initializing interactive mode with solution:', solution);
-            
-            // Import interactive solution service
-            const { interactiveSolutionService } = await import('../services/InteractiveSolutionService.js');
-            
-            // Initialize the interactive solution
-            await interactiveSolutionService.initializeInteractiveSolution(solution);
-            
-        } catch (error) {
-            console.error('Interactive mode initialization error:', error);
-            
-            this.showError('İnteraktif çözüm başlatılamadı. Tam çözüme yönlendiriliyorsunuz.');
-            setTimeout(() => {
-                stateManager.setView('result');
-            }, 2000);
-        }
-    }
-    handleShowFullSolution() {
-        console.log('handleShowFullSolution called');
-        const solution = stateManager.getState('problem.solution');
-        console.log('Solution check in handleShowFullSolution:', solution);
-        
-        if (solution) {
-            stateManager.setView('result');
-        } else {
-            console.log('No solution found, showing error');
-            this.showError('Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.');
-        }
-    }
-
-    handleNewQuestion() {
-        stateManager.setView('upload');
-    }
-
-    handleGoBack() {
-        stateManager.setView('summary');
-    }
-
-    handleTextInput(value) {
-        // Handle real-time text input if needed
-        console.log('Text input:', value);
-    }
-
-    /**
-     * Canvas tool methods - integrated with CanvasManager
-     */
-    async setCanvasTool(tool) {
-        try {
-            const { canvasManager } = await import('./canvasManager.js');
-            
-            // Set tool for main canvas
-            const mainCanvas = 'handwritingCanvas';
-            canvasManager.setTool(mainCanvas, tool);
-            
-            // Update UI to reflect active tool
-            this.updateCanvasToolUI(tool);
-            
-        } catch (error) {
-            console.error('Canvas tool set error:', error);
-        }
-    }
-
-    async clearCanvas() {
-        try {
-            const { canvasManager } = await import('./canvasManager.js');
-            
-            // Clear main canvas
-            const mainCanvas = 'handwritingCanvas';
-            canvasManager.clear(mainCanvas);
-            
-            // Clear any stored canvas data in state
-            stateManager.setState('problem.source', null);
-            stateManager.setState('problem.sourceType', null);
-            
-        } catch (error) {
-            console.error('Canvas clear error:', error);
-        }
-    }
-
-    async undoCanvas() {
-        try {
-            const { canvasManager } = await import('./canvasManager.js');
-            
-            // Undo main canvas
-            const mainCanvas = 'handwritingCanvas';
-            canvasManager.undo(mainCanvas);
-            
-        } catch (error) {
-            console.error('Canvas undo error:', error);
-        }
-    }
-
-    /**
-     * Update canvas tool UI to show active tool
-     */
-    updateCanvasToolUI(activeTool) {
-        const toolButtons = ['hw-pen-btn', 'hw-eraser-btn'];
-        
-        toolButtons.forEach(buttonId => {
-            const button = document.getElementById(buttonId);
-            if (button) {
-                button.classList.remove('canvas-tool-active');
-                if (buttonId.includes(activeTool)) {
-                    button.classList.add('canvas-tool-active');
-                }
-            }
-        });
-    }
-
-    /**
-     * UI state management methods
-     */
-    updateLoadingState(loading, message) {
-        if (loading) {
-            this.showLoading(message);
-        } else {
-            this.hideLoading();
-        }
-    }
-
-    updateErrorState(error) {
-        if (error) {
-            this.showError(error);
-        }
-    }
-
-    handleViewChange(newView) {
-        console.log(`UI handling view change to: ${newView}`);
-        // Additional UI updates specific to view changes can be added here
-    }
-
-    /**
-     * Notification methods
-     */
-    showLoading(message = 'Yükleniyor...') {
-        console.log(`Loading: ${message}`);
-        
-        // Find or create loading indicator
-        let loadingIndicator = document.getElementById('loading-indicator');
-        if (!loadingIndicator) {
-            loadingIndicator = document.createElement('div');
-            loadingIndicator.id = 'loading-indicator';
-            loadingIndicator.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-            loadingIndicator.innerHTML = `
-                <div class="bg-white rounded-lg p-6 max-w-sm mx-4">
-                    <div class="flex items-center space-x-3">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                        <span class="text-gray-800">${message}</span>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(loadingIndicator);
-        } else {
-            loadingIndicator.querySelector('span').textContent = message;
-            loadingIndicator.classList.remove('hidden');
-        }
-    }
-
-    hideLoading() {
-        const loadingIndicator = document.getElementById('loading-indicator');
-        if (loadingIndicator) {
-            loadingIndicator.classList.add('hidden');
-        }
-    }
-
-    showError(message, persistent = false) {
-        console.error('UI Error:', message);
-        this.showNotification(message, 'error', persistent);
-    }
-
-    showSuccess(message) {
-        console.log('UI Success:', message);
-        this.showNotification(message, 'success');
-    }
-
-    showNotification(message, type = 'info', persistent = false) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 max-w-sm p-4 rounded-lg shadow-lg z-50 ${
-            type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
-            type === 'success' ? 'bg-green-100 border border-green-400 text-green-700' :
-            'bg-blue-100 border border-blue-400 text-blue-700'
-        }`;
-        
-        notification.innerHTML = `
-            <div class="flex items-center justify-between">
-                <span>${message}</span>
-                <button class="ml-3 text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.remove()">
-                    <span class="sr-only">Close</span>
-                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 5 seconds unless persistent
-        if (!persistent) {
-            setTimeout(() => {
-                if (notification.parentElement) {
-                    notification.remove();
-                }
-            }, 5000);
-        }
-    }
-
-    /**
-     * Logout handler
-     */
-    async handleLogout() {
-        try {
-            const { AuthManager } = await import('./auth.js');
-            await AuthManager.logout();
-        } catch (error) {
-            console.error('Logout error:', error);
-            // Force redirect on error
-            window.location.href = 'login.html';
-        }
-    }
-
-    /**
-     * Cleanup method
-     */
-    destroy() {
-        // Remove all event listeners
-        this.eventListeners.forEach((listeners) => {
-            listeners.forEach(({ element, event, handler }) => {
-                element.removeEventListener(event, handler);
-            });
-        });
-        
-        this.eventListeners.clear();
-        this.elements.clear();
-        this.initialized = false;
+    if (autoHide) {
+        setTimeout(() => {
+            resultContainer.classList.add('hidden');
+        }, hideDelay);
     }
 }
 
-// Create and export singleton instance
-export const uiManager = new UIManager();
+/**
+ * Ekranda bir hata mesajı gösterir - DÜZELTME: Tamam butonu çalışır
+ * @param {string} message - Gösterilecek hata mesajı.
+ * @param {boolean} showResetButton - Kullanıcının arayüzü sıfırlayabileceği bir "Tamam" butonu gösterilsin mi?
+ * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
+ */
+export function showError(message, showResetButton = false, onReset = () => {}) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    // Temel hata mesajı HTML'i
+    let errorHTML = `
+        <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
+            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <p class="font-medium text-center">${message}</p>
+        </div>
+    `;
+
+    statusMessage.className = '';
+    statusMessage.innerHTML = errorHTML;
+
+    // DÜZELTME: Tamam butonu için ayrı element oluştur ve event listener ekle
+    if (showResetButton) {
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'mt-4 text-center';
+        
+        const okButton = document.createElement('button');
+        okButton.textContent = 'Tamam';
+        okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
+        
+        // DÜZELTME: Event listener'ı doğru şekilde ekle
+        okButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            try {
+                console.log('Tamam butonu tıklandı, onReset fonksiyonu çalıştırılıyor...');
+                
+                // Hata mesajını gizle
+                resultContainer.classList.add('hidden');
+                statusMessage.innerHTML = '';
+                
+                // onReset fonksiyonunu çalıştır
+                if (typeof onReset === 'function') {
+                    onReset();
+                } else {
+                    console.warn('onReset fonksiyonu geçerli değil:', onReset);
+                }
+            } catch (error) {
+                console.error('Tamam butonu click handler hatası:', error);
+            }
+        });
+        
+        buttonContainer.appendChild(okButton);
+        statusMessage.appendChild(buttonContainer);
+        
+        // Butona otomatik focus ver
+        setTimeout(() => {
+            okButton.focus();
+        }, 100);
+    }
+
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
+    
+    console.log('showError çağrıldı:', { message, showResetButton, onResetType: typeof onReset });
+}
+
+/**
+ * Animasyonlu adım adım yükleme mesajı gösterir.
+ * @param {Array} steps - Gösterilecek adımlar dizisi.
+ * @param {number} stepDelay - Her adım arasındaki gecikme (ms).
+ */
+export function showAnimatedLoading(steps, stepDelay = 1500) {
+    const resultContainer = document.getElementById('result-container');
+    const statusMessage = document.getElementById('status-message');
+    const solutionOutput = document.getElementById('solution-output');
+
+    if (!resultContainer || !statusMessage || !solutionOutput) return;
+
+    resultContainer.classList.remove('hidden');
+    solutionOutput.classList.add('hidden');
+
+    let currentStep = 0;
+
+    const showStep = () => {
+        if (currentStep >= steps.length) {
+            resultContainer.classList.add('hidden');
+            return;
+        }
+
+        const step = steps[currentStep];
+        statusMessage.innerHTML = `
+            <div class="flex items-center justify-center space-x-3">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-blue-200 h-8 w-8 animate-spin"></div>
+                <div class="flex flex-col">
+                    <p class="text-blue-600 font-medium">${step.title}</p>
+                    <p class="text-gray-500 text-sm">${step.description}</p>
+                </div>
+            </div>
+        `;
+        statusMessage.className = 'flex items-center justify-center p-4 bg-blue-50 rounded-lg border border-blue-200';
+
+        currentStep++;
+        setTimeout(showStep, stepDelay);
+    };
+
+    showStep();
+}
+
+/**
+ * Gelişmiş matematiksel ifade render fonksiyonu
+ * Advanced Math Renderer kullanır - MathJax v3 + KaTeX Hybrid
+ * @param {string} content - Render edilecek içerik.
+ * @param {HTMLElement} element - Hedef HTML elementi.
+ * @param {boolean} displayMode - Display modu (blok/inline).
+ */
+export async function renderMath(content, element, displayMode = false) {
+    if (!content || !element) {
+        console.warn('renderMath: İçerik veya element eksik');
+        return false;
+    }
+    
+    try {
+        // Gelişmiş render sistemini kullan
+        const result = await advancedMathRenderer.render(content, element, displayMode);
+        
+        if (!result) {
+            console.warn('Render başarısız, fallback uygulanıyor:', content);
+            // Fallback: plain text
+            element.textContent = content;
+            element.classList.add('render-fallback');
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('renderMath hatası:', error);
+        element.textContent = content;
+        element.classList.add('render-error');
+        return false;
+    }
+}
+
+/**
+ * Container içindeki tüm matematik içeriğini render eder
+ * @param {HTMLElement} container - Render edilecek container
+ * @param {boolean} displayMode - Display modu
+ */
+export async function renderMathInContainer(container, displayMode = false) {
+    if (!container) {
+        console.warn('renderMathInContainer: Container eksik');
+        return;
+    }
+    
+    try {
+        await advancedMathRenderer.renderContainer(container, displayMode);
+        console.log('Container render tamamlandı');
+    } catch (error) {
+        console.error('Container render hatası:', error);
+    }
+}
+
+/**
+ * Smart content elementlerini render eder (özel attribute ile)
+ * @param {HTMLElement} container - İçerik container'ı
+ */
+export async function renderSmartContent(container) {
+    if (!container) return;
+    
+    const smartElements = container.querySelectorAll('.smart-content[data-content]');
+    
+    for (const element of smartElements) {
+        const content = element.getAttribute('data-content');
+        if (content) {
+            try {
+                await renderMath(content, element, false);
+            } catch (error) {
+                console.warn('Smart content render hatası:', error);
+                element.textContent = content;
+            }
+        }
+    }
+}
+
+/**
+ * LaTeX content elementlerini render eder
+ * @param {HTMLElement} container - İçerik container'ı
+ */
+export async function renderLatexContent(container) {
+    if (!container) return;
+    
+    const latexElements = container.querySelectorAll('.latex-content[data-latex]');
+    
+    for (const element of latexElements) {
+        const latex = element.getAttribute('data-latex');
+        if (latex) {
+            try {
+                await renderMath(latex, element, true); // Display mode için true
+            } catch (error) {
+                console.warn('LaTeX content render hatası:', error);
+                element.textContent = latex;
+            }
+        }
+    }
+}
+
+/**
+ * Render performans monitörü
+ */
+export function getRenderStats() {
+    return advancedMathRenderer.getStats();
+}
+
+/**
+ * Render cache temizleme
+ */
+export function clearRenderCache() {
+    advancedMathRenderer.clearCache();
+}
+
+/**
+ * HTML karakterlerini escape eder
+ * @param {string} text - Escape edilecek metin
+ * @returns {string} Escape edilmiş metin
+ */
+export function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Render sistemi hazır olup olmadığını kontrol eder
+ * @returns {Promise<boolean>} Sistem hazır mı?
+ */
+export async function waitForRenderSystem() {
+    return new Promise((resolve) => {
+        const checkReady = () => {
+            const stats = getRenderStats();
+            if (stats.mathJaxReady || stats.katexReady) {
+                resolve(true);
+            } else {
+                setTimeout(checkReady, 100);
+            }
+        };
+        checkReady();
+    });
+}
+
+/**
+ * Gelişmiş render fonksiyonu - otomatik tip algılama ile
+ * @param {string} content - İçerik
+ * @param {HTMLElement} element - Hedef element
+ * @param {Object} options - Render seçenekleri
+ */
+export async function smartRender(content, element, options = {}) {
+    const {
+        displayMode = false,
+        fallbackToText = true,
+        enableCache = true,
+        timeout = 5000
+    } = options;
+    
+    if (!enableCache) {
+        clearRenderCache();
+    }
+    
+    // Timeout ile render
+    const renderPromise = renderMath(content, element, displayMode);
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Render timeout')), timeout);
+    });
+    
+    try {
+        return await Promise.race([renderPromise, timeoutPromise]);
+    } catch (error) {
+        if (fallbackToText) {
+            element.textContent = content;
+            element.classList.add('render-timeout');
+            return false;
+        }
+        throw error;
+    }
+}
+
+/**
+ * Batch render - çoklu elementi aynı anda render eder
+ * @param {Array} renderTasks - Render görevleri [{content, element, displayMode}]
+ * @param {number} batchSize - Aynı anda işlenecek görev sayısı
+ */
+export async function batchRender(renderTasks, batchSize = 5) {
+    const results = [];
+    
+    for (let i = 0; i < renderTasks.length; i += batchSize) {
+        const batch = renderTasks.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (task) => {
+            try {
+                return await renderMath(task.content, task.element, task.displayMode);
+            } catch (error) {
+                console.warn('Batch render hatası:', error);
+                return false;
+            }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        
+        // Batch'ler arası kısa bekleme
+        if (i + batchSize < renderTasks.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+    
+    return results;
+}
+
+// Debug amaçlı global export
+if (typeof window !== 'undefined') {
+    window.mathUI = {
+        renderMath,
+        renderMathInContainer,
+        renderSmartContent,
+        renderLatexContent,
+        smartRender,
+        batchRender,
+        getRenderStats,
+        clearRenderCache,
+        waitForRenderSystem
+    };
+}
