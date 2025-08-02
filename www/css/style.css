@@ -1,231 +1,15 @@
 /* =================================================================== */
-/* ===                MathAi - ANA STİL DOSYASI (FİNAL)            === */
+/* ===           MathAi - YENİDEN DÜZENLENMİŞ ANA STİL DOSYASI       === */
+/* =================================================================== */
+/* AÇIKLAMA: Bu dosya, tekrar eden kodlardan arındırılmış, mantıksal  */
+/* olarak gruplanmış ve yeni uygulama mimarisiyle tam uyumlu hale    */
+/* getirilmiştir.                                                    */
 /* =================================================================== */
 
-/* --- Test Sistemi Stilleri --- */
-.test-category {
-    animation: slideIn 0.5s ease-out;
-}
+/* =================================================================== */
+/* === 1. GLOBAL STİLLER ve TEMEL YAPILANDIRMA                     === */
+/* =================================================================== */
 
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.test-item {
-    transition: all 0.3s ease;
-}
-
-.test-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.test-success {
-    border-left: 4px solid #10b981;
-    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-}
-
-.test-failure {
-    border-left: 4px solid #ef4444;
-    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-}
-
-.test-latex-input {
-    font-family: 'Courier New', monospace;
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    padding: 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-}
-
-.test-result {
-    min-height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.test-statistics {
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border: 1px solid #cbd5e1;
-    border-radius: 0.75rem;
-    padding: 1rem;
-}
-
-.test-status-indicator {
-    display: inline-block;
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 50%;
-    margin-right: 0.5rem;
-}
-
-.test-status-running {
-    background-color: #f59e0b;
-    animation: pulse 1.5s infinite;
-}
-
-.test-status-success {
-    background-color: #10b981;
-}
-
-.test-status-error {
-    background-color: #ef4444;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-}
-
-/* Test kontrol paneli animasyonları */
-.test-control-panel {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    border: 1px solid #93c5fd;
-    border-radius: 1rem;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.test-control-panel button {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.test-control-panel button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Özel test alanı stilleri */
-.custom-test-area {
-    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
-    border: 1px solid #c084fc;
-    border-radius: 1rem;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.custom-test-area textarea {
-    font-family: 'Courier New', monospace;
-    resize: vertical;
-    min-height: 8rem;
-}
-
-.custom-test-area .result-display {
-    background-color: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    min-height: 8rem;
-    overflow-y: auto;
-}
-
-/* Test sonuç animasyonları */
-.test-result-animation {
-    animation: fadeInUp 0.6s ease-out;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Responsive test sistemi */
-@media (max-width: 768px) {
-    .test-control-panel {
-        padding: 1rem;
-    }
-    
-    .test-control-panel .grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .custom-test-area .grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .test-item .grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* MathRenderer için özel stiller */
-.math-text {
-    font-family: 'Inter', sans-serif;
-    color: #374151;
-    line-height: 1.6;
-}
-
-.math-content {
-    margin: 0.5rem 0;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    background-color: #f9fafb;
-    border: 1px solid #e5e7eb;
-}
-
-.latex-content {
-    margin: 0.5rem 0;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    background-color: #f0f9ff;
-    border: 1px solid #bae6fd;
-}
-
-.katex-error {
-    color: #ef4444;
-    background-color: #fef2f2;
-    border: 1px solid #fecaca;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    font-family: 'Courier New', monospace;
-}
-
-/* Akıllı içerik stilleri */
-.smart-content {
-    display: inline;
-    line-height: 1.6;
-}
-
-.smart-content .katex {
-    font-size: 1em;
-    line-height: 1.2;
-}
-
-/* Problem özeti ve adım açıklamaları için özel stiller */
-.problem-summary .smart-content {
-    color: #1f2937;
-}
-
-.step-description .smart-content {
-    color: #374151;
-}
-
-/* İnteraktif çözüm için özel stiller */
-.interactive-solution-workspace .smart-content {
-    color: #1e40af;
-}
-
-/* --- Global Stiller ve Sayfa Arka Planı --- */
 html {
     height: 100%;
 }
@@ -234,140 +18,246 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: #f1f5f9; /* bg-slate-100 */
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='%23e2e8f0'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e");
+    color: #1f2937; /* Varsayılan metin rengi */
 }
 
-/* --- Auth Ekranları (Login, Register) için Form Stilleri --- */
-.form-input {
-    @apply shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 bg-slate-50/70;
-}
-.form-input-error {
-    @apply border-red-500 ring-red-500;
-}
-.form-input-success {
-    @apply border-green-500 ring-green-500;
-}
-.error-message {
-    @apply text-red-600 text-xs italic mt-1 h-4;
+/* Yükleme animasyonu ve alanları pasif hale getirme */
+.loader {
+    border-top-color: #4f46e5; /* indigo-600 */
+    animation: spin 1s ease-in-out infinite;
 }
 
-/* --- Ana Uygulama Komponent Stilleri (Butonlar, Yükleyici vb.) --- */
-.loader { 
-    border-top-color: #6366f1; 
-    animation: spin 1s ease-in-out infinite; 
+.disabled-area {
+    opacity: 0.6;
+    pointer-events: none;
+    filter: grayscale(30%);
 }
 
+.disabled-area input,
+.disabled-area textarea,
+.disabled-area canvas,
+.disabled-area button:not(.always-enabled) {
+    pointer-events: none;
+}
+
+/* Genel Animasyonlar */
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.btn { 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    gap: 0.6rem; 
-    font-weight: 600; 
-    padding: 0.7rem 1.2rem; 
-    border-radius: 0.75rem; 
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
-    border: 1px solid transparent; 
-    font-size: 0.9rem; 
-    cursor: pointer; 
-}
-.btn:disabled { 
-    opacity: 0.6; 
-    cursor: not-allowed; 
-    transform: none; 
-    box-shadow: none; 
-}
-.btn-primary { 
-    background-image: linear-gradient(to right, #4f46e5 0%, #818cf8 100%); 
-    color: white; 
-    box-shadow: 0 4px 15px -5px rgba(79, 70, 229, 0.5); 
-}
-.btn-primary:hover:not(:disabled) { 
-    transform: translateY(-3px); 
-    box-shadow: 0 7px 20px -5px rgba(79, 70, 229, 0.6); 
-}
-.btn-secondary { 
-    background-color: #374151; 
-    color: white; 
-}
-.btn-secondary:hover:not(:disabled) { 
-    background-color: #1f2937; 
-    transform: translateY(-2px); 
-}
-.btn-tertiary { 
-    background-color: #e5e7eb; 
-    color: #1f2937; 
-    border-color: #d1d5db; 
-}
-.btn-tertiary:hover:not(:disabled) { 
-    background-color: #d1d5db; 
-    border-color: #9ca3af; 
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Mod ve Araç Butonları --- */
-.mode-btn-active { 
-    background-image: linear-gradient(to right, #4f46e5, #7c3aed); 
-    color: white; 
-    box-shadow: 0 2px 8px -1px rgba(0,0,0,0.2); 
-    transform: scale(1.05); 
-}
-.tool-btn-active { 
-    background-color: #4f46e5; 
-    color: white; 
-    transform: scale(1.1); 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.15); 
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Kanvas ve Diğer Alanlar --- */
-.canvas-container { 
-    border: 2px dashed #d1d5db; 
-    background-color: #ffffff; 
-    background-image: linear-gradient(to right, #f3f4f6 1px, transparent 1px), linear-gradient(to bottom, #f3f4f6 1px, transparent 1px); 
-    background-size: 20px 20px; 
+/* =================================================================== */
+/* === 2. BUTON STİLLERİ (Genel, Mod ve Araç Butonları)            === */
+/* =================================================================== */
+
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    padding: 0.7rem 1.2rem;
+    border-radius: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
 }
-/* Ana soru sorma canvas'ı */
-#handwritingCanvas {
-    display: block;
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary {
+    background-image: linear-gradient(to right, #4f46e5 0%, #818cf8 100%);
+    color: white;
+    box-shadow: 0 4px 15px -5px rgba(79, 70, 229, 0.5);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 20px -5px rgba(79, 70, 229, 0.6);
+}
+
+.btn-secondary {
+    background-color: #374151; /* gray-700 */
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: #1f2937; /* gray-800 */
+    transform: translateY(-2px);
+}
+
+.btn-tertiary {
+    background-color: #e5e7eb; /* gray-200 */
+    color: #1f2937;
+    border-color: #d1d5db;
+}
+
+.btn-tertiary:hover:not(:disabled) {
+    background-color: #d1d5db; /* gray-300 */
+    border-color: #9ca3af;
+}
+
+/* Soru giriş ekranındaki mod butonları (Fotoğraf, El Yazısı) */
+.mode-btn-active {
+    background-image: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    box-shadow: 0 2px 8px -1px rgba(0,0,0,0.2);
+    transform: scale(1.05);
+}
+
+/* Canvas araç butonları (Kalem, Silgi) */
+.tool-btn-active {
+    background-color: #4f46e5;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+/* =================================================================== */
+/* === 3. KANVAS ve GİRİŞ ALANLARI STİLLERİ                        === */
+/* =================================================================== */
+
+/* Ana soru sorma ve akıllı rehberdeki canvas'lar için ortak stil */
+.canvas-container {
+    border: 2px dashed #d1d5db;
+    background-color: #ffffff;
+    background-image: linear-gradient(to right, #f3f4f6 1px, transparent 1px), linear-gradient(to bottom, #f3f4f6 1px, transparent 1px);
+    background-size: 20px 20px;
     width: 100%;
     height: 100%;
+    border-radius: 0.5rem;
+    overflow: hidden;
 }
 
-/* İnteraktif çözüm canvas'ı */
+#handwritingCanvas,
 #guide-handwriting-canvas {
     display: block;
     width: 100%;
     height: 100%;
 }
 
-/* --- Akıllı Rehber Canvas Araçları --- */
-.canvas-tool-active {
+/* Akıllı Rehber canvas araçları için özel aktif durum */
+#guide-pen-btn.canvas-tool-active,
+#guide-eraser-btn.canvas-tool-active {
     background-color: #4f46e5 !important;
     color: white !important;
-    transform: scale(1.1);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
 }
 
-/* --- Çoktan Seçmeli Seçenekler --- */
+/* =================================================================== */
+/* === 4. MATEMATİK RENDER (KaTeX & MathJax) STİLLERİ              === */
+/* =================================================================== */
+
+/* Render motoru tarafından oluşturulan ana container */
+.katex {
+    font-size: 1em !important; /* Çevreleyen metnin boyutunu miras al */
+    line-height: 1.6 !important;
+    color: #1f2937 !important; /* Koyu metin rengi */
+    text-align: left !important;
+}
+
+/* Satır içi matematik ifadeleri için stil ($...$) */
+.katex:not(.katex-display) {
+    display: inline-block !important;
+    vertical-align: -0.1em; /* Metinle daha iyi hizalama */
+    margin: 0 3px !important;
+    padding: 2px 5px !important;
+    background: rgba(79, 70, 229, 0.07) !important; /* Hafif indigo arka plan */
+    border-radius: 4px !important;
+    border: 1px solid rgba(79, 70, 229, 0.1) !important;
+    transition: all 0.2s ease !important;
+}
+
+.katex:not(.katex-display):hover {
+    background: rgba(79, 70, 229, 0.1) !important;
+    border-color: rgba(79, 70, 229, 0.2) !important;
+}
+
+/* Blok (display) matematik ifadeleri için stil ($$...$$) */
+.katex-display {
+    display: block !important;
+    text-align: center !important;
+    margin: 1rem auto !important;
+    padding: 1rem !important;
+    background-color: #f8fafc !important; /* slate-50 */
+    border-radius: 0.5rem !important;
+    border: 1px solid #e2e8f0 !important; /* slate-200 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    max-width: 100%;
+    overflow-x: auto; /* Uzun ifadeler için kaydırma çubuğu */
+}
+
+/* Render hatası durumunda gösterilecek stil */
+.katex-error {
+    color: #dc2626 !important;
+    background: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    padding: 0.5rem !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace !important;
+}
+
+/* Çeşitli render konteynerleri için genel stil */
+.math-content, .latex-content, .smart-content {
+    line-height: 1.7; /* Okunabilirliği artır */
+}
+
+/* Uzun ifadelerin taşmasını önlemek için genel konteyner */
+.math-container {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0.5rem 0 !important;
+}
+
+/* =================================================================== */
+/* === 5. ÇOKTAN SEÇMELİ SEÇENEK STİLLERİ (İnteraktif Çözüm)        === */
+/* =================================================================== */
+
 .option-label {
+    display: flex;
+    align-items: flex-start;
+    padding: 1rem;
+    border-width: 2px;
+    border-color: #e5e7eb; /* gray-200 */
+    border-radius: 0.75rem;
     transition: all 0.2s ease;
     cursor: pointer;
 }
 
 .option-label:hover {
-    background-color: #f8fafc;
-    border-color: #6366f1;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.option-label input[type="radio"]:checked + .option-label {
-    border-color: #6366f1;
-    background-color: #eef2ff;
+    background-color: #f8fafc; /* slate-50 */
+    border-color: #6366f1; /* indigo-500 */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .option-letter {
-    transition: all 0.2s ease;
     flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    margin-right: 0.75rem;
+    border-radius: 50%;
+    background-color: #e5e7eb;
+    color: #4b5563;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    transition: all 0.2s ease;
 }
 
 .option-label:hover .option-letter {
@@ -375,511 +265,79 @@ body {
     color: white;
 }
 
-.option-label.border-blue-500 {
-    border-color: #3b82f6 !important;
-    background-color: #eff6ff !important;
+/* Seçim durumuna göre renkler */
+.option-label.border-blue-500 { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
+.option-label.border-green-500 { border-color: #10b981 !important; background-color: #ecfdf5 !important; }
+.option-label.border-red-500 { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+
+.option-label.border-blue-500 .option-letter,
+.option-label.border-green-500 .option-letter,
+.option-label.border-red-500 .option-letter {
+    color: white;
 }
 
-.option-label.border-green-500 {
-    border-color: #10b981 !important;
-    background-color: #ecfdf5 !important;
-}
+.option-label.border-blue-500 .option-letter { background-color: #3b82f6; }
+.option-label.border-green-500 .option-letter { background-color: #10b981; }
+.option-label.border-red-500 .option-letter { background-color: #ef4444; }
 
-.option-label.border-red-500 {
-    border-color: #ef4444 !important;
-    background-color: #fef2f2 !important;
-}
-
-/* İnteraktif çözüm navigasyon butonları */
-.navigation-section button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.navigation-section button:not(:disabled):hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-.disabled-area { 
-    opacity: 0.6; 
-    pointer-events: none; 
-    filter: grayscale(30%);
-}
-
-.disabled-area input,
-.disabled-area textarea,
-.disabled-area canvas {
-    pointer-events: none;
-}
-
-.disabled-area button:not(.always-enabled) {
-    pointer-events: none;
-}
-
-/* --- "Kendim Çözeceğim" Adım Blokları --- */
-.step-block.inactive .step-content {
-    display: none;
-}
-.step-block.inactive {
-    max-height: 50px;
-    cursor: not-allowed;
-    background-color: #f8fafc;
-}
-.step-block.inactive h3 {
-    opacity: 0.6;
-}
-.step-block.active {
-    max-height: 500px;
-}
-
-.step-block.step-correct {
-    background-color: #e6f9ed !important;
-    border-color: #22c55e !important;
-    box-shadow: 0 0 0 2px #bbf7d0;
-}
-.step-block.step-correct .step-content {
-    opacity: 1 !important;
-    pointer-events: none;
-}
-.step-block.step-correct h3 {
-    color: #15803d !important;
-}
-
-.step-block.inactive.step-correct .step-content {
-    display: block !important;
-    opacity: 1 !important;
-    pointer-events: none;
-}
 
 /* =================================================================== */
-/* ===         METİN GÖRÜNÜMÜ VE TAŞMA İÇİN NİHAİ ÇÖZÜMLER         === */
+/* === 6. İNTERAKTİF ÇÖZÜM ve AKILLI REHBER ORTAK STİLLERİ         === */
 /* =================================================================== */
 
-/* 1. FLEXBOX YERLEŞİM DÜZELTMESİ (EN ÖNEMLİ KURAL)
-   Bu kural, "Tüm Çözümü Göster" ve "Kendim Çözeceğim" gibi modüllerdeki
-   metin kutularının doğru genişliğe sahip olmasını sağlar. */
-.step-content {
-    min-width: 0;
-    max-width: 100%;
+/* İlerleme Çubuğu */
+.progress-fill {
+    background: linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%);
+    transition: width 0.5s ease-in-out;
 }
 
-
-
-/* 3. İNTERAKTİF ÇÖZÜM ALANI STİLLERİ */
-#solution-output > p {
-    padding: 0 1rem;
-    overflow-wrap: break-word;
-    color: #1e293b; 
-    font-weight: 600;
-}
-.option-btn {
-    white-space: normal; 
-    text-align: center;
-    line-height: 1.4;
-    min-height: 5rem; 
-    padding: 1rem;
-    display: flex; 
-    align-items: center;
-    justify-content: center;
+/* Deneme Hakkı Göstergesi */
+.attempt-dots > div {
+    transition: background-color 0.3s ease;
 }
 
-/* 4. İPUCU KUTUSU STİLLERİ */
-.hint-area {
-    width: 100%;
-    min-width: 200px;
-    max-width: 100%;
-    white-space: normal;   /* pre-line yerine normal */
-    word-break: break-word;
-    overflow-x: auto;
-    display: block;
-}
-.hint-area.text-red-700 {
-    color: #b91c1c !important; 
-    font-weight: 600 !important; 
-    background-color: #fee2e2 !important;
-    border-left: 4px solid #ef4444; 
+/* Geri Bildirim Mesajları (Doğru/Yanlış) */
+.feedback-message {
+    animation: fadeIn 0.4s ease-out;
+    font-size: 0.875rem;
 }
 
-.step-block, .step-content, .hint-area {
-    min-width: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+.feedback-close {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.feedback-close:hover {
+    transform: scale(1.1);
 }
 
-.hint-area {
-    display: block !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-    overflow-x: auto !important;
-    font-size: 1rem !important;
-    line-height: 1.7 !important;
+/* Çözüm Tamamlandı Ekranı */
+.interactive-completion, .completion-message {
+    animation: fadeInUp 0.6s ease-out;
 }
 
-
-/* Math Renderer CSS Düzeltmeleri - Enhanced Version */
-
-/* Genel KaTeX container düzeltmeleri */
-.katex {
-    font-size: inherit !important;
-    line-height: 1.6 !important;
-    color: #1f2937 !important;
-}
-
-/* Display mode için merkez hizalama ve gelişmiş görünüm */
-.katex-display {
-    text-align: center !important;
-    margin: 1.5rem auto !important;
-    padding: 1rem 0 !important;
-    background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%) !important;
-    border-radius: 0.5rem !important;
-    border: 1px solid #e5e7eb !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Inline math için gelişmiş düzeltmeler */
-.katex:not(.katex-display) {
-    display: inline-block !important;
-    vertical-align: middle !important;
-    margin: 0 3px !important;
-    padding: 2px 4px !important;
-    background: rgba(99, 102, 241, 0.05) !important;
-    border-radius: 3px !important;
-    border: 1px solid rgba(99, 102, 241, 0.1) !important;
-    transition: all 0.2s ease !important;
-}
-
-.katex:not(.katex-display):hover {
-    background: rgba(99, 102, 241, 0.1) !important;
-    border-color: rgba(99, 102, 241, 0.2) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Metin elementleri için hizalama */
-.katex .mord.text {
-    vertical-align: baseline !important;
-    font-family: 'Inter', sans-serif !important;
-    color: #374151 !important;
-}
-
-/* Fraction düzeltmeleri */
-.katex .mfrac {
-    vertical-align: middle !important;
-    margin: 0 2px !important;
-}
-
-.katex .mfrac .frac-line {
-    border-bottom-width: 0.08em !important;
-    border-color: #4f46e5 !important;
-}
-
-/* Square root düzeltmeleri */
-.katex .sqrt {
-    vertical-align: middle !important;
-}
-
-.katex .sqrt > .sqrt-sign {
-    color: #4f46e5 !important;
-    font-weight: 600 !important;
-}
-
-/* Superscript ve subscript düzeltmeleri */
-.katex .msupsub {
-    vertical-align: baseline !important;
-}
-
-.katex .msupsub .msup,
-.katex .msupsub .msub {
-    font-size: 0.75em !important;
-    line-height: 1.2 !important;
-}
-
-/* Trigonometric ve diğer fonksiyon isimleri */
-.katex .mop {
-    color: #7c3aed !important;
-    font-weight: 600 !important;
-}
-
-/* Integral, sum, product sembolleri */
-.katex .mop.op-symbol {
-    color: #dc2626 !important;
-    font-weight: 700 !important;
-}
-
-/* Limit operatörü */
-.katex .mop.op-limits {
-    color: #059669 !important;
-    font-weight: 600 !important;
-}
-
-/* Parentheses ve brackets */
-.katex .mopen,
-.katex .mclose {
-    color: #6b7280 !important;
-    font-weight: 500 !important;
-}
-
-/* Math container için responsive tasarım */
-.math-container {
-    max-width: 100% !important;
-    overflow-x: auto !important;
-    overflow-y: visible !important;
-    padding: 0.5rem 0 !important;
-    background: #ffffff !important;
-    border-radius: 0.375rem !important;
-    border: 1px solid #e5e7eb !important;
-    margin: 0.25rem 0 !important;
-}
-
-/* Karışık içerik (mixed content) için özel stiller */
-.latex-inline {
-    display: inline-block !important;
-    vertical-align: middle !important;
-    margin: 0 2px !important;
-    transition: all 0.2s ease !important;
-}
-
-.text-inline {
-    display: inline !important;
-    vertical-align: baseline !important;
-    font-family: 'Inter', sans-serif !important;
-    color: #374151 !important;
-    line-height: 1.6 !important;
-}
-
-/* Problem özeti için özel LaTeX stili */
-.problem-summary .katex {
-    background: rgba(59, 130, 246, 0.05) !important;
-    border: 1px solid rgba(59, 130, 246, 0.15) !important;
-}
-
-.problem-summary .katex-display {
-    background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%) !important;
-    border: 1px solid #93c5fd !important;
-}
-
-/* Çözüm adımları için özel LaTeX stili */
-.solution-step .katex {
-    background: rgba(16, 185, 129, 0.05) !important;
-    border: 1px solid rgba(16, 185, 129, 0.15) !important;
-}
-
-.solution-step .katex-display {
-    background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%) !important;
-    border: 1px solid #86efac !important;
-}
-
-/* İnteraktif çözüm için özel LaTeX stili */
-.interactive-solution-workspace .katex {
-    background: rgba(139, 92, 246, 0.05) !important;
-    border: 1px solid rgba(139, 92, 246, 0.15) !important;
-}
-
-.interactive-solution-workspace .katex-display {
-    background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%) !important;
-    border: 1px solid #c084fc !important;
-}
-
-/* Akıllı rehber için özel LaTeX stili */
-.smart-guide-workspace .katex {
-    background: rgba(245, 158, 11, 0.05) !important;
-    border: 1px solid rgba(245, 158, 11, 0.15) !important;
-}
-
-.smart-guide-workspace .katex-display {
-    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%) !important;
-    border: 1px solid #fcd34d !important;
-}
-
-/* Matrix ve denklem sistemleri için özel stiller */
-.katex .mtable {
-    border-collapse: separate !important;
-    border-spacing: 0.5em 0.25em !important;
-}
-
-.katex .mtable .mtd {
-    padding: 0.25em 0.5em !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 0.25rem !important;
-    background: #f9fafb !important;
-}
-
-/* Büyük operatörler için iyileştirmeler */
-.katex .op-symbol.large-op {
-    font-size: 1.5em !important;
-    line-height: 1 !important;
-    margin: 0 0.1em !important;
-}
-
-/* Kesirler için daha iyi görünüm */
-.katex .frac-line {
-    border-bottom: 2px solid #4f46e5 !important;
-    margin: 0.1em 0 !important;
-}
-
-.katex .mfrac > span:first-child {
-    padding-bottom: 0.2em !important;
-}
-
-.katex .mfrac > span:last-child {
-    padding-top: 0.2em !important;
-}
-
-/* Kök işareti için iyileştirmeler */
-.katex .sqrt-sign {
-    color: #dc2626 !important;
-    font-weight: 700 !important;
-    border-top: 2px solid #dc2626 !important;
-}
-
-.katex .sqrt > .sqrt-sign::before {
-    border-bottom: 2px solid #dc2626 !important;
-}
-
-/* Açılar ve derece sembolleri */
-.katex .mord.deg {
-    color: #7c3aed !important;
-    font-size: 0.8em !important;
-    vertical-align: super !important;
-}
-
-/* Çözüm adımları için özel stiller */
-.solution-step {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    margin: 0.5rem 0;
+.stat-card, .stat-item {
     transition: all 0.2s ease;
 }
 
-.solution-step:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
+.stat-card:hover, .stat-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
 }
 
-/* Adım numarası stili */
-.step-number {
-    background: #e2e8f0;
-    color: #475569;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.875rem;
-    flex-shrink: 0;
-    margin-right: 1rem;
-}
+/* =================================================================== */
+/* === 7. AKILLI REHBER ("KENDİM ÇÖZECEĞİM") ÖZEL STİLLERİ         === */
+/* =================================================================== */
 
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    .katex {
-        font-size: 0.9em !important;
-    }
-    
-    .math-container {
-        padding: 0.125rem 0 !important;
-    }
-    
-    .solution-step {
-        padding: 0.75rem;
-        margin: 0.375rem 0;
-    }
-    
-    .step-number {
-        width: 1.75rem;
-        height: 1.75rem;
-        font-size: 0.75rem;
-        margin-right: 0.75rem;
-    }
-}
-
-/* Hata durumu için stiller */
-.katex-error {
-    color: #dc2626 !important;
-    background: #fef2f2 !important;
-    border: 1px solid #fecaca !important;
-    padding: 0.25rem 0.5rem !important;
-    border-radius: 0.25rem !important;
-    font-family: monospace !important;
-}
-
-/* Scroll bar düzeltmeleri */
-.math-container::-webkit-scrollbar {
-    height: 4px;
-}
-
-.math-container::-webkit-scrollbar-track {
-    background: #f1f5f9;
-}
-
-.math-container::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 2px;
-}
-
-.math-container::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-/* Özel Türkçe karakter desteği */
-.katex .mord.text {
-    font-family: "Computer Modern", "Latin Modern Math", "Times New Roman", serif !important;
-    font-weight: normal !important;
-}
-
-/* style.css dosyanızda bu bölümün olduğundan emin olun */
-
-/* Çözüm adımları için özel stiller */
-.solution-step {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    transition: all 0.2s ease;
-}
-
-.solution-step:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-}
-
-/* Adım numarası stili */
-.step-number {
-    background: #e2e8f0;
-    color: #475569;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.875rem;
-    flex-shrink: 0;
-    margin-right: 1rem;
-}
-
-/* Roadmap Stilleri */
+/* Çözüm Yol Haritası (Roadmap) */
 .roadmap-content {
     max-height: 0;
     overflow: hidden;
-    transition: all 0.3s ease-in-out;
+    transition: max-height 0.4s ease-in-out;
 }
 
 .roadmap-content:not(.hidden) {
-    max-height: 500px;
+    max-height: 500px; /* Veya ihtiyacınıza göre bir değer */
     overflow-y: auto;
-}
-
-.roadmap-step-item {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
 }
 
 .roadmap-step-item.current-step {
@@ -888,119 +346,7 @@ body {
     box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
 }
 
-.roadmap-step-item:hover {
-    border-color: #cbd5e1;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.step-indicator {
-    transition: all 0.2s ease;
-}
-
-.animate-fadeIn {
-    animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Roadmap responsive düzeltmeleri */
-@media (max-width: 768px) {
-    .roadmap-content {
-        max-height: none;
-    }
-    
-    .roadmap-content:not(.hidden) {
-        max-height: 400px;
-    }
-    
-    .roadmap-step-item {
-        padding: 0.75rem;
-    }
-    
-    .step-indicator {
-        width: 1.75rem;
-        height: 1.75rem;
-        font-size: 0.75rem;
-    }
-}
-
-/* İpucu stilleri */
-.hint-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: all 0.3s ease-in-out;
-}
-
-.hint-content:not(.hidden) {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.hint-section {
-    margin-bottom: 1.5rem;
-}
-
-.hint-completion-info {
-    animation: bounceIn 0.6s ease-out;
-}
-
-@keyframes bounceIn {
-    0% {
-        opacity: 0;
-        transform: scale(0.3);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.05);
-    }
-    70% {
-        transform: scale(0.9);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-/* İpucu buton stilleri */
-.btn.btn-tertiary {
-    background-color: #f3f4f6;
-    color: #6b7280;
-    border: 1px solid #d1d5db;
-}
-
-.btn.btn-tertiary:hover:not(:disabled) {
-    background-color: #e5e7eb;
-    color: #4b5563;
-    border-color: #9ca3af;
-}
-
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    .hint-content:not(.hidden) {
-        max-height: 250px;
-    }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-    }
-    
-    .stats-grid .stat-item {
-        padding: 0.75rem;
-    }
-}
-
-/* Text Hint Preview Stilleri */
+/* İpucu Önizleme Alanı */
 .hint-preview-area {
     border-style: dashed;
     border-width: 2px;
@@ -1008,723 +354,53 @@ body {
 }
 
 @keyframes hintGlow {
-    from {
-        border-color: #fcd34d;
-        box-shadow: 0 0 5px rgba(252, 211, 77, 0.3);
-    }
-    to {
-        border-color: #f59e0b;
-        box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
-    }
-}
-
-.hint-preview-area:hover {
-    animation-play-state: paused;
-    border-color: #f59e0b;
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
-}
-
-#text-hint-content {
-    font-family: 'Courier New', monospace;
-    min-height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    .hint-preview-area {
-        padding: 0.75rem;
-    }
-    
-    #text-hint-content {
-        font-size: 0.75rem;
-        min-height: 1.5rem;
-    }
-}
-
-/* Deneme sistemi stilleri */
-.attempt-info-section {
-    transition: all 0.3s ease;
-}
-
-.attempt-indicator {
-    transition: all 0.2s ease;
-    font-weight: bold;
-}
-
-.attempt-dots {
-    gap: 0.25rem;
-}
-
-.attempt-dots > div {
-    transition: all 0.2s ease;
-}
-
-/* Feedback sistem stilleri */
-.feedback-message {
-    animation: slideInFromTop 0.4s ease-out;
-}
-
-@keyframes slideInFromTop {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.feedback-message.success {
-    border-left: 4px solid #10b981;
-}
-
-.feedback-message.warning {
-    border-left: 4px solid #f59e0b;
-}
-
-.feedback-message.error {
-    border-left: 4px solid #ef4444;
-}
-
-/* Performans completion info animasyonu */
-.attempt-completion-info {
-    animation: bounceIn 0.6s ease-out 0.2s both;
-}
-
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.75rem;
-    }
-    
-    .attempt-info-section {
-        padding: 0.75rem;
-    }
-    
-    .attempt-indicator {
-        width: 1.75rem;
-        height: 1.75rem;
-        font-size: 0.75rem;
-    }
-    
-    .feedback-message {
-        padding: 0.75rem;
-    }
-}
-
-
-/* Feedback kapatma butonu stilleri */
-.feedback-close {
-    transition: all 0.2s ease;
-    cursor: pointer;
-    line-height: 1;
-    border: none;
-    outline: none;
-}
-
-.feedback-close:hover {
-    transform: scale(1.1);
-}
-
-.feedback-close:active {
-    transform: scale(0.95);
-}
-
-/* Feedback mesajı boyut ayarlamaları */
-.feedback-message {
-    animation: slideInFromTop 0.4s ease-out;
-    font-size: 0.875rem; /* Biraz daha küçük font */
-}
-
-.feedback-message h4 {
-    font-size: 1rem;
-}
-
-.feedback-message p {
-    line-height: 1.4;
-}
-
-/* Responsive feedback */
-@media (max-width: 768px) {
-    .feedback-message {
-        padding: 0.75rem;
-        font-size: 0.8rem;
-    }
-    
-    .feedback-message h4 {
-        font-size: 0.9rem;
-    }
-    
-    .feedback-close {
-        width: 1.25rem;
-        height: 1.25rem;
-        font-size: 0.75rem;
-        top: 0.5rem;
-        right: 0.5rem;
-    }
+    from { border-color: #fcd34d; box-shadow: 0 0 5px rgba(252, 211, 77, 0.3); }
+    to { border-color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
 }
 
 /* =================================================================== */
-/* ===              MATH AUTOCOMPLETE SİSTEMİ STİLLERİ           === */
+/* === 8. MATEMATİK SEMBOL PANELİ STİLLERİ                         === */
 /* =================================================================== */
-
-/* Smart Math Input Container */
-.smart-math-container {
-    position: relative;
-    font-family: 'Inter', sans-serif;
-}
-
-/* Input alanı özel stilleri */
-#smart-math-input {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    resize: vertical;
-    min-height: 100px;
-    transition: all 0.2s ease;
-}
-
-#smart-math-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-#smart-math-input::placeholder {
-    color: #9ca3af;
-    font-style: italic;
-}
-
-/* Öneri kutusu stilleri */
-#math-suggestions {
-    backdrop-filter: blur(8px);
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    animation: slideDown 0.2s ease-out;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Öneri item stilleri */
-.suggestion-item {
-    transition: all 0.15s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.suggestion-item:hover {
-    background-color: #f3f4f6 !important;
-    transform: translateX(2px);
-}
-
-.suggestion-item:last-child {
-    border-bottom: none;
-}
-
-/* Seçili öneri item */
-.suggestion-item.bg-blue-100 {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
-    border-color: #3b82f6 !important;
-    transform: translateX(4px);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
-}
-
-/* Kategori renkli kenarlıklar */
-.suggestion-item.border-l-blue-400 {
-    border-left-color: #60a5fa !important;
-}
-
-.suggestion-item.border-l-green-400 {
-    border-left-color: #4ade80 !important;
-}
-
-.suggestion-item.border-l-purple-400 {
-    border-left-color: #a78bfa !important;
-}
-
-.suggestion-item.border-l-orange-400 {
-    border-left-color: #fb923c !important;
-}
-
-.suggestion-item.border-l-indigo-400 {
-    border-left-color: #818cf8 !important;
-}
-
-.suggestion-item.border-l-gray-400 {
-    border-left-color: #9ca3af !important;
-}
-
-/* Güven çubuğu animasyonu */
-.confidence-bar {
-    background: #e5e7eb;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.confidence-bar > div {
-    transition: width 0.3s ease;
-    background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
-}
-
-/* Hızlı semboller bölümü */
-.quick-symbol {
-    transition: all 0.2s ease;
-    font-family: 'Times New Roman', serif;
-    font-size: 1rem;
-    font-weight: 500;
-    min-width: 2rem;
-    height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.quick-symbol:hover {
-    background-color: #dbeafe !important;
-    border-color: #3b82f6 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-}
-
-.quick-symbol:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
-}
-
-/* Kabul edilmiş önerinin efekti */
-@keyframes fadeInOut {
-    0% {
-        opacity: 0;
-        transform: translateY(-10px) scale(0.9);
-    }
-    20% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-    80% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-5px) scale(0.95);
-    }
-}
-
-/* Klavye kısayolları */
-kbd {
-    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
-    border: 1px solid #d1d5db;
-    background: #f9fafb;
-    color: #374151;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-/* Kategori etiketleri */
-.suggestion-item .text-gray-600 {
-    font-size: 0.625rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
-}
-
-/* Loading durumu */
-.smart-math-container.loading #smart-math-input {
-    background-image: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
-    background-size: 200% 100%;
-    animation: loading 1.5s infinite;
-}
-
-@keyframes loading {
-    0% {
-        background-position: -200% 0;
-    }
-    100% {
-        background-position: 200% 0;
-    }
-}
-
-/* Scrollbar stilleri */
-#math-suggestions::-webkit-scrollbar {
-    width: 6px;
-}
-
-#math-suggestions::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 3px;
-}
-
-#math-suggestions::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-}
-
-#math-suggestions::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    #smart-math-input {
-        font-size: 0.8rem;
-        padding: 0.75rem;
-        min-height: 80px;
-    }
-    
-    .suggestion-item {
-        padding: 0.75rem;
-    }
-    
-    .suggestion-item .font-mono {
-        font-size: 0.75rem;
-    }
-    
-    .quick-symbol {
-        min-width: 1.75rem;
-        height: 1.75rem;
-        font-size: 0.875rem;
-    }
-    
-    #math-suggestions {
-        max-height: 200px;
-    }
-    
-    .confidence-bar {
-        width: 6px;
-        height: 3px;
-    }
-}
-
-/* Dark mode desteği (opsiyonel) */
-@media (prefers-color-scheme: dark) {
-    #math-suggestions {
-        background: rgba(31, 41, 55, 0.95);
-        border-color: #4b5563;
-    }
-    
-    .suggestion-item {
-        color: #f9fafb;
-        border-color: #4b5563;
-    }
-    
-    .suggestion-item:hover {
-        background-color: #374151 !important;
-    }
-    
-    .quick-symbol {
-        background-color: #374151;
-        border-color: #4b5563;
-        color: #f9fafb;
-    }
-    
-    .quick-symbol:hover {
-        background-color: #4b5563 !important;
-        border-color: #6b7280 !important;
-    }
-}
-
-/* Özel matematik fontu desteği */
-@font-face {
-    font-family: 'Math';
-    src: local('STIX'), local('XITS'), local('Latin Modern Math'), local('TeX Gyre Termes Math');
-    unicode-range: U+2190-21FF, U+2200-22FF, U+2300-23FF, U+2900-297F, U+1D400-1D7FF;
-}
-
-.suggestion-item .font-mono {
-    font-family: 'Math', 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-/* Animasyonların performans optimizasyonu */
-.suggestion-item,
-.quick-symbol,
-.confidence-bar > div {
-    will-change: transform, background-color, border-color;
-}
-
-/* Focus trap için */
-.smart-math-container:focus-within #math-suggestions {
-    display: block;
-}
-
-/* Emoji ve semboller için font */
-.quick-symbol,
-.suggestion-item .font-mono {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-}
-
-/* ===== YENİ SEMBOL KATEGORİLERİ STİLLERİ ===== */
-
-/* Kategori butonları */
-.symbol-category-btn {
-    transition: all 0.2s ease;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.symbol-category-btn:hover:not(.active) {
-    background-color: #e5e7eb !important;
-    transform: translateY(-1px);
-}
-
-.symbol-category-btn.active {
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-}
-
-/* Sembol kategorileri */
-.symbol-category {
-    transition: all 0.3s ease;
-}
-
-.symbol-category.hidden {
-    opacity: 0;
-    transform: translateY(-10px);
-}
-
-.symbol-category.active {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Hızlı semboller - geliştirilmiş */
-.quick-symbol {
-    transition: all 0.2s ease;
-    font-family: 'Times New Roman', 'STIX', serif;
-    font-size: 1rem;
-    font-weight: 500;
-    min-width: 2.25rem;
-    height: 2.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    cursor: pointer;
-}
-
-.quick-symbol:hover {
-    background-color: #dbeafe !important;
-    border-color: #3b82f6 !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.25);
-    z-index: 10;
-}
-
-.quick-symbol:active {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.25);
-}
-
-/* Arama kutusu */
-#symbol-search {
-    transition: all 0.2s ease;
-}
-
-#symbol-search:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-/* Arama sonuçları */
-#symbol-search-results {
-    animation: fadeIn 0.3s ease-out;
-}
-
-#symbol-search-results .quick-symbol {
-    border-color: #10b981;
-    background-color: #f0fdf4;
-}
-
-#symbol-search-results .quick-symbol:hover {
-    background-color: #dcfce7 !important;
-    border-color: #059669 !important;
-}
-
-/* Yeni animasyonlar */
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Tooltip stilleri */
-.quick-symbol[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: 120%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1f2937;
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 50;
-    opacity: 0;
-    animation: tooltipFadeIn 0.2s ease-out 0.5s forwards;
-}
-
-.quick-symbol[title]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 110%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 4px solid transparent;
-    border-top-color: #1f2937;
-    z-index: 50;
-    opacity: 0;
-    animation: tooltipFadeIn 0.2s ease-out 0.5s forwards;
-}
-
-@keyframes tooltipFadeIn {
-    to {
-        opacity: 1;
-    }
-}
-
-/* Responsive düzeltmeler */
-@media (max-width: 768px) {
-    .symbol-category-btn {
-        font-size: 0.625rem;
-        padding: 0.25rem 0.5rem;
-    }
-    
-    .quick-symbol {
-        min-width: 2rem;
-        height: 2rem;
-        font-size: 0.875rem;
-    }
-    
-    .symbol-categories {
-        max-height: 200px;
-        overflow-y: auto;
-    }
-    
-    #symbol-search {
-        font-size: 0.75rem;
-    }
-}
-
-/* Dark mode desteği */
-@media (prefers-color-scheme: dark) {
-    .symbol-category-btn {
-        border-color: #4b5563;
-    }
-    
-    .symbol-category-btn:not(.active) {
-        background-color: #374151;
-        color: #d1d5db;
-    }
-    
-    .quick-symbol {
-        background-color: #374151;
-        border-color: #4b5563;
-        color: #f9fafb;
-    }
-    
-    .quick-symbol:hover {
-        background-color: #4b5563 !important;
-        border-color: #6b7280 !important;
-    }
-    
-    #symbol-search {
-        background-color: #374151;
-        border-color: #4b5563;
-        color: #f9fafb;
-    }
-    
-    #symbol-search::placeholder {
-        color: #9ca3af;
-    }
-}
-
-/* Matematik Sembol Paneli Stilleri */
-.math-symbol-panel-container {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
 
 .math-symbol-panel {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); /* light-blue */
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+    border: 1px solid #bae6fd;
     transition: all 0.3s ease;
 }
 
 /* Kategori Butonları */
 .category-btn {
     padding: 0.5rem 0.75rem;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 500;
-    background-color: #F3F4F6;
-    color: #6B7280;
-    border: 1px solid #D1D5DB;
+    background-color: #fff;
+    color: #4b5563;
+    border: 1px solid #d1d5db;
     border-radius: 0.375rem;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .category-btn:hover {
-    background-color: #E5E7EB;
-    color: #374151;
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
 }
 
 .category-btn.active {
     background-color: #3B82F6;
     color: white;
     border-color: #2563EB;
+    box-shadow: 0 2px 5px -1px rgba(59,130,246,0.3);
 }
 
 /* Sembol Butonları */
 .symbol-btn, .quick-symbol-btn {
     padding: 0.75rem;
     font-size: 1.125rem;
-    font-weight: 600;
     background-color: white;
     color: #374151;
-    border: 2px solid #E5E7EB;
+    border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1736,320 +412,46 @@ kbd {
 
 .symbol-btn:hover, .quick-symbol-btn:hover {
     border-color: #3B82F6;
-    background-color: #EFF6FF;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.1);
-}
-
-.symbol-btn:active, .quick-symbol-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
-}
-
-/* Hızlı Erişim Butonları */
-.quick-symbol-btn {
-    padding: 0.5rem;
-    min-height: 2.5rem;
-    font-size: 1rem;
-}
-
-/* Grid'ler */
-.symbol-grid {
-    transition: all 0.3s ease;
-}
-
-.symbol-grid.hidden {
-    display: none;
-}
-
-.symbol-grid.active {
-    display: block;
-}
-
-/* Panel Actions */
-.panel-actions {
-    align-items: center;
-}
-
-.clear-input-btn, .panel-toggle-btn {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
-    border: 1px solid #D1D5DB;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.clear-input-btn:hover, .panel-toggle-btn:hover {
-    background-color: #F9FAFB;
-    border-color: #9CA3AF;
-}
-
-/* Responsive Design */
-@media (max-width: 640px) {
-    .symbol-btn, .quick-symbol-btn {
-        padding: 0.5rem;
-        font-size: 1rem;
-        min-height: 2.5rem;
-    }
-    
-    .math-symbol-panel {
-        padding: 1rem;
-    }
-    
-    .category-selector {
-        gap: 0.25rem;
-    }
-    
-    .category-btn {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.6875rem;
-    }
-}
-
-/* Animasyonlar */
-@keyframes symbolInsert {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-
-.symbol-insert-animation {
-    animation: symbolInsert 0.3s ease;
-}
-
-/* Tooltip stilleri */
-.symbol-btn[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #1F2937;
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 10;
-    margin-bottom: 0.25rem;
-}
-
-/* Gradient arka plan */
-.math-symbol-panel {
-    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-}
-
-/* İnteraktif Çözüm Stilleri */
-.interactive-solution-workspace {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-/* İlerleme Çubuğu */
-.progress-bar {
-    background: linear-gradient(90deg, #E5E7EB 0%, #D1D5DB 100%);
-}
-
-.progress-fill {
-    background: linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%);
-    transition: width 0.5s ease-in-out;
-}
-
-/* Deneme Göstergesi */
-.attempt-dots {
-    justify-content: flex-end;
-}
-
-.attempt-dots > div {
-    transition: all 0.3s ease;
-}
-
-/* Seçenek Kartları */
-.option-label {
-    transition: all 0.2s ease;
-    cursor: pointer;
-    position: relative;
-}
-
-.option-label:hover {
-    border-color: #3B82F6;
-    background-color: #F3F4F6;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.1);
-}
-
-.option-label:active {
-    transform: translateY(0);
-}
-
-.option-letter {
-    transition: all 0.2s ease;
-    font-weight: 700;
-}
-
-.option-label:hover .option-letter {
-    background-color: #3B82F6;
-    color: white;
-}
-
-.option-label.border-blue-500 .option-letter {
-    background-color: #3B82F6;
-    color: white;
-}
-
-.option-label.border-green-500 .option-letter {
-    background-color: #10B981;
-    color: white;
-}
-
-.option-label.border-red-500 .option-letter {
-    background-color: #EF4444;
-    color: white;
-}
-
-/* Sonuç Mesajları */
-.result-message {
-    animation: slideIn 0.5s ease-out;
-}
-
-.result-message.success {
-    border-left: 4px solid #10B981;
-}
-
-.result-message.warning {
-    border-left: 4px solid #F59E0B;
-}
-
-.result-message.error {
-    border-left: 4px solid #EF4444;
-}
-
-/* Uyarı Mesajları */
-.warning-message {
-    animation: slideIn 0.3s ease-out;
-}
-
-/* İnteraktif Tamamlama */
-.interactive-completion {
-    animation: fadeInUp 0.6s ease-out;
-}
-
-.stat-card {
-    transition: all 0.2s ease;
-}
-
-.stat-card:hover {
+    background-color: #eff6ff;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.1);
 }
 
-.stat-number {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
+/* =================================================================== */
+/* === 9. RESPONSIVE (MOBİL UYUMLULUK) DÜZENLEMELERİ               === */
+/* =================================================================== */
 
-/* Performance Evaluation */
-.performance-evaluation {
-    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
-}
-
-.improvement-tips {
-    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-}
-
-.excellence-message {
-    background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
-}
-
-/* Animasyonlar */
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Loading Animation */
-.interactive-submit-btn svg {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-    .interactive-solution-workspace {
-        padding: 1rem;
+    /* Genel küçültmeler */
+    .btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
     }
-    
-    .progress-section .grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+
+    /* İnteraktif ve Rehber alanları */
+    .interactive-solution-workspace, .smart-guide-workspace, .test-control-panel {
+        padding: 1rem;
     }
     
     .option-label {
         padding: 0.75rem;
     }
-    
+
     .option-letter {
-        width: 1.5rem;
-        height: 1.5rem;
-        font-size: 0.75rem;
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.8rem;
     }
-    
-    .performance-stats {
+
+    /* Tamamlandı ekranı */
+    .stats-grid, .performance-stats {
         grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
     }
-}
 
-@media (max-width: 480px) {
-    .performance-stats {
-        grid-template-columns: 1fr;
-    }
-    
-    .action-buttons .btn {
-        font-size: 0.875rem;
-        padding: 0.75rem 1rem;
-    }
-}
-
-/* Accessibility */
-.option-label:focus-within {
-    outline: 2px solid #3B82F6;
-    outline-offset: 2px;
-}
-
-/* Dark mode support (opsiyonel) */
-@media (prefers-color-scheme: dark) {
-    .interactive-solution-workspace {
-        background-color: #1F2937;
-        color: #F9FAFB;
-    }
-    
-    .option-label {
-        background-color: #374151;
-        border-color: #4B5563;
-        color: #F9FAFB;
-    }
-    
-    .option-label:hover {
-        background-color: #4B5563;
+    /* Sembol paneli */
+    .category-btn {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.75rem;
     }
 }

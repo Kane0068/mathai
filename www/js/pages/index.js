@@ -1,15 +1,15 @@
 // --- Gerekli Modülleri Import Et ---
 import { AuthManager } from '../modules/auth.js';
 import { FirestoreManager } from '../modules/firestore.js';
-import { 
-    showLoading, 
-    showError, 
-    showSuccess, 
-    renderMath, 
-    renderMathInContainer, 
+import {
+    showLoading,
+    showError,
+    showSuccess,
+    renderMath,
+    renderMathInContainer,
     renderSmartContent,
     waitForRenderSystem,
-    showAnimatedLoading 
+    showAnimatedLoading
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
@@ -18,126 +18,21 @@ import { smartGuide } from '../modules/smartGuide.js';
 import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
+import { renderStateManager } from '../modules/renderStateManager.js';
+
+
+import { getProblemSummary, getFullSolution, getInteractiveOptions } from '../services/apiService.js';
 
 
 
-
-// --- Yardımcı Fonksiyonlar ---
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
 const errorHandler = new AdvancedErrorHandler();
 const stateManager = new StateManager();
 
-// --- Sabitler ---
-const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-const masterSolutionPrompt = `MATEMATIK PROBLEM ÇÖZÜCÜ - KATKI KURALLARI
 
-🚨 KRİTİK TALİMATLAR - MUTLAKA TAKİP ET:
-
-1. YANIT FORMATI GEREKSİNİMLERİ:
-   - Yanıt SADECE geçerli JSON olmalı
-   - JSON'dan önce veya sonra ASLA ekstra metin yazma
-   - Tüm string'ler için çift tırnak kullan
-   - Sondaki virgülleri kaldır
-   - Karakter kaçışlarını doğru yap (\\n, \\", \\\\)
-
-2. ALAN ÖZEL KURALLARI - MUTLAKA UYULACAK:
-   
-   adimAciklamasi alanı için:
-   ✅ SADECE Türkçe metin: "Verilen değerleri yerine koy"
-   ❌ YASAK: √, ∫, ∑, π, α, β, θ, ≤, ≥, ≠, ±, $, $$, \\(, \\), \\[, \\]
-   ❌ YASAK: \\frac, \\sqrt, \\sum, \\int, herhangi bir LaTeX komut
-   
-   ipucu alanı için:
-   ✅ SADECE Türkçe metin: "Bu adımda işlem sırasına dikkat et"
-   ❌ YASAK: Tüm matematik sembolleri ve LaTeX komutları
-   
-   cozum_lateks alanı için:
-   ✅ SADECE LaTeX: "$$x = \\frac{a + b}{c}$$"
-   ✅ MUTLAKA $$ ile başla ve bitir
-   ❌ YASAK: Türkçe kelimeler bu alanda
-
-3. ZORUNLU DOĞRULAMA KELİMELERİ:
-   - Türkçe alanlarda kullan: "hesapla", "bul", "belirle", "çöz", "yerine koy"
-   - Matematik sembolleri yerine kelime kullan: "karekök" (√ değil), "pi sayısı" (π değil)
-
-4. ÖRNEK DOĞRU FORMAT:
-   ✅ "adimAciklamasi": "Denklemin sol tarafındaki değerleri topla"
-   ❌ "adimAciklamasi": "x + y = 5 denklemini çöz"
-   
-   ✅ "cozum_lateks": "$$x + y = 5$$"
-   ❌ "cozum_lateks": "x + y = 5"
-
-5. JSON ŞEMA GEREKSİNİMLERİ:
-   - problemOzeti, adimlar ve tamCozumLateks alanları MUTLAKA olmalı
-   - adimlar array'i boş olmamalı
-   - Her adımda adimAciklamasi ve cozum_lateks MUTLAKA olmalı
-
-INTELLIGENT STEP CREATION RULES:
-- Analyze the problem complexity and create appropriate number of steps
-- Simple concept questions (like "which is irrational?"): 1-2 steps maximum
-- Multiple choice questions: Focus on the logical reasoning, not checking each option separately
-- Calculation problems: Break into natural mathematical steps
-- Complex proofs: More detailed steps are acceptable
-
-JSON SCHEMA:
-{
-  "problemOzeti": {
-    "verilenler": [
-      "Turkish explanation text with math: $LaTeX_inline$",
-      "Another data in Turkish: $\\\\frac{a}{b} = 5$"
-    ],
-    "istenen": "What is requested in Turkish: $\\\\sqrt{x^2 + y^2}$"
-  },
-  "adimlar": [
-    {
-      "adimAciklamasi": "PURE VERBAL Turkish explanation - NO MATH SYMBOLS OR LaTeX",
-      "cozum_lateks": "$$pure_latex_expression$$",
-      "ipucu": "PURE VERBAL Turkish helpful hint - NO MATH SYMBOLS OR LaTeX", 
-      "yanlisSecenekler": [
-        {
-          "metin": "$$wrong_latex_expression$$",
-          "yanlisGeriBildirimi": "Turkish explanation why it's wrong with math: $LaTeX_inline$"
-        }
-      ]
-    }
-  ],
-  "tamCozumLateks": [
-    "$$step_1_pure_latex$$",
-    "$$step_2_pure_latex$$", 
-    "$$final_answer_pure_latex$$"
-  ]
-}
-
-STEP EXAMPLES BY PROBLEM TYPE:
-
-For "Which number is irrational?" type questions:
-- Step 1: "Rasyonel ve irrasyonel sayıları ayırt etme kurallarını hatırla"
-- Step 2: "Verilen seçenekleri tek tek incele ve hangisinin kesir şeklinde yazılamayacağını belirle"
-
-For calculation problems:
-- Step 1: "Verilen değerleri formülde yerine koy"
-- Step 2: "İşlem sırasını takip ederek hesapla"
-- Step 3: "Sonucu kontrol et"
-
-For geometry problems:
-- Step 1: "Şeklin özelliklerini belirle"
-- Step 2: "Uygun formülü seç"
-- Step 3: "Hesaplamaları yap"
-
-IMPORTANT: Keep adimAciklamasi and ipucu fields completely free of mathematical symbols, fractions, square roots, or any LaTeX. Use only descriptive Turkish words.
-
-Problem: {PROBLEM_CONTEXT}
-
-RESPOND ONLY IN JSON FORMAT, NO OTHER TEXT.`;
 
 
 // --- Global DOM Önbelleği ---
@@ -153,15 +48,15 @@ async function initializeApp(userData) {
         // Render sisteminin hazır olmasını bekle
         showLoading("Matematik render sistemi başlatılıyor...");
         await waitForRenderSystem();
-        
+
         cacheDOMElements();
         setupEventListeners();
         stateManager.subscribe(renderApp);
         stateManager.setUser(userData);
-        
+
         // Akıllı Rehber sistemini başlat
         smartGuide.setCanvasManager(canvasManager);
-        
+
         showLoading(false);
         console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
     } else {
@@ -186,9 +81,44 @@ function cacheDOMElements() {
         'step-by-step-container'
     ];
     ids.forEach(id => { elements[id] = document.getElementById(id); });
-    
+
     // Ana soru sorma canvas'ını başlat
     canvasManager.initCanvas('handwritingCanvas');
+}
+/**
+ * YENİ YARDIMCI FONKSİYON: Arayüzü Temizler
+ * Çözüm, durum ve hata mesajlarının gösterildiği tüm konteynerları gizler ve temizler.
+ * Ana menüye veya yeni bir soruya geçerken kullanılır.
+ */
+function resetUI() {
+    console.log('🧹 Arayüz temizleniyor...');
+    
+    // 1. Ana sonuç konteynerını gizle
+    if (elements['result-container']) {
+        elements['result-container'].classList.add('hidden');
+    }
+    
+    // 2. Durum mesajı alanını (Yükleniyor..., Hata vb.) temizle
+    if (elements['status-message']) {
+        elements['status-message'].innerHTML = '';
+        elements['status-message'].className = ''; // Class'ları sıfırla
+    }
+    
+    // 3. Çözüm çıktısı alanını temizle
+    if (elements['solution-output']) {
+        elements['solution-output'].innerHTML = '';
+        elements['solution-output'].classList.add('hidden');
+    }
+
+    // 4. (Varsa) Akıllı Rehber veya İnteraktif Çözüm konteynerlarını temizle
+    if (elements['step-by-step-container']) {
+        elements['step-by-step-container'].innerHTML = '';
+    }
+
+    // 5. Loading durumunu state'den de temizle (önemli)
+    showLoading(false);
+
+    console.log('✅ Arayüz başarıyla temizlendi.');
 }
 
 
@@ -196,7 +126,7 @@ function setupEventListeners() {
     window.addEventListener('show-error-message', (event) => {
         stateManager.setError(event.detail.message);
     });
-    
+
     // ErrorHandler'dan gelen hata mesajlarını dinle
     window.addEventListener('show-error-message', (event) => {
         const { message, isCritical } = event.detail;
@@ -207,7 +137,7 @@ function setupEventListeners() {
         }
     });
 
-    const add = (id, event, handler) => { 
+    const add = (id, event, handler) => {
         if (elements[id]) {
             elements[id].addEventListener(event, handler);
         } else {
@@ -217,6 +147,7 @@ function setupEventListeners() {
 
     add('logout-btn', 'click', AuthManager.logout);
     add('new-question-btn', 'click', () => {
+        resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
         stateManager.reset();
         smartGuide.reset();
         setTimeout(() => stateManager.setView('setup'), 100);
@@ -228,41 +159,57 @@ function setupEventListeners() {
     add('startFromPhotoBtn', 'click', () => handleNewProblem('image'));
     add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
     add('startFromTextBtn', 'click', () => handleNewProblem('text'));
-    
+
     // Ana çözüm seçenekleri
-    add('start-solving-workspace-btn', 'click', () => {
-        if (stateManager.getStateValue('problem').solution) {
-            initializeSmartGuide();
-        } else {
-            showError("Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.", false);
+    add('start-solving-workspace-btn', 'click', async () => {
+        // 1. ADIM: Önce problemin doğru çözüm yol haritasını al.
+        const stepsReady = await ensureSolutionStepsAvailable();
+        
+        if (stepsReady) {
+            const currentState = stateManager.getStateValue('problem');
+            // 2. ADIM: Adımlar hazır. smartGuide modülünü bu veriyle başlat.
+            await smartGuide.initializeGuidance(currentState.solution);
+            
+            // 3. ADIM: "Kendim Çözeceğim" görünümüne geç.
+            stateManager.setView('solving');
         }
     });
-    
-    add('show-full-solution-btn', 'click', () => {
-        if (stateManager.getStateValue('problem').solution) {
+
+    add('show-full-solution-btn', 'click', async () => {
+        // Yardımcı fonksiyonu çağır. Adımların hazır olduğundan emin ol.
+        const stepsReady = await ensureSolutionStepsAvailable();
+        
+        // Eğer adımlar başarılı bir şekilde hazırlandıysa, görünümü değiştir.
+        if (stepsReady) {
             stateManager.setView('fullSolution');
-        } else {
-            showError("Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.", false);
         }
     });
-    
-    add('solve-all-btn', 'click', async () => { 
-        if (stateManager.getStateValue('problem').solution) { 
-            // YENİ: İnteraktif çözüm için doğrudan view değiştir
-            stateManager.setView('interactive'); 
-        } else { 
-            showError("Henüz bir çözüm bulunamadı. Lütfen önce bir soru yükleyin.", false); 
-        } 
+
+    add('solve-all-btn', 'click', async () => {
+        // 1. ADIM: Önce problemin doğru çözüm yol haritasını al.
+        const stepsReady = await ensureSolutionStepsAvailable();
+        if (!stepsReady) {
+            // Eğer adımlar alınamazsa işlemi durdur. ensureSolutionStepsAvailable zaten hata mesajını gösterir.
+            return;
+        }
+
+        // 2. ADIM: Adımlar hazır olduğuna göre, interaktif görünümü başlat.
+        // renderApp fonksiyonu, 'interactive' view'a geçildiğinde
+        // renderInteractiveSolution'ı çağırarak süreci başlatacak.
+        stateManager.setView('interactive');
     });
-    
-    add('goBackBtn', 'click', () => stateManager.setView('summary'));
-    
+
+    add('goBackBtn', 'click', () => {
+        resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
+        stateManager.setView('summary');
+    });
+
     // Canvas araçları
     add('hw-pen-btn', 'click', () => setQuestionCanvasTool('pen', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-eraser-btn', 'click', () => setQuestionCanvasTool('eraser', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-clear-btn', 'click', () => canvasManager.clear('handwritingCanvas'));
     add('hw-undo-btn', 'click', () => canvasManager.undo('handwritingCanvas'));
-    
+
     // Fotoğraf yükleme
     add('selectFileBtn', 'click', () => elements['imageUploader'].click());
     add('takePhotoBtn', 'click', () => elements['cameraUploader'].click());
@@ -273,12 +220,68 @@ function setupEventListeners() {
         elements['upload-selection'].classList.remove('hidden');
         elements['startFromPhotoBtn'].disabled = true;
     });
-    
-   
+
+    async function ensureSolutionStepsAvailable() {
+        const currentState = stateManager.getStateValue('problem');
+        if (!currentState || !currentState.solution) {
+            showError("Önce bir soru yüklemelisiniz.", false);
+            return false;
+        }
+
+        if (currentState.solution.adimlar) return true;
+
+        try {
+            showLoading("Çözüm adımları hazırlanıyor...");
+            
+            const onProgressCallback = (message) => {
+                showLoading(message);
+            };
+
+            const source = currentState.solution._source;
+            if (!source || !source.context) {
+                showError("Orijinal soru verisi bulunamadı.", true);
+                return false;
+            }
+
+            const solutionSteps = await getFullSolution(
+                source.context,
+                source.image,
+                onProgressCallback
+            );
+
+            if (solutionSteps && solutionSteps.adimlar) {
+                const completeSolution = { ...currentState.solution, ...solutionSteps };
+                stateManager.setSolution(completeSolution);
+                showLoading(false);
+                return true;
+            } else {
+                showLoading(false);
+                showError("Çözüm adımları alınamadı. Lütfen tekrar deneyin.", false);
+                return false;
+            }
+        } catch (error) {
+            showLoading(false);
+            errorHandler.handleError(error, { operation: 'ensureSolutionSteps' });
+            return false;
+        }
+    }
     // Ana menüye dönme butonları için event delegation
+        // Dinamik buton olayını bulun ve güncelleyin
     document.addEventListener('click', (event) => {
-        if (event.target && event.target.id === 'back-to-main-menu-btn') {
+        const target = event.target;
+
+        // Ana Menüye Dön butonu (farklı yerlerde olabilir)
+        if (target && (target.id === 'back-to-main-menu-btn' || target.closest('#back-to-main-menu-btn'))) {
+            resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
+            interactiveSolutionManager.reset(); // (Güvenlik için) Manager'ları da sıfırla
+            smartGuide.reset();
             stateManager.setView('summary');
+        }
+        
+        // İnteraktif çözüm tamamlandığında çıkan butonlar
+        if (target.id === 'interactive-new-problem-btn' || target.id === 'guide-new-problem-btn') {
+            resetUI();
+            // Bu butonlar zaten stateManager.reset() çağırıyor, o yüzden ekstra bir şey gerekmez.
         }
     });
 }
@@ -287,20 +290,20 @@ function setupEventListeners() {
 async function initializeSmartGuide() {
     try {
         const solutionData = stateManager.getStateValue('problem').solution;
-        
+
         if (!solutionData) {
             throw new Error('Çözüm verisi bulunamadı');
         }
 
         showLoading("İnteraktif çözüm başlatılıyor...");
-        
+
         await smartGuide.initializeGuidance(solutionData);
         stateManager.setView('solving');
-        
+
         showSuccess("İnteraktif çözüm hazır! Adım adım çözüme başlayabilirsiniz.");
-        
+
     } catch (error) {
-        errorHandler.handleError(error, { 
+        errorHandler.handleError(error, {
             operation: 'initializeSmartGuide',
             fallbackMessage: 'İnteraktif çözüm başlatılamadı'
         });
@@ -315,22 +318,22 @@ async function initializeSmartGuide() {
 function handleGuideReset() {
     // SmartGuide sistemini sıfırla
     smartGuide.resetAllAttempts();
-    
+
     // Kullanıcıya açıklayıcı mesaj ver
     showError(
-        "3 deneme hakkınız da bitti. API suistimalini önlemek için soruyu tekrar yüklemeniz gerekiyor. Soru yükleme alanına yönlendiriliyorsunuz.", 
-        true, 
+        "3 deneme hakkınız da bitti. API suistimalini önlemek için soruyu tekrar yüklemeniz gerekiyor. Soru yükleme alanına yönlendiriliyorsunuz.",
+        true,
         () => {
             // Setup view'a geç
             stateManager.setView('setup');
-            
+
             // Tüm input alanlarını temizle
             clearInputAreas();
-            
+
             // Bilgilendirme mesajı
             setTimeout(() => {
                 showSuccess(
-                    "Soruyu tekrar yükleyerek yeni bir çözüm denemesi başlatabilirsiniz. Her adım için yine 3 deneme hakkınız olacak.", 
+                    "Soruyu tekrar yükleyerek yeni bir çözüm denemesi başlatabilirsiniz. Her adım için yine 3 deneme hakkınız olacak.",
                     false
                 );
             }, 1000);
@@ -341,16 +344,16 @@ function handleGuideReset() {
 
 function displayDetailedGuideFeedback(evaluation) {
     const feedbackContainer = document.getElementById('guide-feedback-container');
-    
+
     if (!feedbackContainer) return;
-    
+
     const isCorrect = evaluation.isCorrect;
     const attempts = evaluation.attempts || 0;
     const remaining = evaluation.remaining || 0;
-    
+
     // Feedback mesajı oluştur
     let feedbackHTML = '';
-    
+
     if (isCorrect) {
         // Başarılı feedback
         feedbackHTML = `
@@ -402,14 +405,14 @@ function displayDetailedGuideFeedback(evaluation) {
                 </div>
             </div>
         `;
-    
+
     } else {
         // Yanlış feedback
         const isLastAttempt = evaluation.shouldReset || evaluation.finalAttempt;
         const isBlocked = evaluation.stepSkippingBlocked;
-        
+
         let feedbackClass, bgClass, textClass, iconClass, closeButtonClass;
-        
+
         if (isBlocked) {
             // Adım atlama engellendi
             feedbackClass = 'blocked';
@@ -432,7 +435,7 @@ function displayDetailedGuideFeedback(evaluation) {
             iconClass = 'text-orange-600';
             closeButtonClass = 'bg-orange-200 hover:bg-orange-300 text-orange-700';
         }
-        
+
         feedbackHTML = `
             <div class="feedback-message ${feedbackClass} p-4 rounded-lg mb-4 ${bgClass} border relative">
                 <button class="feedback-close absolute top-2 right-2 w-6 h-6 ${closeButtonClass} rounded-full flex items-center justify-center font-bold text-sm transition-colors" onclick="this.parentElement.remove()">
@@ -444,9 +447,9 @@ function displayDetailedGuideFeedback(evaluation) {
                     </div>
                     <div class="feedback-content flex-1">
                         <h4 class="font-semibold ${textClass} mb-1">
-                            ${isBlocked ? 'Adım Atlanamaz!' : 
-                              isLastAttempt ? 'Son deneme yanlış!' : 
-                              `Yanlış - ${remaining} hak kaldı`}
+                            ${isBlocked ? 'Adım Atlanamaz!' :
+                isLastAttempt ? 'Son deneme yanlış!' :
+                    `Yanlış - ${remaining} hak kaldı`}
                         </h4>
                         <p class="${textClass} text-sm mb-2">${evaluation.message}</p>
                         
@@ -464,12 +467,11 @@ function displayDetailedGuideFeedback(evaluation) {
                         <div class="mt-2 flex items-center gap-2">
                             <span class="text-xs ${textClass} font-medium">Deneme:</span>
                             <div class="flex gap-1">
-                                ${Array.from({length: 3}, (_, i) => `
-                                    <div class="w-2 h-2 rounded-full ${
-                                        i < attempts ? 
-                                            (isLastAttempt ? 'bg-red-400' : 'bg-orange-400') : 
-                                            'bg-gray-200'
-                                    }"></div>
+                                ${Array.from({ length: 3 }, (_, i) => `
+                                    <div class="w-2 h-2 rounded-full ${i < attempts ?
+                            (isLastAttempt ? 'bg-red-400' : 'bg-orange-400') :
+                            'bg-gray-200'
+                        }"></div>
                                 `).join('')}
                             </div>
                         </div>
@@ -492,12 +494,12 @@ function displayDetailedGuideFeedback(evaluation) {
             </div>
         `;
     }
-    
+
     feedbackContainer.innerHTML = feedbackHTML;
-    
+
     // Feedback'i görünür yap ve scroll et
     feedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    
+
     // BUTON DURUMUNU DÜZELT (eğer reset olmayacaksa ve engellenmemişse)
     if (!evaluation.shouldReset && !evaluation.isCorrect && !evaluation.stepSkippingBlocked) {
         setTimeout(() => {
@@ -509,7 +511,7 @@ function displayDetailedGuideFeedback(evaluation) {
             }
         }, 1500);
     }
-    
+
     // Otomatik temizleme sadece reset durumunda (10 saniye sonra)
     if (evaluation.shouldReset) {
         setTimeout(() => {
@@ -520,46 +522,10 @@ function displayDetailedGuideFeedback(evaluation) {
         }, 10000);
     }
 }
-function displayGuideFeedback(evaluation) {
-    const feedbackContainer = document.getElementById('guide-feedback-container');
-    
-    if (!feedbackContainer) return;
-    
-    const isCorrect = evaluation.isCorrect;
-    const message = evaluation.message || 'Değerlendirme tamamlandı';
-    
-    feedbackContainer.innerHTML = `
-        <div class="feedback-message ${isCorrect ? 'success' : 'error'} p-4 rounded-lg mb-4">
-            <div class="flex items-center">
-                <div class="feedback-icon mr-3">
-                    ${isCorrect ? '✅' : '❌'}
-                </div>
-                <div class="feedback-content">
-                    <p class="font-semibold">${message}</p>
-                    ${evaluation.hint ? `<p class="text-sm mt-1 opacity-80">${evaluation.hint}</p>` : ''}
-                </div>
-            </div>
-            ${evaluation.accuracy !== undefined ? `
-                <div class="mt-2 text-sm opacity-70">
-                    Doğruluk: ${Math.round(evaluation.accuracy * 100)}%
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    // Otomatik temizleme
-    setTimeout(() => {
-        if (feedbackContainer.innerHTML.includes('feedback-message')) {
-            feedbackContainer.innerHTML = '';
-        }
-    }, 5000);
-}
-
-
 
 function handleGuideNextStep() {
     const hasNextStep = smartGuide.proceedToNextStep();
-    
+
     if (hasNextStep) {
         renderSmartGuideStep();
         // Input'ları temizle
@@ -567,7 +533,7 @@ function handleGuideNextStep() {
         if (textInput) {
             textInput.value = '';
         }
-        
+
         // Roadmap açıksa yeniden yükle
         const roadmapContent = document.getElementById('roadmap-content');
         if (roadmapContent && !roadmapContent.classList.contains('hidden')) {
@@ -582,7 +548,7 @@ function handleGuideNextStep() {
 
 function handleGuidePreviousStep() {
     const canGoPrevious = smartGuide.goToPreviousStep();
-    
+
     if (canGoPrevious) {
         renderSmartGuideStep();
         // Input'u temizle
@@ -590,7 +556,7 @@ function handleGuidePreviousStep() {
         if (textInput) {
             textInput.value = '';
         }
-        
+
         // Roadmap açıksa yeniden yükle
         const roadmapContent = document.getElementById('roadmap-content');
         if (roadmapContent && !roadmapContent.classList.contains('hidden')) {
@@ -607,16 +573,16 @@ function handleGuidePreviousStep() {
 
 function displayGuideCompletion() {
     const container = document.getElementById('smart-guide-container') || elements['step-by-step-container'];
-    
+
     if (!container) return;
-    
+
     const progress = smartGuide.getProgress();
     const hintStats = smartGuide.getHintStats();
     const attemptStats = smartGuide.getAttemptStats();
-    
+
     // YENİ: Öğrenme raporu al
     const learningReport = smartGuide.getLearningReport();
-    
+
     // İpucu kullanım mesajını oluştur
     let hintMessage = '';
     if (hintStats.totalHints === 0) {
@@ -628,7 +594,7 @@ function displayGuideCompletion() {
     } else {
         hintMessage = `💡 ${hintStats.totalHints} ipucu alarak çözdünüz. Pratik yaparak daha az ipucu ile çözebilirsiniz!`;
     }
-    
+
     // Deneme performans mesajını oluştur
     let attemptMessage = '';
     const avgAttempts = parseFloat(attemptStats.averageAttemptsPerStep);
@@ -639,12 +605,12 @@ function displayGuideCompletion() {
     } else {
         attemptMessage = '💪 Pratik yaparak daha az denemede çözebilirsiniz!';
     }
-    
+
     // YENİ: Öğrenme performans mesajı
     let learningMessage = '';
     let learningColor = 'text-green-600';
-    
-    switch(learningReport.performance) {
+
+    switch (learningReport.performance) {
         case 'excellent':
             learningMessage = '🏆 Mükemmel öğrenme yaklaşımı!';
             learningColor = 'text-green-600';
@@ -658,7 +624,7 @@ function displayGuideCompletion() {
             learningColor = 'text-orange-600';
             break;
     }
-    
+
     container.innerHTML = `
         <div class="completion-message text-center p-8 bg-green-50 rounded-lg">
             <div class="completion-icon text-6xl mb-4">🎉</div>
@@ -777,11 +743,11 @@ function displayGuideCompletion() {
             </div>
         </div>
     `;
-    
+
     // Butonlara event listener ekle
     const newProblemBtn = container.querySelector('#guide-new-problem-btn');
     const reviewSolutionBtn = container.querySelector('#guide-review-solution-btn');
-    
+
     if (newProblemBtn) {
         newProblemBtn.addEventListener('click', () => {
             stateManager.reset();
@@ -789,13 +755,13 @@ function displayGuideCompletion() {
             stateManager.setView('setup');
         });
     }
-    
+
     if (reviewSolutionBtn) {
         reviewSolutionBtn.addEventListener('click', () => {
             stateManager.setView('fullSolution');
         });
     }
-    
+
     const backToMainMenuBtn = container.querySelector('#back-to-main-menu-btn');
     if (backToMainMenuBtn) {
         backToMainMenuBtn.addEventListener('click', () => {
@@ -804,21 +770,35 @@ function displayGuideCompletion() {
     }
 }
 
+// index.js içinde renderApp fonksiyonu - EKSIKSIZ VERSİYON
+
 async function renderApp(state) {
     const { user, ui, problem } = state;
     
-    console.log('renderApp çalıştı, mevcut view:', ui.view);
+    console.log('renderApp executed, current view:', ui.view);
+
+    // Önceki render'ları iptal et
+    if (window.renderStateManager) {
+        renderStateManager.cancelAllRenders();
+    }
 
     // 1. Kullanıcı Bilgilerini Güncelle
-    if (user) {
+    if (user && elements['header-subtitle'] && elements['query-count']) {
         elements['header-subtitle'].textContent = `Hoş geldin, ${user.displayName}!`;
         const limit = user.membershipType === 'premium' ? 200 : 5;
         elements['query-count'].textContent = limit - (user.dailyQueryCount || 0);
     }
     
     // 2. Loading ve Error Durumları
-    showLoading(ui.isLoading ? ui.loadingMessage : false);
-    elements['question-setup-area'].classList.toggle('disabled-area', ui.isLoading);
+    if (ui.isLoading) {
+        showLoading(ui.loadingMessage || "Yükleniyor...");
+    } else {
+        showLoading(false);
+    }
+    
+    if (elements['question-setup-area']) {
+        elements['question-setup-area'].classList.toggle('disabled-area', ui.isLoading);
+    }
     
     if (ui.error) {
         showError(ui.error, true, () => stateManager.clearError());
@@ -828,139 +808,256 @@ async function renderApp(state) {
     const { view, inputMode, handwritingInputType } = ui;
     const isVisible = (v) => v === view;
 
-    // DÜZELTME 1: Tüm view containerlarını doğru şekilde kontrol et
-    elements['question-setup-area'].classList.toggle('hidden', !isVisible('setup'));
-    elements['question-setup-area'].classList.toggle('disabled-area', !isVisible('setup'));
+    // View'lara göre container görünürlüğü
+    toggleContainerVisibility(view, problem);
     
-    // DÜZELTME 2: result-container'ı sadece gerekli view'larda göster
-    const resultContainer = elements['result-container'];
-    const solutionOutput = elements['solution-output'];
-    
-    if (isVisible('interactive')) {
-        // İnteraktif view için özel ayarlar
-        resultContainer.classList.remove('hidden');
-        solutionOutput.classList.remove('hidden');
-        
-        // Diğer containerları gizle
-        elements['solving-workspace'].classList.add('hidden');
-        
-    } else if (isVisible('fullSolution')) {
-        // Tam çözüm view için
-        resultContainer.classList.remove('hidden');
-        solutionOutput.classList.remove('hidden');
-        elements['solving-workspace'].classList.add('hidden');
-        
-    } else if (isVisible('solving')) {
-        // Smart guide view için
-        resultContainer.classList.add('hidden');
-        solutionOutput.classList.add('hidden');
-        elements['solving-workspace'].classList.remove('hidden');
-        
-    } else {
-        // Diğer view'lar için gizle
-        resultContainer.classList.add('hidden');
-        solutionOutput.classList.add('hidden');
-        elements['solving-workspace'].classList.add('hidden');
-    }
-    
-    // Question summary ve action buttons kontrolü
-    if (isVisible('setup')) {
-        elements['question-summary-container'].classList.add('hidden');
-        elements['top-action-buttons'].classList.add('hidden');
-    } else {
-        elements['question-summary-container'].classList.toggle('hidden', !problem.solution);
-        elements['top-action-buttons'].classList.toggle('hidden', !isVisible('summary'));
-    }
-    
-    // Go back button kontrolü
-    if (elements['goBackBtn']) {
-        elements['goBackBtn'].classList.toggle('hidden', !['fullSolution', 'interactive', 'solving'].includes(view));
-    }
-    
-    // 4. Görünüme Özel İçerik Render'ları
-    if (isVisible('setup')) {
-        const isPhoto = inputMode === 'photo';
-        elements['photo-mode-container'].classList.toggle('hidden', !isPhoto);
-        elements['handwriting-mode-container'].classList.toggle('hidden', isPhoto);
-        elements['photo-mode-btn'].classList.toggle('mode-btn-active', isPhoto);
-        elements['handwriting-mode-btn'].classList.toggle('mode-btn-active', !isPhoto);
-
-        if (!isPhoto) {
-            const showCanvas = handwritingInputType === 'canvas';
-            elements['handwriting-canvas-container'].classList.toggle('hidden', !showCanvas);
-            elements['keyboard-input-container'].classList.toggle('hidden', showCanvas);
-            if (showCanvas) {
-                setTimeout(() => {
-                    canvasManager.resizeCanvas('handwritingCanvas');
-                    const data = canvasManager.canvasPool.get('handwritingCanvas');
-                    if (data) {
-                        data.ctx.clearRect(0, 0, data.canvas.width, data.canvas.height);
-                        data.ctx.fillStyle = '#FFFFFF';
-                        data.ctx.fillRect(0, 0, data.canvas.width, data.canvas.height);
-                        canvasManager.applyDrawingSettings('handwritingCanvas');
+    try {
+        // 4. View-Specific Render İşlemleri
+        switch(view) {
+            case 'setup':
+                await renderSetupView(inputMode, handwritingInputType);
+                break;
+                
+            case 'summary':
+                // Sadece soru özetini göster
+                if (problem.solution) {
+                    await renderStateManager.trackRender('summary', () => 
+                        displayQuestionSummary(problem.solution.problemOzeti)
+                    );
+                }
+                break;
+                
+            case 'fullSolution':
+                console.log('Rendering full solution view with Advanced Math Renderer');
+                
+                // Container'ları göster
+                showSolutionContainers();
+                
+                // Çözümü render et
+                await renderStateManager.trackRender('fullSolution', async () => {
+                    await renderFullSolution(problem.solution);
+                });
+                
+                // Soru özetini de render et
+                if (problem.solution) {
+                    await renderStateManager.trackRender('summary-full', () => 
+                        displayQuestionSummary(problem.solution.problemOzeti)
+                    );
+                }
+                break;
+                
+            case 'interactive':
+                console.log('Rendering interactive view - starting');
+                
+                try {
+                    showLoading("İnteraktif çözüm hazırlanıyor...");
+                    
+                    // Container'ları göster
+                    showSolutionContainers();
+                    
+                    // Kısa bekleme
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // İnteraktif çözümü render et
+                    await renderStateManager.trackRender('interactive', async () => {
+                        await renderInteractiveSolution(problem.solution);
+                    });
+                    
+                    // Soru özetini render et
+                    if (problem.solution) {
+                        await renderStateManager.trackRender('summary-interactive', () => 
+                            displayQuestionSummary(problem.solution.problemOzeti)
+                        );
                     }
-                }, 100);
-            }
+                    
+                } catch (error) {
+                    console.error('İnteraktif view render hatası:', error);
+                    showError('İnteraktif çözüm yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', false);
+                } finally {
+                    showLoading(false);
+                }
+                break;
+                
+            case 'solving':
+                console.log('Rendering solving view with Smart Guide');
+                
+                // Workspace'i render et
+                await renderStateManager.trackRender('solving', async () => {
+                    await renderSmartGuideWorkspace();
+                });
+                
+                // Soru özetini render et
+                if (problem.solution) {
+                    await renderStateManager.trackRender('summary-solving', () => 
+                        displayQuestionSummary(problem.solution.problemOzeti)
+                    );
+                }
+                break;
+                
+            default:
+                console.warn('Bilinmeyen view:', view);
         }
         
-        clearInputAreas();
-        
-    } else if (isVisible('fullSolution')) {
-        console.log('Rendering full solution view with Advanced Math Renderer');
-        await renderFullSolution(problem.solution);
-        
-    } else if (isVisible('interactive')) {
-        console.log('Rendering interactive view - DÜZELTME başlıyor');
-        
-        // DÜZELTME 3: İnteraktif view'ı daha güvenli şekilde render et
-        try {
-            // Önce container'ın doğru şekilde görünür olduğunu garanti et
-            resultContainer.classList.remove('hidden');
-            solutionOutput.classList.remove('hidden');
-            
-            // Loading göster
-            showLoading("İnteraktif çözüm hazırlanıyor...");
-            
-            // DOM'un hazır olmasını bekle
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
-            // İnteraktif çözümü render et
-            await renderInteractiveSolution(problem.solution);
-            
-            // Loading'i gizle
-            showLoading(false);
-            
-        } catch (error) {
-            console.error('İnteraktif view render hatası:', error);
-            showLoading(false);
-            showError('İnteraktif çözüm yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', false);
+        // 5. Render istatistiklerini logla
+        if (window.renderStateManager) {
+            const stats = renderStateManager.getStats();
+            console.log('Render stats:', stats);
         }
         
-    } else if (isVisible('solving')) {
-        console.log('Rendering solving view with Smart Guide');
-        await renderSmartGuideWorkspace();
+    } catch (error) {
+        console.error('View render hatası:', error);
+        showError('İçerik yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.', true, () => {
+            location.reload();
+        });
+    }
+}
+
+// Yardımcı fonksiyonlar
+
+function toggleContainerVisibility(view, problem) {
+    // Setup area
+    if (elements['question-setup-area']) {
+        // Setup view'da setup area'yı göster, diğerlerinde disabled yap
+        elements['question-setup-area'].classList.toggle('disabled-area', view !== 'setup');
+    }
+    
+    // Question summary container
+    if (elements['question-summary-container']) {
+        elements['question-summary-container'].classList.toggle('hidden', 
+            view === 'setup' || !problem.solution
+        );
+    }
+    
+    // Top action buttons (Çözüme Başla, Tüm Çözümü Göster, vb.)
+    if (elements['top-action-buttons']) {
+        elements['top-action-buttons'].classList.toggle('hidden', view !== 'summary');
+    }
+    
+    // Solving workspace
+    if (elements['solving-workspace']) {
+        elements['solving-workspace'].classList.toggle('hidden', view !== 'solving');
+    }
+    
+    // Result container ve solution output
+    if (view === 'fullSolution' || view === 'interactive') {
+        showSolutionContainers();
+    } else {
+        hideSolutionContainers();
+    }
+    
+    // Go back button
+    if (elements['goBackBtn']) {
+        const showBackButton = ['fullSolution', 'interactive', 'solving'].includes(view);
+        elements['goBackBtn'].classList.toggle('hidden', !showBackButton);
+    }
+}
+
+function showSolutionContainers() {
+    if (elements['result-container']) {
+        elements['result-container'].classList.remove('hidden');
+        elements['result-container'].style.display = 'block';
+    }
+    
+    if (elements['solution-output']) {
+        elements['solution-output'].classList.remove('hidden');
+        elements['solution-output'].style.display = 'block';
+    }
+}
+
+function hideSolutionContainers() {
+    if (elements['result-container']) {
+        elements['result-container'].classList.add('hidden');
+    }
+    
+    if (elements['solution-output']) {
+        elements['solution-output'].classList.add('hidden');
+    }
+}
+
+async function renderSetupView(inputMode, handwritingInputType) {
+    const isPhoto = inputMode === 'photo';
+    
+    // Photo/Handwriting mode toggle
+    if (elements['photo-mode-container']) {
+        elements['photo-mode-container'].classList.toggle('hidden', !isPhoto);
+    }
+    if (elements['handwriting-mode-container']) {
+        elements['handwriting-mode-container'].classList.toggle('hidden', isPhoto);
+    }
+    if (elements['photo-mode-btn']) {
+        elements['photo-mode-btn'].classList.toggle('mode-btn-active', isPhoto);
+    }
+    if (elements['handwriting-mode-btn']) {
+        elements['handwriting-mode-btn'].classList.toggle('mode-btn-active', !isPhoto);
     }
 
-    // 5. Problem Özetini Render Et (sadece setup view değilse)
-    if (problem.solution && !isVisible('setup')) {
-        await displayQuestionSummary(problem.solution.problemOzeti);
-    } else if (isVisible('setup')) {
+    // Handwriting sub-modes (canvas vs keyboard)
+    if (!isPhoto) {
+        const showCanvas = handwritingInputType === 'canvas';
+        
+        if (elements['handwriting-canvas-container']) {
+            elements['handwriting-canvas-container'].classList.toggle('hidden', !showCanvas);
+        }
+        if (elements['keyboard-input-container']) {
+            elements['keyboard-input-container'].classList.toggle('hidden', showCanvas);
+        }
+        
+        // Canvas setup
+        if (showCanvas && canvasManager) {
+            setTimeout(() => {
+                canvasManager.resizeCanvas('handwritingCanvas');
+                const data = canvasManager.canvasPool.get('handwritingCanvas');
+                if (data) {
+                    data.ctx.clearRect(0, 0, data.canvas.width, data.canvas.height);
+                    data.ctx.fillStyle = '#FFFFFF';
+                    data.ctx.fillRect(0, 0, data.canvas.width, data.canvas.height);
+                    canvasManager.applyDrawingSettings('handwritingCanvas');
+                }
+            }, 100);
+        }
+    }
+    
+    // Input alanlarını temizle
+    clearInputAreas();
+    
+    // Question alanını temizle
+    if (elements['question']) {
         elements['question'].innerHTML = '';
     }
 }
 
+// RenderStateManager yoksa basit bir fallback
+if (!window.renderStateManager) {
+    window.renderStateManager = {
+        trackRender: async (id, fn) => {
+            console.log(`Rendering: ${id}`);
+            try {
+                return await fn();
+            } catch (error) {
+                console.error(`Render error in ${id}:`, error);
+                throw error;
+            }
+        },
+        cancelAllRenders: () => {
+            console.log('Cancel all renders called');
+        },
+        getStats: () => ({
+            activeCount: 0,
+            totalRenders: 0,
+            errorCount: 0,
+            successRate: 100
+        })
+    };
+}
+
 // Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
+    console.log('🧹 Clearing input areas...');
+    
     // Klavye input'unu temizle
     const keyboardInput = document.getElementById('keyboard-input');
     if (keyboardInput) {
         keyboardInput.value = '';
-    }
-    
-    // Guide input'unu temizle
-    const guideInput = document.getElementById('guide-text-input');
-    if (guideInput) {
-        guideInput.value = '';
     }
     
     // Fotoğraf preview'ını temizle
@@ -979,15 +1076,16 @@ function clearInputAreas() {
     const cameraUploader = document.getElementById('cameraUploader');
     if (imageUploader) imageUploader.value = '';
     if (cameraUploader) cameraUploader.value = '';
+    
+    console.log('✅ All input areas cleared');
 }
-
 
 async function renderSmartGuideWorkspace() {
     const container = elements['step-by-step-container'];
     if (!container) return;
-    
+
     const stepInfo = smartGuide.getCurrentStepInfo();
-    
+
     if (!stepInfo) {
         container.innerHTML = `
             <div class="p-6 bg-white rounded-lg shadow-md">
@@ -1003,7 +1101,7 @@ async function renderSmartGuideWorkspace() {
         `;
         return;
     }
-    
+
     await renderSmartGuideStep();
 }
 
@@ -1015,9 +1113,9 @@ async function renderSmartGuideStep() {
     const progress = smartGuide.getProgress();
     const hintStats = smartGuide.getHintStats();
     const attemptInfo = smartGuide.getCurrentStepAttemptInfo();
-    
+
     if (!container || !stepInfo) return;
-    
+
     container.innerHTML = `
         <div class="smart-guide-workspace p-6 bg-white rounded-lg shadow-md">
             <div class="flex justify-between items-center mb-4">
@@ -1055,22 +1153,21 @@ async function renderSmartGuideStep() {
                                 ${attemptInfo.isFailed ? 'Adım Başarısız!' : `Deneme ${attemptInfo.attempts}/${attemptInfo.maxAttempts}`}
                             </h4>
                             <p class="text-sm ${attemptInfo.isFailed ? 'text-red-600' : attemptInfo.attempts > 0 ? 'text-orange-600' : 'text-blue-600'}">
-                                ${attemptInfo.isFailed ? 
-                                    'Bu adım için tüm denemelerinizi kullandınız. Sistem sıfırlanacak.' :
-                                    attemptInfo.attempts === 0 ? 
-                                        'Bu adım için 3 deneme hakkınız var' :
-                                        `${attemptInfo.remaining} deneme hakkınız kaldı`
-                                }
+                                ${attemptInfo.isFailed ?
+            'Bu adım için tüm denemelerinizi kullandınız. Sistem sıfırlanacak.' :
+            attemptInfo.attempts === 0 ?
+                'Bu adım için 3 deneme hakkınız var' :
+                `${attemptInfo.remaining} deneme hakkınız kaldı`
+        }
                             </p>
                         </div>
                     </div>
                     <div class="attempt-dots flex gap-1">
-                        ${Array.from({length: 3}, (_, i) => `
-                            <div class="w-3 h-3 rounded-full ${
-                                i < attemptInfo.attempts ? 
-                                    (attemptInfo.isFailed ? 'bg-red-400' : 'bg-orange-400') : 
-                                    'bg-gray-200'
-                            }"></div>
+                        ${Array.from({ length: 3 }, (_, i) => `
+                            <div class="w-3 h-3 rounded-full ${i < attemptInfo.attempts ?
+                (attemptInfo.isFailed ? 'bg-red-400' : 'bg-orange-400') :
+                'bg-gray-200'
+            }"></div>
                         `).join('')}
                     </div>
                 </div>
@@ -1197,10 +1294,10 @@ async function renderSmartGuideStep() {
             
             <div class="action-buttons flex flex-wrap gap-3 mb-4">
                 <button id="guide-submit-btn" class="btn ${attemptInfo.isFailed ? 'btn-secondary' : 'btn-primary'} flex-1 ${attemptInfo.isFailed ? 'opacity-50 cursor-not-allowed' : ''}" ${attemptInfo.isFailed ? 'disabled' : ''}>
-                    ${attemptInfo.isFailed ? 
-                        '❌ Adım Başarısız' : 
-                        `🎯 Kontrol Et (${attemptInfo.remaining} hak)`
-                    }
+                    ${attemptInfo.isFailed ?
+            '❌ Adım Başarısız' :
+            `🎯 Kontrol Et (${attemptInfo.remaining} hak)`
+        }
                 </button>
                 
                 ${attemptInfo.isFailed ? `
@@ -1223,17 +1320,17 @@ async function renderSmartGuideStep() {
             </div>
         </div>
     `;
-    
+
     // Advanced Math Renderer ile içeriği render et
     setTimeout(async () => {
         await renderSmartContent(container);
         // Roadmap içeriğini yükle
         await loadRoadmapContent();
-        
+
         // YENİ: Matematik Sembol Paneli'ni başlat
         initializeMathSymbolPanel();
     }, 50);
-    
+
     // Event listener'ları yeniden bağla
     setupGuideEventListeners();
 }
@@ -1243,21 +1340,21 @@ function initializeMathSymbolPanel() {
     try {
         // Önceki panelleri temizle
         mathSymbolPanel.destroy();
-        
+
         // Textarea'nın var olup olmadığını kontrol et
         const textarea = document.getElementById('guide-text-input');
         if (textarea) {
             // Paneli oluştur
             const panel = mathSymbolPanel.createPanel('guide-text-input');
-            
+
             if (panel) {
                 console.log('Matematik Sembol Paneli başarıyla başlatıldı');
-                
+
                 // Textarea'ya focus olduğunda panel'i göster
                 textarea.addEventListener('focus', () => {
                     panel.style.display = 'block';
                 });
-                
+
                 // Başlangıçta panel'i göster
                 panel.style.display = 'block';
             } else {
@@ -1276,22 +1373,22 @@ function initializeMathSymbolPanel() {
 async function handleGuideSubmission() {
     const submitBtn = document.getElementById('guide-submit-btn');
     const canvasContainer = document.getElementById('guide-canvas-container');
-    
+
     if (!submitBtn) {
         showError("Gerekli form elemanları bulunamadı.", false);
         return;
     }
-    
+
     // Deneme kontrolü
     const attemptInfo = smartGuide.getCurrentStepAttemptInfo();
     if (!attemptInfo.canAttempt) {
         showError("Bu adım için deneme hakkınız kalmadı.", false);
         return;
     }
-    
+
     let studentInput = '';
     let inputType = 'text';
-    
+
     // Hangi mod aktif olduğunu kontrol et
     if (canvasContainer && !canvasContainer.classList.contains('hidden')) {
         // El yazısı modu aktif
@@ -1299,7 +1396,7 @@ async function handleGuideSubmission() {
         try {
             const canvasData = canvasManager.toDataURL('guide-handwriting-canvas');
             studentInput = canvasData;
-            
+
             if (!studentInput || studentInput === 'data:,' || isCanvasEmpty('guide-handwriting-canvas')) {
                 showError("Lütfen el yazısı ile bir cevap yazın.", false);
                 return;
@@ -1314,13 +1411,13 @@ async function handleGuideSubmission() {
         if (textInput) {
             studentInput = textInput.value.trim();
         }
-        
+
         if (!studentInput) {
             showError("Lütfen bir cevap yazın.", false);
             return;
         }
     }
-    
+
     try {
         // Buton durumunu değiştir
         submitBtn.disabled = true;
@@ -1332,91 +1429,91 @@ async function handleGuideSubmission() {
             </svg>
             Kontrol ediliyor...
         `;
-        
+
         // Öğrenci girişini değerlendir
         const evaluation = await smartGuide.evaluateStudentStep(studentInput, inputType);
-       
-       // Geri bildirimi göster
-       displayDetailedGuideFeedback(evaluation);
-       
-       // Sonuç işlemleri
-       if (evaluation.isCorrect && evaluation.shouldProceed) {
-           
-           // Final cevap mı yoksa normal adım mı kontrol et
-           if (evaluation.shouldComplete || evaluation.finalAnswerGiven) {
-               // Final cevap verildi - tüm problemi tamamla
-               smartGuide.completeProblem();
-               
-               setTimeout(() => {
-                   displayGuideCompletion();
-               }, 3000);
-               
-           } else {
-               // Normal adım tamamlandı - sonraki adıma geç
-               setTimeout(() => {
-                   const hasNextStep = smartGuide.proceedToNextStep();
-                   
-                   if (hasNextStep) {
-                       renderSmartGuideStep();
-                       // Normal textarea'yı temizle
-                       const textInput = document.getElementById('guide-text-input');
-                       if (textInput) {
-                           textInput.value = '';
-                       }
-                   } else {
-                       displayGuideCompletion();
-                   }
-               }, 2000);
-           }
-           
-       } else if (evaluation.shouldReset) {
-           // 3 deneme bitti - sistemi sıfırla
-           setTimeout(() => {
-               handleGuideReset();
-           }, 8000);
-           
-       } else {
-           // Yanlış ama deneme hakkı var - buton durumunu geri al ve sayfayı yenile
-           setTimeout(() => {
-               renderSmartGuideStep();
-           }, 1000);
-       }
-       
-   } catch (error) {
-       errorHandler.handleError(error, { 
-           operation: 'handleGuideSubmission',
-           fallbackMessage: 'Cevap değerlendirilemedi'
-       });
-       showError("Cevabınız değerlendirilirken bir hata oluştu. Lütfen tekrar deneyin.", false);
-       
-       // HATA DURUMUNDA BUTON DURUMUNU GERİ AL
-       submitBtn.disabled = false;
-       submitBtn.innerHTML = originalText;
-   }
+
+        // Geri bildirimi göster
+        displayDetailedGuideFeedback(evaluation);
+
+        // Sonuç işlemleri
+        if (evaluation.isCorrect && evaluation.shouldProceed) {
+
+            // Final cevap mı yoksa normal adım mı kontrol et
+            if (evaluation.shouldComplete || evaluation.finalAnswerGiven) {
+                // Final cevap verildi - tüm problemi tamamla
+                smartGuide.completeProblem();
+
+                setTimeout(() => {
+                    displayGuideCompletion();
+                }, 3000);
+
+            } else {
+                // Normal adım tamamlandı - sonraki adıma geç
+                setTimeout(() => {
+                    const hasNextStep = smartGuide.proceedToNextStep();
+
+                    if (hasNextStep) {
+                        renderSmartGuideStep();
+                        // Normal textarea'yı temizle
+                        const textInput = document.getElementById('guide-text-input');
+                        if (textInput) {
+                            textInput.value = '';
+                        }
+                    } else {
+                        displayGuideCompletion();
+                    }
+                }, 2000);
+            }
+
+        } else if (evaluation.shouldReset) {
+            // 3 deneme bitti - sistemi sıfırla
+            setTimeout(() => {
+                handleGuideReset();
+            }, 8000);
+
+        } else {
+            // Yanlış ama deneme hakkı var - buton durumunu geri al ve sayfayı yenile
+            setTimeout(() => {
+                renderSmartGuideStep();
+            }, 1000);
+        }
+
+    } catch (error) {
+        errorHandler.handleError(error, {
+            operation: 'handleGuideSubmission',
+            fallbackMessage: 'Cevap değerlendirilemedi'
+        });
+        showError("Cevabınız değerlendirilirken bir hata oluştu. Lütfen tekrar deneyin.", false);
+
+        // HATA DURUMUNDA BUTON DURUMUNU GERİ AL
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
 }
 
- 
+
 function toggleHint() {
     const hintResult = smartGuide.toggleHint();
     const toggleBtn = document.getElementById('toggle-hint-btn');
     const btnText = document.getElementById('hint-btn-text');
     const statusMessage = document.getElementById('hint-status-message');
-    
+
     if (!toggleBtn || !btnText) return;
-    
+
     if (hintResult.isVisible) {
         // Hangi mod aktif olduğunu kontrol et
         const canvasContainer = document.getElementById('guide-canvas-container');
         const textContainer = document.getElementById('guide-text-input-container');
-        
+
         const isCanvasMode = canvasContainer && !canvasContainer.classList.contains('hidden');
         const isTextMode = textContainer && !textContainer.classList.contains('hidden');
-        
+
         if (isCanvasMode) {
             // Canvas modunda - hint preview göster
             showCanvasHintPreview(hintResult.stepHint);
             updateHintUI(true, hintResult, 'canvas');
-            
+
         } else if (isTextMode) {
             // Klavye modunda - hint preview göster
             showTextHintPreview(hintResult.stepHint);
@@ -1424,7 +1521,7 @@ function toggleHint() {
         } else {
             showError('Aktif giriş modu bulunamadı.', false);
         }
-        
+
     } else {
         // İpucuyu temizle
         clearAllHints();
@@ -1447,20 +1544,20 @@ function hideCanvasHintPreview() {
 function showTextHintPreview(stepHint) {
     const hintPreview = document.getElementById('text-hint-preview');
     const hintContent = document.getElementById('text-hint-content');
-    
+
     if (!hintPreview || !hintContent || !stepHint) return;
-    
+
     // Hint içeriğini hazırla - sadece ipucu kısmını al (adımAciklamasi değil)
     const hintText = stepHint.hint || stepHint.ipucu || 'İpucu mevcut değil';
-    
+
     // İçeriği ayarla - LaTeX render etme, sadece düz metin
     hintContent.textContent = hintText;
     hintContent.removeAttribute('data-content'); // Smart content render etmeyi engelle
-    
+
     // Preview'ı göster
     hintPreview.classList.remove('hidden');
     hintPreview.classList.add('animate-fadeIn');
-    
+
     console.log('Text hint preview gösterildi (sadece sözel):', hintText);
 }
 
@@ -1468,20 +1565,20 @@ function showTextHintPreview(stepHint) {
 function showCanvasHintPreview(stepHint) {
     const hintPreview = document.getElementById('canvas-hint-preview');
     const hintContent = document.getElementById('canvas-hint-content');
-    
+
     if (!hintPreview || !hintContent || !stepHint) return;
-    
+
     // Hint içeriğini hazırla - sadece ipucu kısmını al
     const hintText = stepHint.hint || stepHint.ipucu || 'İpucu mevcut değil';
-    
+
     // İçeriği ayarla - LaTeX render etme, sadece düz metin
     hintContent.textContent = hintText;
     hintContent.removeAttribute('data-content'); // Smart content render etmeyi engelle
-    
+
     // Preview'ı göster
     hintPreview.classList.remove('hidden');
     hintPreview.classList.add('animate-fadeIn');
-    
+
     console.log('Canvas hint preview gösterildi (sadece sözel):', hintText);
 }
 
@@ -1507,38 +1604,38 @@ function updateHintUI(isVisible, hintResult, mode) {
     const toggleBtn = document.getElementById('toggle-hint-btn');
     const btnText = document.getElementById('hint-btn-text');
     const statusMessage = document.getElementById('hint-status-message');
-    
+
     if (isVisible) {
         // Buton durumunu güncelle
         btnText.textContent = '🚫 İpucuyu Temizle';
         toggleBtn.classList.remove('btn-tertiary');
         toggleBtn.classList.add('btn-secondary');
-        
+
         // Status mesajını göster
         if (statusMessage) {
             const modeText = mode === 'canvas' ? 'canvas\'ta görüntüleniyor' : 'yazı alanında görüntüleniyor';
             statusMessage.querySelector('p').textContent = `💡 İpucu ${modeText}. Üzerine yazabilirsiniz!`;
             statusMessage.style.display = 'block';
         }
-        
+
         // Başarı mesajı göster
         if (hintResult.hintCount === 1) {
             showSuccess(`İlk ipucunuz görüntülendi! Toplam: ${hintResult.hintCount} ipucu`, true, 3000);
         } else {
             showSuccess(`${hintResult.hintCount}. ipucunuz görüntülendi!`, true, 3000);
         }
-        
+
     } else {
         // Buton durumunu güncelle
         btnText.textContent = '💡 İpucu Al';
         toggleBtn.classList.remove('btn-secondary');
         toggleBtn.classList.add('btn-tertiary');
-        
+
         // Status mesajını gizle
         if (statusMessage) {
             statusMessage.style.display = 'none';
         }
-        
+
         showSuccess('İpucu temizlendi.', true, 2000);
     }
 }
@@ -1549,21 +1646,21 @@ function updateHintUI(isVisible, hintResult, mode) {
 async function loadRoadmapContent() {
     const solutionData = stateManager.getStateValue('problem').solution;
     if (!solutionData || !solutionData.adimlar) return;
-    
+
     const roadmapSteps = document.getElementById('roadmap-steps');
     if (!roadmapSteps) return;
-    
+
     // Tüm adımları roadmap olarak göster
     let roadmapHTML = '';
-    
+
     solutionData.adimlar.forEach((step, index) => {
         const stepNumber = index + 1;
         const isCurrentStep = stepNumber === smartGuide.getCurrentStepInfo()?.stepNumber;
-        
+
         // Sadece sözel açıklama kullan - LaTeX render etme
         const description = step.adimAciklamasi || `Adım ${stepNumber} açıklaması`;
         const hint = step.ipucu || '';
-        
+
         roadmapHTML += `
             <div class="roadmap-step-item ${isCurrentStep ? 'current-step' : ''} p-3 rounded-lg border transition-all duration-200">
                 <div class="flex items-start gap-3">
@@ -1583,9 +1680,9 @@ async function loadRoadmapContent() {
             </div>
         `;
     });
-    
+
     roadmapSteps.innerHTML = roadmapHTML;
-    
+
     // Smart content render etmeye gerek yok çünkü sadece düz metin var
     console.log('Roadmap sadece sözel açıklamalar ile yüklendi');
 }
@@ -1594,11 +1691,11 @@ function toggleRoadmap() {
     const roadmapContent = document.getElementById('roadmap-content');
     const toggleBtn = document.getElementById('toggle-roadmap-btn');
     const btnText = document.getElementById('roadmap-btn-text');
-    
+
     if (!roadmapContent || !toggleBtn || !btnText) return;
-    
+
     const isHidden = roadmapContent.classList.contains('hidden');
-    
+
     if (isHidden) {
         // Roadmap'i göster
         roadmapContent.classList.remove('hidden');
@@ -1623,32 +1720,32 @@ function setupGuideEventListeners() {
     const prevBtn = document.getElementById('guide-previous-step-btn');
     const resetBtn = document.getElementById('guide-reset-btn'); // YENİ EKLEME
     const textInput = document.getElementById('guide-text-input');
-    
+
     // Roadmap ve İpucu toggle butonları
     const roadmapToggleBtn = document.getElementById('toggle-roadmap-btn');
     const hintToggleBtn = document.getElementById('toggle-hint-btn');
-    
+
     // Giriş modu butonları
     const textModeBtn = document.getElementById('guide-text-mode-btn');
     const handwritingModeBtn = document.getElementById('guide-handwriting-mode-btn');
-    
+
     // Canvas araçları
     const penBtn = document.getElementById('guide-pen-btn');
     const eraserBtn = document.getElementById('guide-eraser-btn');
     const clearBtn = document.getElementById('guide-clear-btn');
-    
+
     if (submitBtn) {
         submitBtn.addEventListener('click', handleGuideSubmission);
     }
-    
+
     if (nextBtn) {
         nextBtn.addEventListener('click', handleGuideNextStep);
     }
-    
+
     if (prevBtn) {
         prevBtn.addEventListener('click', handleGuidePreviousStep);
     }
-    
+
     // YENİ EKLEME: Reset butonu
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -1657,17 +1754,17 @@ function setupGuideEventListeners() {
             }
         });
     }
-    
+
     // Roadmap toggle event listener
     if (roadmapToggleBtn) {
         roadmapToggleBtn.addEventListener('click', toggleRoadmap);
     }
-    
+
     // İpucu toggle event listener
     if (hintToggleBtn) {
         hintToggleBtn.addEventListener('click', toggleHint);
     }
-    
+
     if (textInput) {
         textInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1680,31 +1777,31 @@ function setupGuideEventListeners() {
             }
         });
     }
-    
+
     // Giriş modu değiştirme
     if (textModeBtn) {
         textModeBtn.addEventListener('click', () => switchGuideInputMode('text'));
     }
-    
+
     if (handwritingModeBtn) {
         handwritingModeBtn.addEventListener('click', () => switchGuideInputMode('handwriting'));
     }
-    
+
     // Canvas araçları
     if (penBtn) {
         penBtn.addEventListener('click', () => setGuideCanvasTool('pen'));
     }
-    
+
     if (eraserBtn) {
         eraserBtn.addEventListener('click', () => setGuideCanvasTool('eraser'));
     }
-    
+
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
             canvasManager.clear('guide-handwriting-canvas');
         });
     }
-    
+
     // İnteraktif çözüm canvas'ını başlat
     setTimeout(() => {
         try {
@@ -1719,7 +1816,7 @@ function setupGuideEventListeners() {
             console.error('Canvas başlatma hatası:', error);
         }
     }, 100);
-    
+
     // Ana menüye dönme butonu
     const backToMainMenuBtn = document.getElementById('back-to-main-menu-btn');
     if (backToMainMenuBtn) {
@@ -1736,18 +1833,18 @@ function switchGuideInputMode(mode) {
     const canvasContainer = document.getElementById('guide-canvas-container');
     const textModeBtn = document.getElementById('guide-text-mode-btn');
     const handwritingModeBtn = document.getElementById('guide-handwriting-mode-btn');
-    
+
     if (mode === 'text') {
         // Akıllı klavye moduna geç
         textContainer.classList.remove('hidden');
         canvasContainer.classList.add('hidden');
-        
+
         textModeBtn.classList.add('bg-blue-100', 'text-blue-700', 'font-medium');
         textModeBtn.classList.remove('bg-gray-100', 'text-gray-600');
-        
+
         handwritingModeBtn.classList.add('bg-gray-100', 'text-gray-600');
         handwritingModeBtn.classList.remove('bg-blue-100', 'text-blue-700', 'font-medium');
-        
+
         // Matematik sembol paneli'ni başlat/göster
         setTimeout(() => {
             initializeMathSymbolPanel();
@@ -1756,21 +1853,21 @@ function switchGuideInputMode(mode) {
                 textInput.focus();
             }
         }, 100);
-        
+
     } else if (mode === 'handwriting') {
         // El yazısı moduna geç
         textContainer.classList.add('hidden');
         canvasContainer.classList.remove('hidden');
-        
+
         handwritingModeBtn.classList.add('bg-blue-100', 'text-blue-700', 'font-medium');
         handwritingModeBtn.classList.remove('bg-gray-100', 'text-gray-600');
-        
+
         textModeBtn.classList.add('bg-gray-100', 'text-gray-600');
         textModeBtn.classList.remove('bg-blue-100', 'text-blue-700', 'font-medium');
-        
+
         // Matematik sembol paneli'ni gizle
         mathSymbolPanel.destroy();
-        
+
         // Canvas'ı yeniden boyutlandır
         setTimeout(() => {
             canvasManager.resizeCanvas('guide-handwriting-canvas');
@@ -1783,7 +1880,7 @@ function setGuideCanvasTool(tool) {
         console.error('Canvas manager bulunamadı');
         return;
     }
-    
+
     try {
         canvasManager.setTool('guide-handwriting-canvas', tool);
         console.log(`Guide canvas tool set to: ${tool}`);
@@ -1796,27 +1893,27 @@ function setGuideCanvasTool(tool) {
 function isCanvasEmpty(canvasId) {
     const data = canvasManager.canvasPool.get(canvasId);
     if (!data) return true;
-    
+
     const { canvas, ctx } = data;
-    
+
     try {
         // Canvas'ın image data'sını al
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
-        
+
         // Beyaz arka plan hariç herhangi bir piksel var mı kontrol et
         for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
             const a = data[i + 3];
-            
+
             // Beyaz olmayan veya şeffaf olmayan piksel varsa canvas boş değil
             if (r !== 255 || g !== 255 || b !== 255 || a !== 255) {
                 return false;
             }
         }
-        
+
         return true; // Tüm pikseller beyaz, canvas boş
     } catch (error) {
         console.error('Canvas boşluk kontrolü hatası:', error);
@@ -1824,381 +1921,72 @@ function isCanvasEmpty(canvasId) {
     }
 }
 
+// www/js/index.js
+
 async function handleNewProblem(sourceType) {
     let sourceData;
     let problemContextForPrompt = "Görseldeki matematik problemini çöz.";
+    let imageBase64 = null;
 
     try {
         if (sourceType === 'image') {
             const file = document.getElementById('imageUploader').files[0];
-            if (!file) return showError("Lütfen bir resim dosyası seçin.", false);
-            sourceData = await toBase64(file);
+            if (!file) { showError("Lütfen bir resim dosyası seçin.", false); return; }
+            imageBase64 = await toBase64(file);
         } else if (sourceType === 'canvas') {
-            sourceData = canvasManager.toDataURL('handwritingCanvas').split(',')[1];
+            const dataUrl = canvasManager.toDataURL('handwritingCanvas');
+            if(!dataUrl) { showError("Lütfen bir çizim yapın.", false); return; }
+            imageBase64 = dataUrl.split(',')[1];
         } else if (sourceType === 'text') {
             sourceData = elements['keyboard-input'].value.trim();
-            if (!sourceData) return showError("Lütfen bir soru yazın.", false);
+            if (!sourceData) { showError("Lütfen bir soru yazın.", false); return; }
             problemContextForPrompt = sourceData;
         }
 
         if (!await handleQueryDecrement()) return;
 
-        // Animasyonlu yükleme mesajları
-        const analysisSteps = [
-            { title: "Soru içerik kontrolü yapılıyor", description: "Yapay zeka soruyu analiz ediyor..." },
-            { title: "Matematiksel ifadeler tespit ediliyor", description: "Formüller ve denklemler çözümleniyor..." },
-            { title: "Problem özeti oluşturuluyor", description: "Verilenler ve istenenler belirleniyor..." },
-            { title: "Çözüm adımları hazırlanıyor", description: "Adım adım çözüm planı oluşturuluyor..." },
-            { title: "Render sistemi hazırlanıyor", description: "Advanced Math Renderer ile optimize ediliyor..." }
-        ];
-        
-        showAnimatedLoading(analysisSteps, 1500);
+        showLoading("Soru analiz ediliyor, lütfen bekleyin...");
 
-        const promptText = masterSolutionPrompt.replace('{PROBLEM_CONTEXT}', problemContextForPrompt);
-        const payloadParts = [{ text: promptText }];
-        if (sourceType !== 'text') {
-            payloadParts.push({ inlineData: { mimeType: 'image/png', data: sourceData } });
-        }
-        
-        const solution = await makeApiCall({ contents: [{ role: "user", parts: payloadParts }] });
-        
-        if (solution) {
-            // YENİ EKLEME: Final validation before using solution
-            const finalValidation = validateApiResponse(solution);
-            
-            if (finalValidation.valid || finalValidation.correctedResponse) {
-                const finalSolution = finalValidation.correctedResponse || solution;
-                
-                // SmartGuide'ı sıfırla
-                smartGuide.reset();
-                
-                stateManager.setSolution(finalSolution);
-                stateManager.setView('summary');
-                
-                // YENİ EKLEME: Başarı mesajına validation bilgisi ekle
-                const successMessage = finalValidation.warnings.length > 0 ? 
-                    "Problem çözüldü! (Bazı düzeltmeler uygulandı)" : 
-                    "Problem başarıyla çözüldü! Advanced Math Renderer ile optimize edildi.";
-                
-                showSuccess(successMessage, false);
-                
-                await FirestoreManager.incrementQueryCount();
-            } else {
-                console.error('Final validation failed:', finalValidation.errors);
-                showError("API yanıtı geçersiz format içeriyor. Lütfen tekrar deneyin.", false);
-            }
-        } else {
-            showError("Problem çözülürken bir hata oluştu. Lütfen tekrar deneyin.", false);
-        }
-    } catch (error) {
-        errorHandler.handleError(error, { 
-            operation: 'handleNewProblem',
-            context: { sourceType }
-        });
-        showError("Problem analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.", false);
-    } finally {
-        showLoading(false);
-    }
-}
-/**
- * YENİ EKLEME: API yanıt doğrulama şeması
- */
-const responseValidationSchema = {
-    required: ["problemOzeti", "adimlar", "tamCozumLateks"],
-    properties: {
-        problemOzeti: {
-            required: ["verilenler", "istenen"],
-            verilenler: { type: "array", minItems: 1 },
-            istenen: { type: "string", minLength: 1 }
-        },
-        adimlar: {
-            type: "array",
-            minItems: 1,
-            itemSchema: {
-                required: ["adimAciklamasi", "cozum_lateks"],
-                adimAciklamasi: { 
-                    type: "string",
-                    forbiddenChars: /[\$\\√∫∑π±≤≥≠αβθγδ]/g,
-                    minLength: 5
-                },
-                cozum_lateks: { 
-                    type: "string",
-                    requiredPattern: /^\$\$.*\$\$$/,
-                    minLength: 4
-                },
-                ipucu: { 
-                    type: "string",
-                    forbiddenChars: /[\$\\√∫∑π±≤≥≠αβθγδ]/g,
-                    optional: true
-                }
-            }
-        },
-        tamCozumLateks: {
-            type: "array",
-            minItems: 1
-        }
-    }
-};
-
-/**
- * YENİ EKLEME: API yanıtını doğrulama fonksiyonu
- */
-function validateApiResponse(response) {
-    const errors = [];
-    const warnings = [];
-    
-    try {
-        // 1. Temel yapı kontrolü
-        if (!response || typeof response !== 'object') {
-            errors.push('Geçersiz JSON yapısı');
-            return { valid: false, errors, warnings, correctedResponse: null };
-        }
-        
-        // 2. Zorunlu alan kontrolü
-        responseValidationSchema.required.forEach(field => {
-            if (!response[field]) {
-                errors.push(`Zorunlu alan eksik: ${field}`);
-            }
-        });
-        
-        // 3. problemOzeti kontrolü
-        if (response.problemOzeti) {
-            if (!response.problemOzeti.verilenler || !Array.isArray(response.problemOzeti.verilenler)) {
-                errors.push('problemOzeti.verilenler array olmalı');
-            }
-            if (!response.problemOzeti.istenen || typeof response.problemOzeti.istenen !== 'string') {
-                errors.push('problemOzeti.istenen string olmalı');
-            }
-        }
-        
-        // 4. adimlar array kontrolü
-        if (response.adimlar) {
-            if (!Array.isArray(response.adimlar) || response.adimlar.length === 0) {
-                errors.push('adimlar boş olmayan array olmalı');
-            } else {
-                response.adimlar.forEach((step, index) => {
-                    // adimAciklamasi kontrolü
-                    if (!step.adimAciklamasi) {
-                        errors.push(`Adım ${index + 1}: adimAciklamasi eksik`);
-                    } else {
-                        const forbiddenMatches = step.adimAciklamasi.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
-                        if (forbiddenMatches) {
-                            errors.push(`Adım ${index + 1}: adimAciklamasi'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
-                        }
-                        if (step.adimAciklamasi.length < 5) {
-                            warnings.push(`Adım ${index + 1}: adimAciklamasi çok kısa`);
-                        }
-                    }
-                    
-                    // cozum_lateks kontrolü
-                    if (!step.cozum_lateks) {
-                        errors.push(`Adım ${index + 1}: cozum_lateks eksik`);
-                    } else {
-                        if (!step.cozum_lateks.startsWith('$$') || !step.cozum_lateks.endsWith('$$')) {
-                            errors.push(`Adım ${index + 1}: cozum_lateks $$ ile başlayıp bitmeli`);
-                        }
-                        if (step.cozum_lateks.length < 4) {
-                            errors.push(`Adım ${index + 1}: cozum_lateks çok kısa`);
-                        }
-                    }
-                    
-                    // ipucu kontrolü (opsiyonel)
-                    if (step.ipucu) {
-                        const forbiddenMatches = step.ipucu.match(/[\$\\√∫∑π±≤≥≠αβθγδ]/g);
-                        if (forbiddenMatches) {
-                            errors.push(`Adım ${index + 1}: ipucu'da yasak karakterler: ${forbiddenMatches.join(', ')}`);
-                        }
-                    }
-                });
-            }
-        }
-        
-        // 5. tamCozumLateks kontrolü
-        if (response.tamCozumLateks) {
-            if (!Array.isArray(response.tamCozumLateks) || response.tamCozumLateks.length === 0) {
-                errors.push('tamCozumLateks boş olmayan array olmalı');
-            }
-        }
-        
-        return { 
-            valid: errors.length === 0, 
-            errors, 
-            warnings,
-            correctedResponse: errors.length > 0 ? autoCorrectResponse(response, errors) : response
+        const onProgressCallback = (message) => {
+            showLoading(message);
         };
-        
-    } catch (validationError) {
-        errors.push(`Doğrulama hatası: ${validationError.message}`);
-        return { valid: false, errors, warnings, correctedResponse: null };
-    }
-}
 
-/**
- * YENİ EKLEME: Otomatik düzeltme fonksiyonu
- */
-function autoCorrectResponse(response, errors) {
-    let corrected = JSON.parse(JSON.stringify(response));
-    
-    try {
-        // adimlar düzeltmeleri
-        if (corrected.adimlar && Array.isArray(corrected.adimlar)) {
-            corrected.adimlar.forEach((step, index) => {
-                // adimAciklamasi düzeltme
-                if (step.adimAciklamasi) {
-                    step.adimAciklamasi = cleanTextFromMathSymbols(step.adimAciklamasi);
-                }
-                
-                // ipucu düzeltme
-                if (step.ipucu) {
-                    step.ipucu = cleanTextFromMathSymbols(step.ipucu);
-                }
-                
-                // cozum_lateks format düzeltme
-                if (step.cozum_lateks) {
-                    if (!step.cozum_lateks.startsWith('$$')) {
-                        step.cozum_lateks = `$$${step.cozum_lateks.replace(/^\$+|\$+$/g, '')}$$`;
-                    }
-                    if (!step.cozum_lateks.endsWith('$$') && step.cozum_lateks.startsWith('$$')) {
-                        step.cozum_lateks = step.cozum_lateks + '$$';
-                    }
-                }
-            });
-        }
-        
-        // Eksik alanları varsayılan değerlerle doldur
-        if (!corrected.problemOzeti) {
-            corrected.problemOzeti = {
-                verilenler: ["Problem verisi analiz edildi"],
-                istenen: "Problemin çözümü"
+        const summaryResponse = await getProblemSummary(
+            problemContextForPrompt,
+            imageBase64,
+            onProgressCallback
+        );
+
+        if (summaryResponse && summaryResponse.problemOzeti) {
+            const initialSolution = {
+                problemOzeti: summaryResponse.problemOzeti,
+                adimlar: null,
+                tamCozumLateks: null,
+                _source: { context: problemContextForPrompt, image: imageBase64 }
             };
-        }
-        
-        if (!corrected.tamCozumLateks || !Array.isArray(corrected.tamCozumLateks)) {
-            corrected.tamCozumLateks = ["$$\\text{Çözüm adımları üretildi}$$"];
-        }
-        
-        return corrected;
-        
-    } catch (correctionError) {
-        console.error('Otomatik düzeltme hatası:', correctionError);
-        return response; // Orijinali döndür
-    }
-}
-
-/**
- * YENİ EKLEME: Metinden matematik sembollerini temizleme
- */
-function cleanTextFromMathSymbols(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    return text
-        // LaTeX komutlarını kaldır
-        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        .replace(/\\[a-zA-Z]+/g, '')
-        // Matematik sembollerini kaldır
-        .replace(/[\$\\√∫∑π±≤≥≠αβθγδ]/g, '')
-        // Delimiterleri kaldır
-        .replace(/\$+/g, '')
-        .replace(/\\\(/g, '').replace(/\\\)/g, '')
-        .replace(/\\\[/g, '').replace(/\\\]/g, '')
-        // Fazla boşlukları temizle
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-/**
- * YENİ EKLEME: JSON parse'ı güvenli hale getirme
- */
-function safeJsonParse(text) {
-    try {
-        // Önce temel temizlik
-        let cleaned = text.trim();
-        
-        // JSON dışındaki metinleri kaldır
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            cleaned = jsonMatch[0];
+            stateManager.setSolution(initialSolution);
+            stateManager.setView('summary');
+            showLoading(false);
+            showSuccess("Problem özeti başarıyla oluşturuldu.", false);
         } else {
-            throw new Error('JSON yapısı bulunamadı');
+            showLoading(false);
+            showError(
+                "Yapay zeka bu soruyu işlerken bir sorunla karşılaştı. Lütfen soruyu daha net bir şekilde tekrar sormayı deneyin.",
+                true,
+                () => { stateManager.reset(); clearInputAreas(); }
+            );
         }
-        
-        // Yaygın JSON hatalarını düzelt
-        cleaned = cleaned
-            .replace(/,(\s*[}\]])/g, '$1') // Sondaki virgülleri kaldır
-            .replace(/\\n/g, '\\\\n') // Newline escape düzelt
-            .replace(/\\"/g, '\\\\"') // Quote escape düzelt
-            .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Control karakterleri kaldır
-        
-        return JSON.parse(cleaned);
-        
-    } catch (parseError) {
-        console.error('JSON parse hatası:', parseError.message);
-        throw new Error(`JSON parse başarısız: ${parseError.message}`);
-    }
-}
-
-// --- API ÇAĞRISI ---
-export async function makeApiCall(payload) {
-    try {
-        const response = await fetch(GEMINI_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} - ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-            const content = data.candidates[0].content.parts[0].text;
-            
-            try {
-                // GÜNCELLENEN: Güvenli JSON parse kullan
-                const parsedContent = safeJsonParse(content);
-                
-                // YENİ EKLEME: Yanıtı doğrula
-                const validation = validateApiResponse(parsedContent);
-                
-                if (!validation.valid) {
-                    console.warn('API yanıt doğrulama hataları:', validation.errors);
-                    console.warn('API yanıt uyarıları:', validation.warnings);
-                    
-                    // Düzeltilmiş yanıt varsa onu kullan
-                    if (validation.correctedResponse) {
-                        console.log('Otomatik düzeltilmiş yanıt kullanılıyor');
-                        return validation.correctedResponse;
-                    } else {
-                        throw new Error(`Yanıt doğrulama başarısız: ${validation.errors.join(', ')}`);
-                    }
-                }
-                
-                // Uyarıları logla
-                if (validation.warnings.length > 0) {
-                    console.warn('API yanıt uyarıları:', validation.warnings);
-                }
-                
-                return parsedContent;
-                
-            } catch (parseError) {
-                console.error('JSON parse hatası:', parseError);
-                throw new Error(`Yanıt işleme hatası: ${parseError.message}`);
-            }
-        }
-        
-        throw new Error('Geçersiz API yanıtı - content bulunamadı');
     } catch (error) {
-        console.error('API çağrısı hatası:', error);
-        throw error;
+        errorHandler.handleError(error, { operation: 'handleNewProblem' });
     }
 }
+
+
 // --- YARDIMCI FONKSİYONLAR ---
 async function handleQueryDecrement() {
     const userData = stateManager.getStateValue('user');
     const limit = userData.membershipType === 'premium' ? 200 : 5;
-    
+
     if (userData.dailyQueryCount >= limit) {
         showError(`Günlük sorgu limitiniz (${limit}) doldu. Yarın tekrar deneyin.`, false);
         return false;
@@ -2217,19 +2005,19 @@ async function toBase64(file) {
 
 async function handleFileSelect(file) {
     if (!file) return;
-    
+
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
         showError("Dosya boyutu 5MB'dan büyük olamaz.", false);
         return;
     }
-    
+
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
         showError("Sadece JPEG, PNG, GIF ve WebP dosyaları desteklenir.", false);
         return;
     }
-    
+
     try {
         const base64 = await toBase64(file);
         elements['imagePreview'].src = `data:${file.type};base64,${base64}`;
@@ -2258,262 +2046,471 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 // --- PROBLEM ÖZETİ VE RENDER FONKSİYONLARI ---
+
+
+
 async function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
-    
+
     const { verilenler, istenen } = problemOzeti;
-    
+
     let summaryHTML = '<div class="problem-summary bg-blue-50 p-4 rounded-lg mb-4">';
     summaryHTML += '<h3 class="font-semibold text-blue-800 mb-2">Problem Özeti:</h3>';
-    
+
     if (verilenler && verilenler.length > 0) {
         summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
-        verilenler.forEach((veri, index) => {
-            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}" id="verilen-${index}"></li>`;
+        verilenler.forEach((veri) => {
+            // DEĞİŞİKLİK: CSS sınıfını 'smart-content' olarak güncelledik.
+            // Bu, render motorunun bu elementi bulmasını sağlar.
+            summaryHTML += `<li class="smart-content">${veri}</li>`;
         });
         summaryHTML += '</ul></div>';
     }
-    
+
     if (istenen) {
-        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}" id="istenen-content"></span></div>`;
+        // DEĞİŞİKLİK: CSS sınıfını 'smart-content' olarak güncelledik.
+        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content">${istenen}</span></div>`;
     }
-    
+
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
-    
-    // Advanced Math Renderer ile render et
-    setTimeout(async () => {
-        await renderSmartContent(elements['question']);
-    }, 50);
+
+    // Bu kısım doğru. DOM güncellendikten sonra render motorunu çağırır.
+    setTimeout(() => {
+        renderMathInContainer(elements['question']);
+    }, 100);
 }
 
 
-async function renderFullSolution(solution) {
-    console.log('renderFullSolution called with Advanced Math Renderer:', solution);
+
+
+// HTML oluşturma fonksiyonu - Full Solution için
+function generateSolutionHTML(solution) {
     if (!solution) {
-        console.log('No solution provided to renderFullSolution');
-        return;
+        return '<div class="p-4 bg-red-50 text-red-700 rounded-lg">Çözüm verisi bulunamadı.</div>';
     }
-    
+
     let html = '<div class="full-solution-container">';
     html += '<div class="flex justify-between items-center mb-4">';
     html += '<h3 class="text-xl font-bold text-gray-800">Tam Çözüm</h3>';
     html += '<button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>';
     html += '</div>';
-    
+
     if (solution.adimlar && solution.adimlar.length > 0) {
         solution.adimlar.forEach((step, index) => {
-            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
-            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="step-description mb-2 text-gray-700 smart-content" data-content="${escapeHtml(step.adimAciklamasi || 'Adım açıklaması')}" id="step-desc-${index}"></div>`;
-            if (step.cozum_lateks) {
-                html += `<div class="latex-content mb-2" data-latex="${escapeHtml(step.cozum_lateks)}" id="step-latex-${index}"></div>`;
-            }
-            if (step.ipucu) {
-                html += `<div class="step-hint p-2 bg-yellow-50 rounded text-sm smart-content" data-content="${escapeHtml(step.ipucu)}" id="step-hint-${index}"></div>`;
-            }
-            html += '</div>';
+            html += `
+                <div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                    <div class="step-header flex items-center gap-3 mb-3">
+                        <div class="step-number w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold">
+                            ${index + 1}
+                        </div>
+                        <h4 class="font-semibold text-gray-800">Adım ${index + 1}</h4>
+                    </div>
+                    
+                    <div class="step-content space-y-3">
+                        <!-- Adım açıklaması -->
+                        <div class="step-description text-gray-700 smart-content" 
+                             data-content="${escapeHtml(step.adimAciklamasi || `${index + 1}. adım açıklaması`)}" 
+                             id="step-desc-${index}">
+                            ${escapeHtml(step.adimAciklamasi || 'Yükleniyor...')}
+                        </div>
+                        
+                        <!-- LaTeX çözüm -->
+                        ${step.cozum_lateks ? `
+                            <div class="latex-content p-3 bg-white rounded border border-gray-200" 
+                                 data-latex="${escapeHtml(step.cozum_lateks)}" 
+                                 id="step-latex-${index}">
+                                <div class="text-center text-gray-400">
+                                    <span class="loader inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></span>
+                                    Matematik ifadesi yükleniyor...
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- İpucu -->
+                        ${step.ipucu ? `
+                            <div class="step-hint p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-yellow-600">💡</span>
+                                    <div class="step-hint-content smart-content flex-1 text-sm text-yellow-800" 
+                                         data-content="${escapeHtml(step.ipucu)}" 
+                                         id="step-hint-${index}">
+                                        ${escapeHtml(step.ipucu)}
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
         });
     } else if (solution.tamCozumLateks && solution.tamCozumLateks.length > 0) {
+        // Eski format desteği
         solution.tamCozumLateks.forEach((latex, index) => {
-            html += `<div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg">`;
-            html += `<div class="step-number font-semibold text-blue-600 mb-2">${index + 1}. Adım</div>`;
-            html += `<div class="latex-content" data-latex="${escapeHtml(latex)}" id="legacy-step-${index}"></div>`;
-            html += '</div>';
+            html += `
+                <div class="solution-step p-4 mb-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="step-number font-semibold text-blue-600 mb-2">Adım ${index + 1}</div>
+                    <div class="latex-content p-3 bg-white rounded" 
+                         data-latex="${escapeHtml(latex)}" 
+                         id="legacy-step-${index}">
+                        <div class="text-center text-gray-400">Yükleniyor...</div>
+                    </div>
+                </div>
+            `;
         });
     } else {
-        html += '<div class="p-4 bg-red-50 text-red-700 rounded-lg">';
-        html += '<p>Çözüm verisi bulunamadı. Lütfen tekrar deneyin.</p>';
-        html += '</div>';
+        html += `
+            <div class="p-6 bg-yellow-50 text-yellow-800 rounded-lg border border-yellow-300">
+                <p class="font-semibold mb-2">⚠️ Çözüm Adımları Bulunamadı</p>
+                <p class="text-sm">Lütfen "Çözüme Başla" butonuna tıklayarak çözüm adımlarını yükleyin.</p>
+            </div>
+        `;
     }
-    
+
     html += '</div>';
-    elements['solution-output'].innerHTML = html;
-    
-    // Advanced Math Renderer ile render et
-    setTimeout(async () => {
-        await renderMathInContainer(elements['solution-output'], false);
-    }, 100);
-    
-    console.log('renderFullSolution completed with Advanced Math Renderer');
+    return html;
 }
 
-async function renderInteractiveSolution(solution) {
-    console.log('renderInteractiveSolution çağrıldı - DÜZELTME versiyonu');
+// Güncellenmiş renderFullSolution fonksiyonu
+async function renderFullSolution(solution) {
+    console.log('renderFullSolution called with solution:', solution);
     
-    if (!solution || !solution.adimlar || !solution.adimlar.length) {
-        elements['solution-output'].innerHTML = `
+    const container = elements['solution-output'];
+    if (!container) {
+        console.error('solution-output container bulunamadı');
+        return;
+    }
+
+    if (!solution) {
+        container.innerHTML = `
             <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>İnteraktif çözüm için adımlar bulunamadı.</p>
-                <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
-            </div>`;
+                <p>Çözüm verisi bulunamadı. Lütfen önce bir soru yükleyin.</p>
+            </div>
+        `;
         return;
     }
 
     try {
-        console.log('İnteraktif çözüm sistemi başlatılıyor...');
+        // 1. Loading state göster
+        container.innerHTML = `
+            <div class="text-center p-8">
+                <div class="inline-block">
+                    <div class="loader w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-600">Çözüm hazırlanıyor...</p>
+                </div>
+            </div>
+        `;
+
+        // 2. HTML'i oluştur
+        const html = generateSolutionHTML(solution);
         
-        // DÜZELTME: Sistemi tamamen sıfırla
-        interactiveSolutionManager.reset();
-        
-        // DOM elementinin varlığını kontrol et
-        const solutionOutput = elements['solution-output'];
-        if (!solutionOutput) {
-            throw new Error('solution-output elementi bulunamadı');
-        }
-        
-        // Container'ın görünür olduğunu garanti et
-        solutionOutput.classList.remove('hidden');
-        const resultContainer = elements['result-container'];
-        if (resultContainer) {
-            resultContainer.classList.remove('hidden');
-        }
-        
-        // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // İnteraktif çözüm sistemini başlat
-        const initResult = interactiveSolutionManager.initializeInteractiveSolution(solution);
-        console.log('İnteraktif sistem başlatıldı:', initResult);
-        
-        // Kısa bekleme
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // İlk adım seçeneklerini oluştur
-        const firstStepData = interactiveSolutionManager.generateStepOptions(0);
-        console.log('İlk adım verileri oluşturuldu:', firstStepData);
-        
-        if (!firstStepData) {
-            throw new Error('İlk adım verileri oluşturulamadı');
-        }
-        
-        // DÜZELTME: Ana container'ı güvenli şekilde render et
-        console.log('İnteraktif adım render ediliyor...');
-        await renderInteractiveStep(firstStepData);
-        
-        // Final kontrol - container'ın görünür olduğunu garanti et
-        setTimeout(() => {
-            const containers = [
-                elements['result-container'],
-                elements['solution-output']
-            ];
-            
-            containers.forEach(container => {
-                if (container) {
-                    container.classList.remove('hidden');
+        // 3. Container'a HTML'i yerleştir
+        container.innerHTML = html;
+
+        // 4. Event listener'ları ekle
+        setupFullSolutionEventListeners();
+
+        // 5. Progressive render başlat
+        await renderSolutionProgressive(container, solution);
+
+        console.log('renderFullSolution completed successfully');
+
+    } catch (error) {
+        console.error('renderFullSolution error:', error);
+        container.innerHTML = `
+            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                <p class="font-semibold mb-2">Çözüm Yükleme Hatası</p>
+                <p class="text-sm">${error.message}</p>
+                <button onclick="location.reload()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                    Sayfayı Yenile
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Progressive render fonksiyonu
+async function renderSolutionProgressive(container, solution) {
+    if (!container) return;
+
+    // İlk 3 adımı hemen render et
+    const visibleSteps = container.querySelectorAll('.solution-step:nth-child(-n+3)');
+    
+    for (const stepElement of visibleSteps) {
+        await renderStepContent(stepElement);
+        // Her adım arası kısa bekleme
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // Geri kalan adımları lazy load et
+    const remainingSteps = container.querySelectorAll('.solution-step:nth-child(n+4)');
+    
+    if (remainingSteps.length > 0) {
+        // Intersection Observer ile görünür olduklarında render et
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    renderStepContent(entry.target);
+                    observer.unobserve(entry.target);
                 }
             });
-            
-            const optionsContainer = document.getElementById('interactive-options-container');
-            const options = optionsContainer ? optionsContainer.children : [];
-            console.log('Final kontrol - seçenek sayısı:', options.length);
-            
-            if (options.length === 0) {
-                console.warn('Seçenekler kayboldu, yeniden render edilecek');
-                renderInteractiveStep(firstStepData);
-            }
-        }, 300);
-        
-    } catch (error) {
-        console.error('İnteraktif çözüm başlatma hatası:', error);
-        elements['solution-output'].innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>İnteraktif çözüm başlatılamadı: ${error.message}</p>
-                <button id="back-to-main-menu-btn" class="btn btn-secondary mt-2">Ana Menüye Dön</button>
-            </div>`;
+        }, { 
+            rootMargin: '100px',
+            threshold: 0.1 
+        });
+
+        remainingSteps.forEach(step => observer.observe(step));
     }
 }
 
-function debugViewState() {
-    const currentView = stateManager.getStateValue('ui').view;
-    const containers = {
-        'result-container': elements['result-container'],
-        'solution-output': elements['solution-output'],
-        'solving-workspace': elements['solving-workspace'],
-        'question-setup-area': elements['question-setup-area']
-    };
+// Tek bir adımın içeriğini render et
+async function renderStepContent(stepElement) {
+    if (!stepElement || stepElement.dataset.rendered === 'true') return;
+
+    try {
+        // Açıklama render
+        const descElement = stepElement.querySelector('.step-description');
+        if (descElement && descElement.dataset.content) {
+            await renderMath(descElement.dataset.content, descElement, false);
+        }
+
+        // LaTeX render
+        const latexElement = stepElement.querySelector('.latex-content');
+        if (latexElement && latexElement.dataset.latex) {
+            await renderMath(latexElement.dataset.latex, latexElement, true);
+        }
+
+        // İpucu render
+        const hintElement = stepElement.querySelector('.step-hint-content');
+        if (hintElement && hintElement.dataset.content) {
+            await renderMath(hintElement.dataset.content, hintElement, false);
+        }
+
+        // Rendered olarak işaretle
+        stepElement.dataset.rendered = 'true';
+        
+        // Başarılı render animasyonu
+        stepElement.classList.add('opacity-0');
+        setTimeout(() => {
+            stepElement.classList.remove('opacity-0');
+            stepElement.classList.add('opacity-100', 'transition-opacity', 'duration-300');
+        }, 50);
+
+    } catch (error) {
+        console.error('Step render error:', error);
+        stepElement.classList.add('render-error', 'border-red-300', 'bg-red-50');
+    }
+}
+
+// Event listener'ları kur
+function setupFullSolutionEventListeners() {
+    // Ana menüye dön butonu
+    const backToMainBtn = document.getElementById('back-to-main-menu-btn');
+    if (backToMainBtn) {
+        backToMainBtn.addEventListener('click', () => {
+            if (window.interactiveSolutionManager) {
+                interactiveSolutionManager.reset();
+            }
+            if (window.smartGuide) {
+                smartGuide.reset();
+            }
+            if (window.stateManager) {
+                stateManager.setView('summary');
+            }
+        });
+    }
+}
+
+
+
+// CSS animasyonları için stil ekle (eğer yoksa)
+if (!document.getElementById('solution-animations')) {
+    const style = document.createElement('style');
+    style.id = 'solution-animations';
+    style.textContent = `
+        .loader {
+            border-top-color: #3B82F6;
+        }
+        
+        .solution-step {
+            transition: all 0.3s ease;
+        }
+        
+        .solution-step:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .opacity-0 {
+            opacity: 0;
+        }
+        
+        .opacity-100 {
+            opacity: 1;
+        }
+        
+        .transition-opacity {
+            transition-property: opacity;
+        }
+        
+        .duration-300 {
+            transition-duration: 300ms;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+
+
+async function renderInteractiveSolution(solution) {
+    console.log('🔄 Dinamik İnteraktif Çözüm Başlatılıyor (Nihai Düzeltme)');
     
-    console.log('=== VIEW DEBUG ===');
-    console.log('Current view:', currentView);
+    showLoading("İlk interaktif adım hazırlanıyor...");
+
+    try {
+        if (!solution || !solution.adimlar || !solution.adimlar.length === 0) {
+            displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
+            return;
+        }
+
+        // SORUNA NEDEN OLAN forceShowContainers() SATIRI BURADAN KALDIRILDI.
+        
+        interactiveSolutionManager.initializeInteractiveSolution(solution);
+        
+        const firstStepData = solution.adimlar[0];
+        const optionsResponse = await getInteractiveOptions(firstStepData);
+
+        if (!optionsResponse || !optionsResponse.yanlisSecenekler) {
+            throw new Error("API'den çeldirici seçenekler alınamadı.");
+        }
+        
+        solution.adimlar[0].yanlisSecenekler = optionsResponse.yanlisSecenekler;
+        const stepOptionsToRender = interactiveSolutionManager.generateStepOptions(0);
+
+        if (!stepOptionsToRender || !stepOptionsToRender.success) {
+            throw new Error("İlk adım seçenekleri oluşturulamadı.");
+        }
+
+        await renderInteractiveStepSafe(stepOptionsToRender);
+
+    } catch (error) {
+        console.error('❌ İnteraktif çözüm başlatma hatası:', error);
+        displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
+    } finally {
+        // Bu blok artık inline stil tarafından engellenmeyeceği için
+        // yükleme mesajını başarıyla gizleyecektir.
+        showLoading(false);
+        console.log('✅ İnteraktif hazırlık süreci tamamlandı, yükleme mesajı gizlendi.');
+    }
+}
+
+function forceShowContainers() {
+    const containers = [
+        'result-container',
+        'solution-output'
+    ];
     
-    Object.entries(containers).forEach(([name, element]) => {
+    containers.forEach(id => {
+        const element = document.getElementById(id);
         if (element) {
-            console.log(`${name}:`, {
-                hidden: element.classList.contains('hidden'),
-                classes: element.className,
-                innerHTML: element.innerHTML.substring(0, 100) + '...'
-            });
-        } else {
-            console.log(`${name}: ELEMENT NOT FOUND`);
+            element.classList.remove('hidden');
+            element.style.display = 'block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            console.log(`✅ Force shown: ${id}`);
         }
     });
-    console.log('=== END DEBUG ===');
+}
+// Güvenli DOM hazırlık bekleme
+function waitForDOMReady() {
+    return new Promise(resolve => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', resolve);
+        } else {
+            setTimeout(resolve, 50); // Kısa gecikme
+        }
+    });
+}
+// www/js/index.js
+
+async function renderInteractiveStepSafe(stepData) {
+    console.log('🔄 Güvenli adım render başlıyor (NİHAİ DÜZELTME İLE):', stepData);
+
+    try {
+        const solutionOutput = document.getElementById('solution-output');
+        if (!solutionOutput) {
+            throw new Error('solution-output container bulunamadı');
+        }
+
+        // 1. HTML'i oluştur ve DOM'a ekle
+        solutionOutput.innerHTML = generateInteractiveHTML(stepData);
+
+        // 2. Event listener'ları kur
+        setupInteractiveEventListeners(stepData);
+
+        // 3. NİHAİ RENDER MANTIĞI:
+        // DOM güncellendikten sonra, her bir seçeneği tek tek bul ve render et.
+        setTimeout(() => {
+            try {
+                console.log('🔄 Her bir seçenek tek tek render ediliyor...');
+                
+                // Konteyner içindeki TÜM '.smart-content' elementlerini bul
+                const mathElements = solutionOutput.querySelectorAll('.smart-content');
+                
+                if (mathElements.length === 0) {
+                    console.warn('Render edilecek matematik içeriği bulunamadı.');
+                    return;
+                }
+
+                console.log(`${mathElements.length} adet matematik içeriği bulundu ve işleniyor.`);
+
+                // Her birini render et
+                mathElements.forEach(element => {
+                    // Elementin kendi içeriğini al ve doğrudan kendisine render et
+                    const contentToRender = element.textContent || element.innerHTML;
+                    renderMath(contentToRender, element, false);
+                });
+
+                console.log('✅ Tüm seçeneklerin render işlemi tamamlandı.');
+
+            } catch (mathError) {
+                console.error('⚠️ Seçenekler render edilirken kritik hata:', mathError);
+            }
+        }, 150); // DOM'un tam olarak güncellenmesi için kısa bir bekleme süresi
+
+    } catch (error) {
+        console.error('❌ Adım render hatası:', error);
+        displayInteractiveError(`Render hatası: ${error.message}`);
+    }
 }
 
-// Adım render fonksiyonu
-async function renderInteractiveStep(stepData) {
-    console.log('renderInteractiveStep başlıyor - DÜZELTME versiyonu:', stepData);
-    
+function generateInteractiveHTML(stepData) {
     if (!stepData || !stepData.options) {
-        console.error('Step data eksik:', stepData);
-        return;
+        console.error('❌ generateInteractiveHTML: stepData eksik');
+        return '<div class="p-4 text-red-600">Adım verisi eksik</div>';
     }
-    
+
     const progress = (stepData.stepNumber / stepData.totalSteps) * 100;
-    
-    // DÜZELTME: innerHTML'i güvenli şekilde ayarla
-    const solutionOutput = elements['solution-output'];
-    
-    if (!solutionOutput) {
-        console.error('solution-output elementi bulunamadı');
-        return;
-    }
-    
-    // Önce container'ı temizle
-    solutionOutput.innerHTML = '';
-    
-    // DÜZELTME: HTML'i parça parça oluştur
-    const htmlContent = generateInteractiveStepHTML(stepData, progress);
-    
-    // HTML'i ayarla
-    solutionOutput.innerHTML = htmlContent;
-    
-    // DÜZELTME: DOM'un hazır olmasını bekle
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Event listener'ları kur
-    console.log('Event listener\'ları kuruluyor...');
-    setupInteractiveSolutionListeners(stepData);
-    
-    // DÜZELTME: Math render'ı ayrı bir task olarak çalıştır
-    setTimeout(async () => {
-        try {
-            console.log('Math rendering başlıyor...');
-            await renderMathInContainer(solutionOutput, false);
-            console.log('Math rendering tamamlandı');
-            
-            // Final doğrulama
-            const optionsContainer = document.getElementById('interactive-options-container');
-            if (optionsContainer) {
-                console.log('Final doğrulama - seçenek sayısı:', optionsContainer.children.length);
-            }
-        } catch (renderError) {
-            console.error('Math render hatası:', renderError);
-        }
-    }, 150);
-}
-function generateInteractiveStepHTML(stepData, progress) {
+
     return `
         <div class="interactive-solution-workspace p-6 bg-white rounded-lg shadow-md">
+            <!-- Header -->
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800">İnteraktif Çözüm</h3>
                 <button id="back-to-main-menu-btn" class="btn btn-secondary">Ana Menüye Dön</button>
             </div>
             
-            <!-- İlerleme ve Deneme Bilgisi -->
+            <!-- Progress -->
             <div class="progress-section mb-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <!-- İlerleme -->
                     <div class="progress-info">
                         <div class="flex justify-between items-center mb-2">
                             <h4 class="text-lg font-semibold text-gray-800">Adım ${stepData.stepNumber} / ${stepData.totalSteps}</h4>
@@ -2525,7 +2522,6 @@ function generateInteractiveStepHTML(stepData, progress) {
                         </div>
                     </div>
                     
-                    <!-- Deneme Bilgisi -->
                     <div class="attempt-info">
                         <div class="flex justify-between items-center mb-2">
                             <h4 class="text-lg font-semibold text-gray-800">Deneme Hakkı</h4>
@@ -2534,17 +2530,13 @@ function generateInteractiveStepHTML(stepData, progress) {
                             </span>
                         </div>
                         <div class="attempt-dots flex gap-1">
-                            ${Array.from({length: stepData.maxAttempts}, (_, i) => `
-                                <div class="w-3 h-3 rounded-full ${
-                                    i < stepData.attempts ? 'bg-red-400' : 'bg-gray-200'
-                                }"></div>
-                            `).join('')}
+                            ${generateAttemptDots(stepData.attempts, stepData.maxAttempts)}
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Adım Açıklaması -->
+            <!-- Step Description -->
             <div class="step-description mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 class="font-semibold text-blue-800 mb-2 flex items-center gap-2">
                     <span class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
@@ -2552,29 +2544,27 @@ function generateInteractiveStepHTML(stepData, progress) {
                     </span>
                     Bu Adımda Yapılacak:
                 </h4>
-                <div class="text-blue-700 smart-content" data-content="${escapeHtml(stepData.stepDescription)}" id="interactive-step-desc"></div>
+                <div class="text-blue-700" id="interactive-step-desc">${escapeHtml(stepData.stepDescription)}</div>
             </div>
             
-            <!-- Uyarı Mesajları -->
-            <div id="interactive-warning-container" class="mb-4">
-                <!-- Uyarı mesajları buraya gelecek -->
-            </div>
+            <!-- Warning Container -->
+            <div id="interactive-warning-container" class="mb-4"></div>
             
-            <!-- Seçenekler - DÜZELTME: Daha güvenli HTML -->
+            <!-- Options -->
             <div class="options-section mb-6">
                 <h4 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 12l2 2 4-4"/>
                         <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
                     </svg>
                     Doğru çözüm adımını seçin:
                 </h4>
                 <div class="options-grid space-y-3" id="interactive-options-container">
-                    ${generateOptionsHTML(stepData)}
+                    ${generateInteractiveOptions(stepData.options)}
                 </div>
             </div>
             
-            <!-- Aksiyon Butonları -->
+            <!-- Action Buttons -->
             <div class="action-buttons flex flex-wrap gap-3 mb-4">
                 <button id="interactive-submit-btn" class="btn btn-primary flex-1" disabled>
                     Seçimi Onayla
@@ -2584,12 +2574,10 @@ function generateInteractiveStepHTML(stepData, progress) {
                 </button>
             </div>
             
-            <!-- Sonuç Alanı -->
-            <div id="interactive-result-container" class="result-section hidden mb-4">
-                <!-- Sonuç mesajları buraya gelecek -->
-            </div>
+            <!-- Result Container -->
+            <div id="interactive-result-container" class="result-section hidden mb-4"></div>
             
-            <!-- Navigasyon -->
+            <!-- Navigation -->
             <div class="navigation-section flex justify-between mt-6 pt-4 border-t">
                 <div class="text-sm text-gray-500">
                     <p><strong>Kurallar:</strong></p>
@@ -2609,121 +2597,510 @@ function generateInteractiveStepHTML(stepData, progress) {
     `;
 }
 
-function generateOptionsHTML(stepData) {
-    if (!stepData.options || !Array.isArray(stepData.options)) {
-        console.error('Options verisi eksik:', stepData);
-        return '<p class="text-red-600">Seçenekler yüklenemedi</p>';
+function generateAttemptDots(attempts, maxAttempts) {
+    return Array.from({ length: maxAttempts }, (_, i) => `
+        <div class="w-3 h-3 rounded-full ${i < attempts ? 'bg-red-400' : 'bg-gray-200'
+        }"></div>
+    `).join('');
+}
+
+
+function generateInteractiveOptions(options) {
+    if (!Array.isArray(options) || options.length === 0) {
+        console.error('❌ generateInteractiveOptions: Geçersiz options');
+        return '<div class="text-red-600 p-4">Seçenekler yüklenemedi</div>';
     }
-    
-    return stepData.options.map((option, index) => {
-        const optionLetter = String.fromCharCode(65 + index);
-        const optionId = option.displayId !== undefined ? option.displayId : index;
-        
+
+    console.log('🔄 Seçenekler oluşturuluyor:', options);
+
+    return options.map((option, index) => {
+        const displayId = option.displayId !== undefined ? option.displayId : index;
+        const optionLetter = String.fromCharCode(65 + index); // A, B, C...
+
         return `
-            <label class="option-label flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all duration-200" data-option-id="${optionId}">
-                <input type="radio" name="interactive-step-${stepData.stepNumber}" value="${optionId}" class="sr-only">
+            <label class="option-label flex items-start p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-all duration-200" 
+                   data-option-id="${displayId}">
+                <input type="radio" 
+                       name="interactive-step-options" 
+                       value="${displayId}" 
+                       class="sr-only option-radio">
                 <div class="option-letter w-8 h-8 bg-gray-200 text-gray-700 rounded-full flex items-center justify-center font-bold text-sm mr-3 mt-0.5">
                     ${optionLetter}
                 </div>
                 <div class="option-content flex-1">
-                    <div class="text-gray-800 font-medium smart-content" data-content="${escapeHtml(option.text)}" id="option-text-${optionId}"></div>
-                    ${option.latex ? `<div class="text-sm text-gray-600 mt-1 latex-content" data-latex="${escapeHtml(option.latex)}" id="option-latex-${optionId}"></div>` : ''}
+                    
+                    <div class="text-gray-800 font-medium option-text smart-content" id="option-text-${displayId}">
+                        ${option.text || 'Seçenek metni eksik'}
+                    </div>
+
+                    ${option.latex && option.latex !== option.text ? `
+                        <div class="text-sm text-gray-600 mt-1 option-latex smart-content" id="option-latex-${displayId}">
+                            ${option.latex}
+                        </div>
+                    ` : ''}
                 </div>
             </label>
         `;
     }).join('');
 }
 
-function shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+function validateInteractiveDOM() {
+    const requiredElements = [
+        'interactive-options-container',
+        'interactive-submit-btn',
+        'interactive-result-container'
+    ];
+
+    for (const elementId of requiredElements) {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            console.error(`❌ DOM doğrulaması başarısız: ${elementId} bulunamadı`);
+            return false;
+        }
     }
-    return shuffled;
+
+    // Seçenek sayısını kontrol et
+    const optionsContainer = document.getElementById('interactive-options-container');
+    const optionLabels = optionsContainer.querySelectorAll('.option-label');
+
+    if (optionLabels.length === 0) {
+        console.error('❌ DOM doğrulaması başarısız: Hiç seçenek bulunamadı');
+        return false;
+    }
+
+    console.log(`✅ DOM doğrulaması başarılı: ${optionLabels.length} seçenek bulundu`);
+    return true;
 }
 
-// Event listener kurulumu
-function setupInteractiveSolutionListeners(stepData) {
-    const submitBtn = document.getElementById('interactive-submit-btn');
-    const hintBtn = document.getElementById('interactive-hint-btn');
-    const resetBtn = document.getElementById('interactive-reset-btn');
-    const backBtn = document.getElementById('back-to-main-menu-btn');
-    
-    // Radio button seçimi
-    const radioButtons = document.querySelectorAll(`input[name="interactive-step-${stepData.stepNumber}"]`);
-    radioButtons.forEach(radio => {
-        radio.addEventListener('change', () => {
-            submitBtn.disabled = false;
-            
-            // Seçilen seçeneği vurgula
-            const optionLabels = document.querySelectorAll('.option-label');
-            optionLabels.forEach(label => {
-                label.classList.remove('border-blue-500', 'bg-blue-50');
-            });
-            
-            const selectedLabel = radio.closest('.option-label');
-            if (selectedLabel) {
-                selectedLabel.classList.add('border-blue-500', 'bg-blue-50');
-            }
-        });
-    });
-    
-    // Seçimi onayla
-    if (submitBtn) {
-        submitBtn.addEventListener('click', handleInteractiveSubmission);
+function validateOptionsRender() {
+    const optionsContainer = document.getElementById('interactive-options-container');
+    if (!optionsContainer) {
+        console.error('❌ Options container bulunamadı');
+        return false;
     }
-    
-    // İpucu göster
+
+    const optionLabels = optionsContainer.querySelectorAll('.option-label');
+    console.log(`🔍 Render doğrulaması: ${optionLabels.length} seçenek render edildi`);
+
+    // Her seçeneği kontrol et
+    optionLabels.forEach((label, index) => {
+        const optionId = label.dataset.optionId;
+        const radio = label.querySelector('input[type="radio"]');
+        const text = label.querySelector('.option-text');
+
+        console.log(`🔍 Seçenek ${index}: ID=${optionId}, Radio=${!!radio}, Text=${!!text}`);
+    });
+
+    return optionLabels.length > 0;
+}
+function setupInteractiveEventListeners(stepData) {
+    console.log('🔄 Event listener\'lar kuruluyor...');
+
+    try {
+        // Submit butonu
+        const submitBtn = document.getElementById('interactive-submit-btn');
+        if (submitBtn) {
+            // Eski listener'ları temizle
+            submitBtn.replaceWith(submitBtn.cloneNode(true));
+            const newSubmitBtn = document.getElementById('interactive-submit-btn');
+
+            newSubmitBtn.addEventListener('click', handleInteractiveSubmissionSafe);
+            console.log('✅ Submit button listener kuruldu');
+        }
+
+        // Radio button'lar - DELEGATION İLE
+        const optionsContainer = document.getElementById('interactive-options-container');
+        if (optionsContainer) {
+            // Eski listener'ları temizle
+            optionsContainer.replaceWith(optionsContainer.cloneNode(true));
+            const newOptionsContainer = document.getElementById('interactive-options-container');
+
+            newOptionsContainer.addEventListener('change', function (event) {
+                if (event.target.type === 'radio') {
+                    handleOptionSelection(event);
+                }
+            });
+            console.log('✅ Radio button listeners kuruldu (delegation)');
+        }
+
+        // Diğer butonlar
+        setupOtherInteractiveButtons();
+
+        console.log('✅ Tüm event listener\'lar başarıyla kuruldu');
+
+    } catch (error) {
+        console.error('❌ Event listener kurulum hatası:', error);
+    }
+}
+
+function handleOptionSelection(event) {
+    const selectedValue = event.target.value;
+    const submitBtn = document.getElementById('interactive-submit-btn');
+
+    console.log(`📝 Seçenek seçildi: ${selectedValue}`);
+
+    // Submit butonunu aktif et
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Seçimi Onayla';
+    }
+
+    // Görsel feedback
+    const optionLabels = document.querySelectorAll('.option-label');
+    optionLabels.forEach(label => {
+        label.classList.remove('border-blue-500', 'bg-blue-50');
+    });
+
+    const selectedLabel = event.target.closest('.option-label');
+    if (selectedLabel) {
+        selectedLabel.classList.add('border-blue-500', 'bg-blue-50');
+    }
+}
+
+function setupOtherInteractiveButtons() {
+    // Hint button
+    const hintBtn = document.getElementById('interactive-hint-btn');
     if (hintBtn) {
-        hintBtn.addEventListener('click', () => {
+        hintBtn.replaceWith(hintBtn.cloneNode(true));
+        const newHintBtn = document.getElementById('interactive-hint-btn');
+        newHintBtn.addEventListener('click', () => {
             const hint = interactiveSolutionManager.getHint();
             if (hint) {
                 showInteractiveHint(hint);
             }
         });
     }
-    
-    // Baştan başla
+
+    // Reset button
+    const resetBtn = document.getElementById('interactive-reset-btn');
     if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-            if (confirm('Baştan başlamak istediğinizden emin misiniz? Tüm ilerlemeniz sıfırlanacak.')) {
-                interactiveSolutionManager.reset();
-                stateManager.setView('summary');
+        resetBtn.replaceWith(resetBtn.cloneNode(true));
+        const newResetBtn = document.getElementById('interactive-reset-btn');
+        newResetBtn.addEventListener('click', () => {
+            if (confirm('Baştan başlamak istediğinizden emin misiniz?')) {
+                handleInteractiveReset();
             }
         });
     }
-    
-    // Ana menüye dön
+
+    // Back to main menu
+    const backBtn = document.getElementById('back-to-main-menu-btn');
     if (backBtn) {
-        backBtn.addEventListener('click', () => {
+        backBtn.replaceWith(backBtn.cloneNode(true));
+        const newBackBtn = document.getElementById('back-to-main-menu-btn');
+        newBackBtn.addEventListener('click', () => {
             interactiveSolutionManager.reset();
-            stateManager.setView('summary');
+            if (window.stateManager) {
+                window.stateManager.setView('summary');
+            }
         });
     }
 }
-// İnteraktif çözüm için düzeltilmiş submission handler
-async function handleInteractiveSubmission() {
-    const currentState = interactiveSolutionManager.getCurrentState();
-    const stepNumber = currentState.currentStep;
-    const selectedRadio = document.querySelector(`input[name="interactive-step-${stepNumber}"]:checked`);
-    
-    if (!selectedRadio) {
-        showError("Lütfen bir seçenek seçin.", false);
-        return;
+
+function handleInteractiveReset() {
+    console.log('🔄 İnteraktif sistem sıfırlanıyor...');
+
+    interactiveSolutionManager.reset();
+
+    if (window.stateManager) {
+        window.stateManager.setView('setup');
     }
-    
-    const selectedOptionId = parseInt(selectedRadio.value);
-    
-    // UI elementlerini al
-    const submitBtn = document.getElementById('interactive-submit-btn');
-    const optionLabels = document.querySelectorAll('.option-label');
-    
-    // Orijinal buton metni
-    const originalButtonText = submitBtn.textContent;
+
+    // Success mesajı
+    setTimeout(() => {
+        if (window.showSuccess) {
+            window.showSuccess("Yeni soru yükleyerek tekrar deneyebilirsiniz.", false);
+        }
+    }, 500);
+}
+
+// Hata gösterimi
+function displayInteractiveError(message) {
+    const solutionOutput = document.getElementById('solution-output');
+    if (!solutionOutput) return;
+
+    solutionOutput.innerHTML = `
+        <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+            <h4 class="font-bold mb-2">İnteraktif Çözüm Hatası</h4>
+            <p>${escapeHtml(message)}</p>
+            <button id="back-to-main-menu-btn" class="btn btn-secondary mt-4">Ana Menüye Dön</button>
+        </div>
+    `;
+
+    // Back button için listener
+    const backBtn = document.getElementById('back-to-main-menu-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            if (window.stateManager) {
+                window.stateManager.setView('summary');
+            }
+        });
+    }
+}
+
+// Güvenli hint gösterimi
+function showInteractiveHint(hint) {
+    const resultContainer = document.getElementById('interactive-result-container');
+    if (!resultContainer) return;
+
+    resultContainer.innerHTML = `
+        <div class="hint-message p-4 rounded-lg bg-yellow-100 border border-yellow-300">
+            <div class="flex items-center gap-3">
+                <div class="text-2xl">💡</div>
+                <div class="flex-1">
+                    <h4 class="font-semibold text-yellow-800 mb-1">İpucu</h4>
+                    <p class="text-yellow-700 text-sm">${escapeHtml(hint.hint)}</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    resultContainer.classList.remove('hidden');
+
+    // 5 saniye sonra gizle
+    setTimeout(() => {
+        resultContainer.classList.add('hidden');
+        resultContainer.innerHTML = '';
+    }, 5000);
+}
+
+// HTML escape helper
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+
+async function handleInteractiveSubmissionSafe() {
+    console.log('🔄 Güvenli submission başlıyor...');
     
     try {
-        // Butonları devre dışı bırak
+        // Seçilen option'ı bul
+        const selectedRadio = document.querySelector('input[name="interactive-step-options"]:checked');
+        if (!selectedRadio) {
+            showError("Lütfen bir seçenek seçin.", false);
+            return;
+        }
+        
+        const selectedOptionId = parseInt(selectedRadio.value);
+        console.log(`📝 Seçilen option ID: ${selectedOptionId}`);
+        
+        // UI'yi devre dışı bırak
+        disableInteractiveUI();
+        
+        // Değerlendirme yap
+        const result = interactiveSolutionManager.evaluateSelection(selectedOptionId);
+        
+        console.log('🎯 Evaluation result:', result);
+        
+        if (!result || result.error) {
+            console.error('❌ Değerlendirme hatası:', result);
+            
+            // ✅ KRITIK FIX: Reset koşullarını netleştir
+            if (result && (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded)) {
+                console.log('🔄 ZORUNLU RESET BAŞLATILIYOR...');
+                
+                // Güvenli ve garantili reset işlemi
+                await handleInteractiveForceReset(result.error || result.message);
+                return;
+            } else {
+                showError(result?.error || "Değerlendirme sırasında hata oluştu", false);
+                enableInteractiveUI();
+            }
+            return;
+        }
+        
+        // Sonucu göster
+        await displayInteractiveResultSafe(result);
+        
+        // Sonraki adıma geçiş
+        setTimeout(async () => {
+            if (result.isCorrect) {
+                if (result.isCompleted) {
+                    await displayInteractiveCompletion(result.completionStats);
+                } else if (result.nextStep) {
+                    await renderInteractiveStepSafe(result.nextStep);
+                }
+            } else {
+                // ✅ KRITIK FIX: Yanlış cevap sonrası kontrol
+                if (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded) {
+                    console.log('🔄 YANLIŞ CEVAP + ZORUNLU RESET BAŞLATILIYOR...');
+                    await handleInteractiveForceReset(result.message);
+                } else if (result.nextStep) {
+                    await renderInteractiveStepSafe(result.nextStep);
+                }
+            }
+        }, 3000);
+        
+    } catch (error) {
+        console.error('❌ Submission handler hatası:', error);
+        showError("İşlem sırasında beklenmeyen bir hata oluştu", false);
+        enableInteractiveUI();
+    }
+}
+async function handleInteractiveForceReset(message) {
+    console.log('🔄 ZORUNLU RESET BAŞLATILIYOR...', message);
+    
+    try {
+        // 1. Kullanıcıya bilgi mesajı göster (engellemeyen)
+        showResetNotification(message);
+        
+        // 2. Kısa bekleme (kullanıcının görmesi için)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 3. İnteraktif sistemi tamamen sıfırla
+        interactiveSolutionManager.reset();
+        console.log('✅ InteractiveSolutionManager reset');
+        
+        // 4. DOM'u temizle
+        clearInteractiveDOM();
+        console.log('✅ DOM cleared');
+        
+        // 5. State'i güvenli şekilde setup'a çevir
+        if (window.stateManager) {
+            // Sadece view değiştir, problem verilerini koru
+            window.stateManager.setView('setup');
+            console.log('✅ State set to setup');
+        }
+        
+        // 6. Input alanlarını temizle
+        setTimeout(() => {
+            clearInputAreas();
+            console.log('✅ Input areas cleared');
+        }, 200);
+        
+        // 7. Container'ları gizle
+        setTimeout(() => {
+            hideInteractiveContainers();
+            console.log('✅ Containers hidden');
+        }, 300);
+        
+        // 8. Son kullanıcı bildirimi
+        setTimeout(() => {
+            if (window.showSuccess) {
+                window.showSuccess(
+                    "Yeni soru yükleyerek tekrar deneyebilirsiniz.", 
+                    false
+                );
+            }
+            console.log('✅ Final user notification shown');
+        }, 1000);
+        
+        console.log('✅ ZORUNLU RESET BAŞARIYLA TAMAMLANDI');
+        
+    } catch (error) {
+        console.error('❌ Force reset error:', error);
+        
+        // Fallback: Sayfa yenileme (son çare)
+        if (confirm('Sistem sıfırlanırken bir hata oluştu. Sayfayı yenilemek ister misiniz?')) {
+            window.location.reload();
+        }
+    }
+}
+function clearInteractiveDOM() {
+    // Solution output'u temizle
+    const solutionOutput = document.getElementById('solution-output');
+    if (solutionOutput) {
+        solutionOutput.innerHTML = '';
+    }
+    
+    // Result container'ı temizle
+    const resultContainer = document.getElementById('result-container');
+    if (resultContainer) {
+        resultContainer.classList.add('hidden');
+    }
+    
+    // Status message'ı temizle
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {
+        statusMessage.innerHTML = '';
+    }
+}
+
+function hideInteractiveContainers() {
+    const containerIds = [
+        'result-container',
+        'solution-output',
+        'interactive-result-container'
+    ];
+    
+    containerIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.classList.add('hidden');
+            element.style.display = 'none'; // Force gizle
+        }
+    });
+}
+function showResetNotification(message) {
+    const notification = document.createElement('div');
+    notification.id = 'reset-notification';
+    notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300';
+    notification.innerHTML = `
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <div>
+                <div class="font-semibold">Deneme Hakları Bitti</div>
+                <div class="text-sm opacity-90">${message || 'Soru yükleme ekranına yönlendiriliyorsunuz...'}</div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // 5 saniye sonra kaldır
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+function handleInteractiveResetToSetup(message) {
+    console.log('🔄 Setup\'a reset başlıyor...', message);
+    
+    // 1. İnteraktif sistemi sıfırla
+    interactiveSolutionManager.reset();
+    
+    // 2. State'i sıfırla (problem'i koru, sadece view değiştir)
+    if (window.stateManager) {
+        // Problem verilerini koruyarak sadece view değiştir
+        window.stateManager.setView('setup');
+        console.log('✅ State manager - view set to setup');
+    } else {
+        console.error('❌ stateManager bulunamadı!');
+    }
+    
+    // 3. Input alanlarını temizle
+    setTimeout(() => {
+        clearInputAreas();
+        console.log('✅ Input areas cleared');
+    }, 100);
+    
+    // 4. Kullanıcıya bilgi ver
+    setTimeout(() => {
+        if (window.showSuccess) {
+            window.showSuccess(
+                message || "Deneme haklarınız bitti. Yeni soru yükleyerek tekrar deneyebilirsiniz.", 
+                false
+            );
+        }
+        console.log('✅ User notification shown');
+    }, 500);
+    
+    console.log('✅ Setup reset tamamlandı');
+}
+
+
+function disableInteractiveUI() {
+    const submitBtn = document.getElementById('interactive-submit-btn');
+    const optionLabels = document.querySelectorAll('.option-label');
+
+    if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = `
             <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -2732,293 +3109,64 @@ async function handleInteractiveSubmission() {
             </svg>
             Kontrol ediliyor...
         `;
-        
-        // Seçenekleri geçici olarak devre dışı bırak
-        optionLabels.forEach(label => {
-            label.style.pointerEvents = 'none';
-            label.style.opacity = '0.7';
-        });
-        
-        // Sonucu değerlendir
-        const result = interactiveSolutionManager.evaluateSelection(selectedOptionId);
-        
-        // HATA KONTROLÜ
-        if (result.error) {
-            console.error('İnteraktif çözüm hatası:', result.error);
-            
-            // UI'yi geri yükle
-            restoreUIState(submitBtn, optionLabels, originalButtonText);
-            
-            // DÜZELTME: showResetToSetup durumunda özel işlem
-            if (result.shouldResetToSetup) {
-                // Tamam butonu ile birlikte hata göster
-                showError(result.error, true, () => {
-                    console.log('Tamam butonuna tıklandı - Setup view\'a geçiliyor');
-                    
-                    try {
-                        // İnteraktif çözüm sistemini sıfırla
-                        interactiveSolutionManager.reset();
-                        
-                        // State manager ile setup view'a geç
-                        if (window.stateManager) {
-                            window.stateManager.setView('setup');
-                        } else if (window.stateManager) {
-                            stateManager.setView('setup');
-                        }
-                        
-                        // Input alanlarını temizle
-                        clearInputAreas();
-                        
-                        // Başarı mesajı göster
-                        setTimeout(() => {
-                            showSuccess("Yeni soru yükleyerek tekrar deneyebilirsiniz. Her soru için yeniden 3 deneme hakkınız olacak.", false);
-                        }, 500);
-                        
-                    } catch (resetError) {
-                        console.error('Reset işlemi hatası:', resetError);
-                        // Son çare olarak sayfa yenileme
-                        window.location.reload();
-                    }
-                });
-            } else {
-                showError(result.error, false);
-            }
-            return;
-        }
-        
-        // Sonucu göster
-        await displayInteractiveResult(result);
-        
-        // DOĞRU CEVAP DURUMU
-        if (result.isCorrect) {
-            console.log('Doğru cevap verildi, sonraki adıma geçiliyor...');
-            
-            setTimeout(async () => {
-                if (result.isCompleted) {
-                    // Tamamlama ekranı göster
-                    await displayInteractiveCompletion(result.completionStats);
-                } else if (result.nextStep) {
-                    // Sonraki adıma geç
-                    await renderInteractiveStep(result.nextStep);
-                }
-            }, 2000);
-            
-        } else {
-            // YANLIŞ CEVAP DURUMU
-            console.log('Yanlış cevap verildi, işlem yapılıyor...', result);
-            
-            setTimeout(async () => {
-                if (result.shouldResetToSetup) {
-                    // DÜZELTME: Tamam butonu ile setup'a yönlendirme
-                    showError("Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.", true, () => {
-                        console.log('Tamam butonuna tıklandı - Sistem sıfırlanıyor');
-                        
-                        try {
-                            // Sistemi sıfırla
-                            interactiveSolutionManager.reset();
-                            
-                            // Setup view'a geç
-                            if (window.stateManager) {
-                                window.stateManager.setView('setup');
-                            } else if (stateManager) {
-                                stateManager.setView('setup');
-                            }
-                            
-                            // Input alanlarını temizle
-                            clearInputAreas();
-                            
-                            // Bilgilendirme mesajı
-                            setTimeout(() => {
-                                showSuccess("Yeni soru yükleyerek tekrar deneyebilirsiniz.", false);
-                            }, 500);
-                            
-                        } catch (resetError) {
-                            console.error('Reset işlemi hatası:', resetError);
-                            window.location.reload();
-                        }
-                    });
-                    
-                } else if (result.nextStep) {
-                    // Baştan başla veya mevcut adımı tekrarla
-                    console.log('Yeni adım render ediliyor:', result.nextStep);
-                    await renderInteractiveStep(result.nextStep);
-                } else {
-                    // Fallback: Manuel olarak yeniden render et
-                    console.log('Fallback: Mevcut adım yeniden render ediliyor');
-                    const newStepData = interactiveSolutionManager.generateStepOptions(
-                        interactiveSolutionManager.currentStep
-                    );
-                    if (newStepData) {
-                        await renderInteractiveStep(newStepData);
-                    } else {
-                        // Son çare: UI'yi geri yükle
-                        restoreUIState(submitBtn, optionLabels, originalButtonText);
-                        showError("Bir hata oluştu. Lütfen sayfayı yenileyin.", false);
-                    }
-                }
-            }, 3000);
-        }
-        
-    } catch (error) {
-        console.error('İnteraktif seçim işleme hatası:', error);
-        
-        // UI'yi geri yükle
-        restoreUIState(submitBtn, optionLabels, originalButtonText);
-        
-        showError("Seçim işlenirken bir hata oluştu. Lütfen tekrar deneyin.", false);
     }
+
+    optionLabels.forEach(label => {
+        label.style.pointerEvents = 'none';
+        label.style.opacity = '0.7';
+    });
 }
-// UI durumunu geri yükleme yardımcı fonksiyonu (değişiklik yok)
-function restoreUIState(submitBtn, optionLabels, originalButtonText) {
-    // Buton durumunu geri al
+
+// UI'yi tekrar aktif et
+function enableInteractiveUI() {
+    const submitBtn = document.getElementById('interactive-submit-btn');
+    const optionLabels = document.querySelectorAll('.option-label');
+
     if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = originalButtonText;
+        submitBtn.textContent = 'Seçimi Onayla';
     }
-    
-    // Seçenekleri tekrar aktif et
-    if (optionLabels) {
-        optionLabels.forEach(label => {
-            label.style.pointerEvents = 'auto';
-            label.style.opacity = '1';
-        });
-    }
-}
 
-async function displayInteractiveResult(result) {
+    optionLabels.forEach(label => {
+        label.style.pointerEvents = 'auto';
+        label.style.opacity = '1';
+    });
+}
+// www/js/index.js
+
+async function displayInteractiveResultSafe(result) {
     const resultContainer = document.getElementById('interactive-result-container');
-    const warningContainer = document.getElementById('interactive-warning-container');
-    
     if (!resultContainer) {
-        console.error('Result container bulunamadı');
+        console.error('❌ Result container bulunamadı');
         return;
     }
-    
-    console.log('DisplayInteractiveResult çağrıldı:', result);
-    
+
     // Seçenekleri renklendir
-    highlightInteractiveOptions(result);
-    
-    let resultHTML = '';
-    let warningHTML = '';
-    
-    if (result.isCorrect) {
-        // DOĞRU CEVAP
-        resultHTML = `
-            <div class="result-message success p-4 rounded-lg bg-green-100 border border-green-300">
-                <div class="flex items-center gap-3">
-                    <div class="text-3xl">✅</div>
-                    <div class="flex-1">
-                        <h4 class="font-semibold text-green-800 mb-1">Doğru!</h4>
-                        <p class="text-green-700 text-sm">${result.explanation}</p>
-                        
-                        ${result.isCompleted ? `
-                            <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                                <h5 class="font-semibold text-green-800 mb-2">🎉 Tebrikler! Tüm adımları tamamladınız!</h5>
-                                <div class="text-sm text-green-700">
-                                    <p><strong>Toplam Deneme:</strong> ${result.attempts}</p>
-                                    <p><strong>Kalan Hak:</strong> ${result.remainingAttempts}</p>
-                                </div>
-                            </div>
-                        ` : `
-                            <p class="text-green-600 text-sm mt-2">
-                                <strong>Sonraki adıma geçiliyor...</strong> (${result.currentStep}/${result.totalSteps})
-                            </p>
-                        `}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-    } else {
-        // YANLIŞ CEVAP
-        const isLastAttempt = result.shouldResetToSetup || result.remainingAttempts <= 0;
-        const messageClass = isLastAttempt ? 'error' : 'warning';
-        const bgClass = isLastAttempt ? 'bg-red-100 border-red-300' : 'bg-orange-100 border-orange-300';
-        const textClass = isLastAttempt ? 'text-red-800' : 'text-orange-800';
-        const iconClass = isLastAttempt ? 'text-red-600' : 'text-orange-600';
-        
-        resultHTML = `
-            <div class="result-message ${messageClass} p-4 rounded-lg ${bgClass} border">
-                <div class="flex items-center gap-3">
-                    <div class="text-3xl">${isLastAttempt ? '❌' : '⚠️'}</div>
-                    <div class="flex-1">
-                        <h4 class="font-semibold ${textClass} mb-1">
-                            ${isLastAttempt ? 'Deneme Hakkınız Bitti!' : 'Yanlış Seçim'}
-                        </h4>
-                        <p class="${textClass} text-sm mb-2">${result.explanation}</p>
-                        
-                        <div class="mt-2">
-                            <p class="text-sm ${iconClass}">
-                                <strong>Toplam Deneme:</strong> ${result.attempts}
-                            </p>
-                            <p class="text-sm ${iconClass}">
-                                <strong>Kalan Hak:</strong> ${result.remainingAttempts}
-                            </p>
-                            
-                            ${result.message ? `
-                                <p class="text-sm ${iconClass} mt-1 font-medium">${result.message}</p>
-                            ` : ''}
-                        </div>
-                        
-                        ${isLastAttempt ? `
-                            <div class="mt-3 p-3 bg-red-50 rounded border border-red-200">
-                                <p class="text-red-700 text-sm font-medium">
-                                    Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz...
-                                </p>
-                            </div>
-                        ` : `
-                            <div class="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                                <p class="text-blue-700 text-sm">
-                                    ${result.restartCurrentStep ? 
-                                        '🔄 Bu adımı tekrar çözeceksiniz.' : 
-                                        '🔄 Baştan başlayacaksınız.'
-                                    }
-                                </p>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // UYARI MESAJI
-        if (result.restartCurrentStep || result.restartFromBeginning) {
-            const restartMessage = result.restartCurrentStep ? 
-                '⚠️ Bu adımı tekrar çözeceksiniz.' : 
-                '⚠️ Baştan başlayacaksınız.';
-                
-            warningHTML = `
-                <div class="warning-message p-3 rounded-lg bg-yellow-100 border border-yellow-300">
-                    <div class="flex items-center gap-2">
-                        <span class="text-yellow-600 text-xl">⚠️</span>
-                        <p class="text-yellow-800 text-sm font-medium">${restartMessage}</p>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    // Sonucu göster
+    highlightInteractiveOptionsSafe(result);
+
+    // Sonuç mesajı oluştur
+    const resultHTML = generateResultHTML(result);
     resultContainer.innerHTML = resultHTML;
     resultContainer.classList.remove('hidden');
-    
-    if (warningHTML && warningContainer) {
-        warningContainer.innerHTML = warningHTML;
-    }
-    
-    console.log('Result display tamamlandı, UI güncellendi');
+
+    // EKLENECEK KISIM:
+    // Sonuç mesajı konteynerinin içini de render et.
+    setTimeout(() => {
+        renderMathInContainer(resultContainer);
+    }, 100);
+
+    console.log('✅ Sonuç güvenli şekilde gösterildi ve render edildi');
 }
 
-function highlightInteractiveOptions(result) {
+function highlightInteractiveOptionsSafe(result) {
     const optionLabels = document.querySelectorAll('.option-label');
-    
+
     optionLabels.forEach(label => {
         const optionId = parseInt(label.dataset.optionId);
-        
+
         // Tüm vurguları temizle
         label.classList.remove('border-green-500', 'bg-green-50', 'border-red-500', 'bg-red-50');
-        
+
         if (optionId === result.selectedOption.displayId) {
             // Seçilen seçenek
             if (result.isCorrect) {
@@ -3030,28 +3178,103 @@ function highlightInteractiveOptions(result) {
             // Doğru seçenek (yanlış seçim yapıldıysa göster)
             if (!result.isCorrect) {
                 label.classList.add('border-green-500', 'bg-green-50');
-                
-                // Doğru cevap etiketini ekle
-                const correctLabel = document.createElement('div');
-                correctLabel.className = 'absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold';
-                correctLabel.textContent = 'DOĞRU';
-                label.style.position = 'relative';
-                label.appendChild(correctLabel);
+
+                // Doğru cevap etiketi ekle
+                if (!label.querySelector('.correct-label')) {
+                    const correctLabel = document.createElement('div');
+                    correctLabel.className = 'correct-label absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold';
+                    correctLabel.textContent = 'DOĞRU';
+                    label.style.position = 'relative';
+                    label.appendChild(correctLabel);
+                }
             }
         }
     });
 }
 
+function generateResultHTML(result) {
+    if (result.isCorrect) {
+        return `
+            <div class="result-message success p-4 rounded-lg bg-green-100 border border-green-300">
+                <div class="flex items-center gap-3">
+                    <div class="text-3xl">✅</div>
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-green-800 mb-1">Doğru!</h4>
+                        <p class="text-green-700 text-sm">${escapeHtml(result.explanation)}</p>
+                        
+                        ${result.isCompleted ? `
+                            <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                                <h5 class="font-semibold text-green-800 mb-2">🎉 Tebrikler! Tüm adımları tamamladınız!</h5>
+                            </div>
+                        ` : `
+                            <p class="text-green-600 text-sm mt-2">
+                                <strong>Sonraki adıma geçiliyor...</strong> (${result.currentStep}/${result.totalSteps})
+                            </p>
+                        `}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        const isLastAttempt = result.shouldResetToSetup || result.remainingAttempts <= 0;
+        const bgClass = isLastAttempt ? 'bg-red-100 border-red-300' : 'bg-orange-100 border-orange-300';
+        const textClass = isLastAttempt ? 'text-red-800' : 'text-orange-800';
+
+        return `
+            <div class="result-message error p-4 rounded-lg ${bgClass} border">
+                <div class="flex items-center gap-3">
+                    <div class="text-3xl">${isLastAttempt ? '❌' : '⚠️'}</div>
+                    <div class="flex-1">
+                        <h4 class="font-semibold ${textClass} mb-1">
+                            ${isLastAttempt ? 'Deneme Hakkınız Bitti!' : 'Yanlış Seçim'}
+                        </h4>
+                        <p class="${textClass} text-sm mb-2">${escapeHtml(result.explanation)}</p>
+                        
+                        <div class="mt-2">
+                            <p class="text-sm ${textClass}">
+                                <strong>Kalan Hak:</strong> ${result.remainingAttempts}
+                            </p>
+                        </div>
+                        
+                        ${isLastAttempt ? `
+                            <div class="mt-3 p-3 bg-red-50 rounded border border-red-200">
+                                <p class="text-red-700 text-sm font-medium">
+                                    Tüm deneme haklarınız bitti. Ana menüye yönlendiriliyorsunuz...
+                                </p>
+                            </div>
+                        ` : `
+                            <div class="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+                                <p class="text-blue-700 text-sm">
+                                    ${result.restartCurrentStep ?
+                '🔄 Bu adımı tekrar çözeceksiniz.' :
+                '🔄 Baştan başlayacaksınız.'
+            }
+                                </p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+
+
+
+
+
+
 async function displayInteractiveCompletion(completionStats) {
     const container = elements['solution-output'];
-    
+
     if (!container) return;
-    
+
     // Performans mesajı
     let performanceMessage = '';
     let performanceColor = 'text-green-600';
-    
-    switch(completionStats.performance) {
+
+    switch (completionStats.performance) {
         case 'excellent':
             performanceMessage = '🏆 Mükemmel performans! Çok az hatayla tamamladınız.';
             performanceColor = 'text-green-600';
@@ -3069,7 +3292,7 @@ async function displayInteractiveCompletion(completionStats) {
             performanceColor = 'text-orange-600';
             break;
     }
-    
+
     container.innerHTML = `
         <div class="interactive-completion text-center p-8 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
             <div class="completion-icon text-6xl mb-4">🎉</div>
@@ -3137,10 +3360,10 @@ async function displayInteractiveCompletion(completionStats) {
             </div>
         </div>
     `;
-    
+
     // Event listener'ları ekle
     setupInteractiveCompletionListeners();
-    
+
     // Math render
     setTimeout(async () => {
         await renderMathInContainer(container, false);
@@ -3152,7 +3375,7 @@ function setupInteractiveCompletionListeners() {
     const reviewSolutionBtn = document.getElementById('interactive-review-solution-btn');
     const stepByStepBtn = document.getElementById('interactive-try-step-by-step-btn');
     const backBtn = document.getElementById('back-to-main-menu-btn');
-    
+
     if (newProblemBtn) {
         newProblemBtn.addEventListener('click', () => {
             interactiveSolutionManager.reset();
@@ -3160,21 +3383,21 @@ function setupInteractiveCompletionListeners() {
             stateManager.setView('setup');
         });
     }
-    
+
     if (reviewSolutionBtn) {
         reviewSolutionBtn.addEventListener('click', () => {
             interactiveSolutionManager.reset();
             stateManager.setView('fullSolution');
         });
     }
-    
+
     if (stepByStepBtn) {
         stepByStepBtn.addEventListener('click', () => {
             interactiveSolutionManager.reset();
             stateManager.setView('solving');
         });
     }
-    
+
     if (backBtn) {
         backBtn.addEventListener('click', () => {
             interactiveSolutionManager.reset();
@@ -3184,42 +3407,24 @@ function setupInteractiveCompletionListeners() {
 }
 
 
-function showInteractiveHint(hint) {
-    const resultContainer = document.getElementById('interactive-result-container');
-    if (!resultContainer) return;
-    
-    resultContainer.innerHTML = `
-        <div class="hint-message p-4 rounded-lg bg-yellow-100 border border-yellow-300">
-            <div class="flex items-center gap-3">
-                <div class="text-2xl">💡</div>
-                <div class="flex-1">
-                    <h4 class="font-semibold text-yellow-800 mb-1">İpucu</h4>
-                    <p class="text-yellow-700 text-sm">${hint.hint}</p>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    resultContainer.classList.remove('hidden');
-    
-    // 5 saniye sonra gizle
-    setTimeout(() => {
-        resultContainer.classList.add('hidden');
-        resultContainer.innerHTML = '';
-    }, 5000);
-}
+
 
 
 
 
 // Global fonksiyonlar
-window.makeApiCall = makeApiCall;
 window.showError = showError;
 window.showSuccess = showSuccess;
 window.showLoading = showLoading;
 window.stateManager = stateManager;
 window.renderMath = renderMath;
-window.debugViewState = debugViewState;
+window.renderInteractiveSolution = renderInteractiveSolution;
+window.handleInteractiveSubmissionSafe = handleInteractiveSubmissionSafe;
+window.setupInteractiveEventListeners = setupInteractiveEventListeners;
+window.forceShowContainers = forceShowContainers;
+window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
+window.clearInputAreas = clearInputAreas;
+
 
 // --- EXPORTS ---
 export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };

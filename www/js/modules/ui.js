@@ -1,6 +1,5 @@
 // =================================================================================
-//  MathAi - UI Modülü - Düzeltilmiş Error Handling
-//  Tamam butonu sorunu çözüldü
+//  MathAi - UI Modülü - Gelişmiş Render ve Hata Yönetimi
 // =================================================================================
 
 import { advancedMathRenderer } from './advancedMathRenderer.js';
@@ -16,13 +15,11 @@ export function showLoading(message) {
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // EĞER message 'false' ise, yükleme ekranını gizle ve fonksiyondan çık.
     if (message === false) {
         resultContainer.classList.add('hidden');
         return;
     }
     
-    // Önceki hata mesajını ve butonları temizle
     statusMessage.innerHTML = `
          <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 animate-spin"></div>
          <p class="text-gray-600 font-medium">${message}</p>
@@ -45,10 +42,9 @@ export function showSuccess(message, autoHide = true, hideDelay = 3000) {
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // Eğer çözüm view'larındaysa (fullSolution, interactive, solving) başarı mesajını gösterme
     const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
     if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
-        return; // Başarı mesajını gösterme
+        return;
     }
 
     statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
@@ -70,9 +66,9 @@ export function showSuccess(message, autoHide = true, hideDelay = 3000) {
 }
 
 /**
- * Ekranda bir hata mesajı gösterir - DÜZELTME: Tamam butonu çalışır
+ * Ekranda bir hata mesajı gösterir.
  * @param {string} message - Gösterilecek hata mesajı.
- * @param {boolean} showResetButton - Kullanıcının arayüzü sıfırlayabileceği bir "Tamam" butonu gösterilsin mi?
+ * @param {boolean} showResetButton - "Tamam" butonu gösterilsin mi?
  * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
  */
 export function showError(message, showResetButton = false, onReset = () => {}) {
@@ -82,7 +78,6 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
 
     if (!resultContainer || !statusMessage || !solutionOutput) return;
 
-    // Temel hata mesajı HTML'i
     let errorHTML = `
         <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
             <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,7 +90,6 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
     statusMessage.className = '';
     statusMessage.innerHTML = errorHTML;
 
-    // DÜZELTME: Tamam butonu için ayrı element oluştur ve event listener ekle
     if (showResetButton) {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'mt-4 text-center';
@@ -104,23 +98,14 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
         okButton.textContent = 'Tamam';
         okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
         
-        // DÜZELTME: Event listener'ı doğru şekilde ekle
         okButton.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
             try {
-                console.log('Tamam butonu tıklandı, onReset fonksiyonu çalıştırılıyor...');
-                
-                // Hata mesajını gizle
                 resultContainer.classList.add('hidden');
                 statusMessage.innerHTML = '';
-                
-                // onReset fonksiyonunu çalıştır
                 if (typeof onReset === 'function') {
                     onReset();
-                } else {
-                    console.warn('onReset fonksiyonu geçerli değil:', onReset);
                 }
             } catch (error) {
                 console.error('Tamam butonu click handler hatası:', error);
@@ -130,21 +115,16 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
         buttonContainer.appendChild(okButton);
         statusMessage.appendChild(buttonContainer);
         
-        // Butona otomatik focus ver
-        setTimeout(() => {
-            okButton.focus();
-        }, 100);
+        setTimeout(() => okButton.focus(), 100);
     }
 
     resultContainer.classList.remove('hidden');
     solutionOutput.classList.add('hidden');
-    
-    console.log('showError çağrıldı:', { message, showResetButton, onResetType: typeof onReset });
 }
 
 /**
  * Animasyonlu adım adım yükleme mesajı gösterir.
- * @param {Array} steps - Gösterilecek adımlar dizisi.
+ * @param {Array} steps - Gösterilecek adımlar dizisi [{title, description}].
  * @param {number} stepDelay - Her adım arasındaki gecikme (ms).
  */
 export function showAnimatedLoading(steps, stepDelay = 1500) {
@@ -158,7 +138,6 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
     solutionOutput.classList.add('hidden');
 
     let currentStep = 0;
-
     const showStep = () => {
         if (currentStep >= steps.length) {
             resultContainer.classList.add('hidden');
@@ -185,31 +164,20 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
 }
 
 /**
- * Gelişmiş matematiksel ifade render fonksiyonu
- * Advanced Math Renderer kullanır - MathJax v3 + KaTeX Hybrid
+ * Gelişmiş matematiksel ifade render fonksiyonu.
  * @param {string} content - Render edilecek içerik.
  * @param {HTMLElement} element - Hedef HTML elementi.
  * @param {boolean} displayMode - Display modu (blok/inline).
  */
 export async function renderMath(content, element, displayMode = false) {
-    if (!content || !element) {
-        console.warn('renderMath: İçerik veya element eksik');
-        return false;
-    }
-    
+    if (!content || !element) return false;
     try {
-        // Gelişmiş render sistemini kullan
         const result = await advancedMathRenderer.render(content, element, displayMode);
-        
         if (!result) {
-            console.warn('Render başarısız, fallback uygulanıyor:', content);
-            // Fallback: plain text
             element.textContent = content;
             element.classList.add('render-fallback');
         }
-        
         return result;
-        
     } catch (error) {
         console.error('renderMath hatası:', error);
         element.textContent = content;
@@ -219,40 +187,63 @@ export async function renderMath(content, element, displayMode = false) {
 }
 
 /**
- * Container içindeki tüm matematik içeriğini render eder
- * @param {HTMLElement} container - Render edilecek container
- * @param {boolean} displayMode - Display modu
+ * Container içindeki tüm matematik içeriğini verimli bir şekilde render eder.
+ * @param {HTMLElement} container - Render edilecek container.
+ * @param {boolean} displayMode - Display modu.
  */
 export async function renderMathInContainer(container, displayMode = false) {
-    if (!container) {
-        console.warn('renderMathInContainer: Container eksik');
+    if (!container) return;
+    
+    await waitForDOMReady();
+    
+    if (!isElementVisible(container)) {
+        console.warn('Container görünür değil, render erteleniyor');
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                observer.disconnect();
+                renderMathInContainer(container, displayMode);
+            }
+        });
+        observer.observe(container);
         return;
     }
     
-    try {
-        await advancedMathRenderer.renderContainer(container, displayMode);
-        console.log('Container render tamamlandı');
-    } catch (error) {
-        console.error('Container render hatası:', error);
+    const elements = collectRenderableElements(container);
+    
+    let completed = 0;
+    const total = elements.length;
+    
+    for (const batch of chunk(elements, 5)) {
+        await Promise.all(batch.map(async ({element, content, type}) => {
+            try {
+                await renderMath(content, element, type === 'latex' ? displayMode : false);
+                completed++;
+                if (window.onRenderProgress) {
+                    window.onRenderProgress(completed, total);
+                }
+            } catch (error) {
+                console.error('Element render hatası:', error);
+                element.classList.add('render-failed');
+            }
+        }));
+        await new Promise(resolve => setTimeout(resolve, 50));
     }
 }
 
+
 /**
- * Smart content elementlerini render eder (özel attribute ile)
- * @param {HTMLElement} container - İçerik container'ı
+ * Smart content elementlerini render eder.
+ * @param {HTMLElement} container - İçerik container'ı.
  */
 export async function renderSmartContent(container) {
     if (!container) return;
-    
     const smartElements = container.querySelectorAll('.smart-content[data-content]');
-    
     for (const element of smartElements) {
         const content = element.getAttribute('data-content');
         if (content) {
             try {
                 await renderMath(content, element, false);
             } catch (error) {
-                console.warn('Smart content render hatası:', error);
                 element.textContent = content;
             }
         }
@@ -260,56 +251,38 @@ export async function renderSmartContent(container) {
 }
 
 /**
- * LaTeX content elementlerini render eder
- * @param {HTMLElement} container - İçerik container'ı
+ * LaTeX content elementlerini render eder.
+ * @param {HTMLElement} container - İçerik container'ı.
  */
 export async function renderLatexContent(container) {
     if (!container) return;
-    
     const latexElements = container.querySelectorAll('.latex-content[data-latex]');
-    
     for (const element of latexElements) {
         const latex = element.getAttribute('data-latex');
         if (latex) {
             try {
-                await renderMath(latex, element, true); // Display mode için true
+                await renderMath(latex, element, true);
             } catch (error) {
-                console.warn('LaTeX content render hatası:', error);
                 element.textContent = latex;
             }
         }
     }
 }
 
-/**
- * Render performans monitörü
- */
 export function getRenderStats() {
     return advancedMathRenderer.getStats();
 }
 
-/**
- * Render cache temizleme
- */
 export function clearRenderCache() {
     advancedMathRenderer.clearCache();
 }
 
-/**
- * HTML karakterlerini escape eder
- * @param {string} text - Escape edilecek metin
- * @returns {string} Escape edilmiş metin
- */
 export function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-/**
- * Render sistemi hazır olup olmadığını kontrol eder
- * @returns {Promise<boolean>} Sistem hazır mı?
- */
 export async function waitForRenderSystem() {
     return new Promise((resolve) => {
         const checkReady = () => {
@@ -324,25 +297,10 @@ export async function waitForRenderSystem() {
     });
 }
 
-/**
- * Gelişmiş render fonksiyonu - otomatik tip algılama ile
- * @param {string} content - İçerik
- * @param {HTMLElement} element - Hedef element
- * @param {Object} options - Render seçenekleri
- */
 export async function smartRender(content, element, options = {}) {
-    const {
-        displayMode = false,
-        fallbackToText = true,
-        enableCache = true,
-        timeout = 5000
-    } = options;
+    const { displayMode = false, fallbackToText = true, enableCache = true, timeout = 5000 } = options;
+    if (!enableCache) clearRenderCache();
     
-    if (!enableCache) {
-        clearRenderCache();
-    }
-    
-    // Timeout ile render
     const renderPromise = renderMath(content, element, displayMode);
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Render timeout')), timeout);
@@ -360,49 +318,67 @@ export async function smartRender(content, element, options = {}) {
     }
 }
 
-/**
- * Batch render - çoklu elementi aynı anda render eder
- * @param {Array} renderTasks - Render görevleri [{content, element, displayMode}]
- * @param {number} batchSize - Aynı anda işlenecek görev sayısı
- */
 export async function batchRender(renderTasks, batchSize = 5) {
     const results = [];
-    
     for (let i = 0; i < renderTasks.length; i += batchSize) {
         const batch = renderTasks.slice(i, i + batchSize);
-        
         const batchPromises = batch.map(async (task) => {
             try {
                 return await renderMath(task.content, task.element, task.displayMode);
             } catch (error) {
-                console.warn('Batch render hatası:', error);
                 return false;
             }
         });
-        
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-        
-        // Batch'ler arası kısa bekleme
+        results.push(...await Promise.all(batchPromises));
         if (i + batchSize < renderTasks.length) {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
     }
-    
     return results;
 }
 
-// Debug amaçlı global export
+// Global export for debugging
 if (typeof window !== 'undefined') {
     window.mathUI = {
-        renderMath,
-        renderMathInContainer,
-        renderSmartContent,
-        renderLatexContent,
-        smartRender,
-        batchRender,
-        getRenderStats,
-        clearRenderCache,
-        waitForRenderSystem
+        renderMath, renderMathInContainer, renderSmartContent, renderLatexContent,
+        smartRender, batchRender, getRenderStats, clearRenderCache, waitForRenderSystem
     };
+}
+
+// --- YARDIMCI FONKSİYONLAR ---
+
+function waitForDOMReady() {
+    return new Promise(resolve => {
+        if (document.readyState === 'complete') {
+            resolve();
+        } else {
+            window.addEventListener('load', resolve, { once: true });
+        }
+    });
+}
+
+function isElementVisible(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
+function collectRenderableElements(container) {
+    const elements = [];
+    container.querySelectorAll('.smart-content').forEach(el => {
+        const content = el.getAttribute('data-content') || el.textContent;
+        if (content) elements.push({element: el, content, type: 'smart'});
+    });
+    container.querySelectorAll('.latex-content').forEach(el => {
+        const content = el.getAttribute('data-latex') || el.textContent;
+        if (content) elements.push({element: el, content, type: 'latex'});
+    });
+    return elements;
+}
+
+function chunk(array, size) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
 }
