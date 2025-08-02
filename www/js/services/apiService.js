@@ -224,13 +224,3 @@ export async function validateMathProblem(problemContext, imageBase64 = null, on
     }
 }
 
-// Test için global erişim
-if (typeof window !== 'undefined') {
-    window.apiService = {
-        getProblemSummary,
-        getFullSolution,
-        getInteractiveOptions,
-        validateStudentStep,
-        validateMathProblem
-    };
-}

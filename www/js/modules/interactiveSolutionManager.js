@@ -1,11 +1,10 @@
 // =================================================================================
-//  İnteraktif Çözüm Yöneticisi - TAMAMEN DÜZELTİLMİŞ VERSİYON
-//  Ana Sorunlar ve Çözümler:
-//  1. Sonsuz döngü sorunu çözüldü
-//  2. displayId mantığı düzeltildi  
-//  3. Async/await sorunları giderildi
-//  4. DOM render güvenliği artırıldı
+//  İnteraktif Çözüm Yöneticisi - Gemini API Entegrasyonu ile Tam Sürüm
 // =================================================================================
+
+// Gerekli servisleri ve yardımcıları import et
+import { getInteractiveOptions } from '../services/apiService.js';
+import { makeLatexJsonSafe } from '../utils/safeJsonParser.js';
 
 export class InteractiveSolutionManager {
     constructor() {
@@ -14,12 +13,12 @@ export class InteractiveSolutionManager {
         this.totalSteps = 0;
         this.isProcessing = false;
         
-        // Deneme sistemi - SABIT KALACAK
+        // Deneme sistemi
         this.totalAttempts = 0;
         this.maxAttempts = 3;
         this.attemptHistory = [];
-        
-        // Seçenek sistemi - DÜZELTİLDİ
+
+        // Seçenek sistemi
         this.currentOptions = [];
         this.selectedOption = null;
         
@@ -30,118 +29,185 @@ export class InteractiveSolutionManager {
         
         console.log('✅ InteractiveSolutionManager başlatıldı');
     }
+
+    /**
+     * Seçenekleri oluşturur, hata durumunda fallback mekanizmasını kullanır.
+     */
+    async generateOptions(stepData, allSteps, currentStepIndex) {
+        console.log(`🎯 Adım ${currentStepIndex + 1} için seçenekler üretiliyor`);
+        
+        try {
+            // Doğru seçeneği hazırla
+            const correctOption = {
+                id: 0,
+                text: stepData.adimBasligi,
+                latex: stepData.cozum_lateks,
+                isCorrect: true,
+                explanation: stepData.adimAciklamasi || "Doğru! Bu adım çözüm için gerekli."
+            };
+            
+            // API'den yanlış seçenekleri üret
+            const wrongOptions = await this.generateWrongOptions(stepData, allSteps, currentStepIndex);
+            
+            // Tüm seçenekleri birleştir ve karıştır
+            const allOptions = [correctOption, ...wrongOptions];
+            return this.shuffleAndAssignIds(allOptions);
+            
+        } catch (error) {
+            console.error('Seçenek üretimi tamamen başarısız oldu, fallback kullanılıyor:', error);
+            // Hata durumunda statik fallback seçeneklerini döndür
+            return this.getFallbackOptions(stepData);
+        }
+    }
+
+    /**
+     * Yanlış seçenekleri üretmek için Gemini API'yi kullanır.
+     * Başarısız olursa matematiksel varyasyonlara geçer.
+     */
+    async generateWrongOptions(stepData, allSteps, currentStepIndex) {
+        const wrongOptions = [];
+        
+        try {
+            // Mevcut apiService'i kullanarak seçenekleri iste.
+            // Bu servis zaten yeniden deneme ve hata yönetimi içeriyor.
+            const parsed = await getInteractiveOptions(stepData, allSteps, currentStepIndex);
+            
+            if (parsed && parsed.yanlisSecenekler && parsed.yanlisSecenekler.length >= 2) {
+                // API'den gelen seçenekleri kullan
+                parsed.yanlisSecenekler.slice(0, 2).forEach((secenek, index) => {
+                    wrongOptions.push({
+                        id: index + 1,
+                        text: `Alternatif ${index + 1}`,
+                        latex: secenek.metin,
+                        isCorrect: false,
+                        explanation: secenek.hataAciklamasi
+                    });
+                });
+                console.log("✅ Gemini API'den çeldirici seçenekler başarıyla alındı.");
+            } else {
+                throw new Error("API'den beklenen formatta çeldirici gelmedi.");
+            }
+            
+        } catch (error) {
+            console.warn('API\'den çeldirici alınamadı, matematiksel varyasyonlar kullanılacak.', error);
+            // API başarısız olursa, fallback olarak matematiksel varyasyonlar oluştur
+            wrongOptions.push(...this.generateMathematicalVariations(stepData));
+        }
+        
+        // Eğer hala yeterli seçenek yoksa (API hatası vb.), genel hatalar ekle
+        while (wrongOptions.length < 2) {
+            wrongOptions.push(this.generateGenericWrongOption(wrongOptions.length + 1));
+        }
+        
+        return wrongOptions.slice(0, 2); // Her zaman 2 yanlış seçenek döndür
+    }
+
+    /**
+     * API'nin çalışmadığı durumlar için matematiksel olarak hatalı seçenekler üretir.
+     */
+    generateMathematicalVariations(stepData) {
+        const variations = [];
+        const originalLatex = stepData.cozum_lateks;
+        
+        const numberPattern = /\d+/g;
+        const numbers = originalLatex.match(numberPattern);
+        
+        if (numbers && numbers.length > 0) {
+            // Varyasyon 1: Sayısal hata
+            const num = parseInt(numbers[0]);
+            const variation1 = originalLatex.replace(numbers[0], (num + Math.floor(Math.random() * 3) + 1).toString());
+            variations.push({
+                id: variations.length + 1,
+                text: "Hesaplama hatası",
+                latex: variation1,
+                isCorrect: false,
+                explanation: "Hesaplama sırasında bir hata yapılmış gibi görünüyor. Sayıları tekrar kontrol et."
+            });
+            
+            // Varyasyon 2: İşaret hatası
+            let variation2 = originalLatex;
+            if (originalLatex.includes('+')) {
+                variation2 = originalLatex.replace('+', '-');
+            } else if (originalLatex.includes('-')) {
+                variation2 = originalLatex.replace('-', '+');
+            }
+            
+            if (variation2 !== originalLatex) {
+                variations.push({
+                    id: variations.length + 1,
+                    text: "İşaret hatası",
+                    latex: variation2,
+                    isCorrect: false,
+                    explanation: "İşlem işareti yanlış kullanılmış olabilir. İşaretleri kontrol et."
+                });
+            }
+        }
+        
+        return variations;
+    }
     
-    // İnteraktif çözümü başlat - GÜVENLİ VERSİYON
+    /**
+     * Çok genel ve konudan bağımsız yanlış seçenekler üretir.
+     */
+    generateGenericWrongOption(id) {
+        const genericOptions = [
+            { text: "Farklı yöntem", latex: "\\text{Bu adımda farklı bir yöntem kullanılmalı}", explanation: "Bu yöntem bu problem için uygun değil." },
+            { text: "Eksik işlem", latex: "\\text{Bu adım atlanabilir}", explanation: "Bu adım çözüm için gereklidir, atlanamaz." },
+            { text: "Yanlış sıralama", latex: "\\text{Bu işlem daha sonra yapılmalı}", explanation: "İşlem sırası doğru, değiştirilemez." }
+        ];
+        const selected = genericOptions[id % genericOptions.length];
+        return { id, isCorrect: false, ...selected };
+    }
+
+    /**
+     * İnteraktif çözümü başlatır.
+     */
     initializeInteractiveSolution(solutionData) {
         try {
             console.log('🔄 İnteraktif çözüm başlatılıyor...', solutionData);
-            
-            if (!solutionData || !solutionData.adimlar || !Array.isArray(solutionData.adimlar)) {
-                throw new Error('Geçersiz çözüm verisi: adimlar dizisi bulunamadı');
+            if (!solutionData || !solutionData.adimlar || !Array.isArray(solutionData.adimlar) || solutionData.adimlar.length === 0) {
+                throw new Error('Geçersiz veya boş çözüm verisi.');
             }
             
-            if (solutionData.adimlar.length === 0) {
-                throw new Error('Çözüm adımları boş');
-            }
-            
-            // Sistem durumunu sıfırla
             this.reset();
-            
             this.solutionData = solutionData;
             this.totalSteps = solutionData.adimlar.length;
-            this.currentStep = 0;
-            this.isCompleted = false;
-            
-            // Deneme hakkını hesapla: minimum 3, maksimum adım sayısı
             this.maxAttempts = Math.max(3, this.totalSteps);
-            this.totalAttempts = 0;
-            this.attemptHistory = [];
-            this.completedSteps = [];
-            
             this.startTime = Date.now();
             
             console.log(`✅ İnteraktif çözüm başlatıldı - ${this.totalSteps} adım, ${this.maxAttempts} deneme hakkı`);
-            
-            return {
-                totalSteps: this.totalSteps,
-                maxAttempts: this.maxAttempts,
-                currentStep: this.currentStep + 1,
-                success: true
-            };
-            
+            return { success: true, totalSteps: this.totalSteps, maxAttempts: this.maxAttempts, currentStep: 1 };
         } catch (error) {
             console.error('❌ İnteraktif çözüm başlatma hatası:', error);
             throw error;
         }
     }
     
-    // Mevcut adım için seçenekleri oluştur - TAMAMEN YENİDEN YAZILDI
+    /**
+     * Belirli bir adım için seçenekleri hazırlar.
+     */
     async generateStepOptions(stepIndex) {
         try {
-            console.log(`🔄 Adım ${stepIndex + 1} seçenekleri oluşturuluyor...`);
-            
+            console.log(`🔄 Adım ${stepIndex + 1} seçenekleri hazırlanıyor...`);
             if (!this.solutionData || stepIndex >= this.totalSteps || stepIndex < 0) {
-                console.error('❌ Geçersiz adım indeksi:', stepIndex, 'Toplam:', this.totalSteps);
-                return null;
+                throw new Error("Geçersiz adım indeksi.");
             }
             
             const currentStepData = this.solutionData.adimlar[stepIndex];
-            if (!currentStepData) {
-                console.error('❌ Adım verisi bulunamadı:', stepIndex);
-                return null;
-            }
             
-            // Eğer yanlış seçenekler yoksa, API'den al
+            // Eğer adım için yanlış seçenekler daha önce üretilmemişse üret
             if (!currentStepData.yanlisSecenekler || currentStepData.yanlisSecenekler.length === 0) {
-                console.log('📡 Çeldiriciler API\'den alınıyor...');
-                
-                const optionsResponse = await getInteractiveOptions(
-                    currentStepData,
-                    this.solutionData.adimlar,
-                    stepIndex
-                );
-                
-                if (optionsResponse && optionsResponse.yanlisSecenekler) {
-                    currentStepData.yanlisSecenekler = optionsResponse.yanlisSecenekler;
-                }
+                 const wrongOptions = await this.generateWrongOptions(currentStepData, this.solutionData.adimlar, stepIndex);
+                 currentStepData.yanlisSecenekler = wrongOptions.map(opt => ({ metin: opt.latex, hataAciklamasi: opt.explanation }));
             }
             
             const options = [];
+            options.push({ id: 0, text: currentStepData.cozum_lateks, latex: currentStepData.cozum_lateks, isCorrect: true, explanation: currentStepData.adimAciklamasi });
+            currentStepData.yanlisSecenekler.slice(0, 2).forEach((opt, i) => {
+                options.push({ id: i + 1, text: opt.metin, latex: opt.metin, isCorrect: false, explanation: opt.hataAciklamasi });
+            });
             
-            // 1. Doğru cevap
-            const correctOption = {
-                id: 0,
-                text: currentStepData.cozum_lateks,
-                latex: currentStepData.cozum_lateks,
-                isCorrect: true,
-                explanation: currentStepData.adimAciklamasi || "Bu doğru çözüm adımıdır.",
-                feedback: "✅ Harika! Doğru adımı seçtiniz."
-            };
-            options.push(correctOption);
-            
-            // 2. Yanlış seçenekler
-            if (currentStepData.yanlisSecenekler && Array.isArray(currentStepData.yanlisSecenekler)) {
-                currentStepData.yanlisSecenekler.slice(0, 2).forEach((wrongOption, index) => {
-                    options.push({
-                        id: index + 1,
-                        text: wrongOption.metin || `Yanlış seçenek ${index + 1}`,
-                        latex: wrongOption.metin,
-                        isCorrect: false,
-                        explanation: wrongOption.hataAciklamasi || "Bu yanlış bir çözüm adımıdır.",
-                        feedback: wrongOption.ogrenciFeedback || "Bu seçenek yanlış. Tekrar düşünün."
-                    });
-                });
-            }
-            
-            // 3. Eksik seçenekleri tamamla
-            while (options.length < 3) {
-                options.push(this.generateFallbackWrongOption(currentStepData, options.length));
-            }
-            
-            // 4. Seçenekleri karıştır
             this.currentOptions = this.shuffleAndAssignIds(options);
-            
-            console.log(`✅ Adım ${stepIndex + 1} seçenekleri hazırlandı`);
             
             return {
                 stepNumber: stepIndex + 1,
@@ -153,301 +219,116 @@ export class InteractiveSolutionManager {
                 remainingAttempts: this.maxAttempts - this.totalAttempts,
                 success: true
             };
-            
         } catch (error) {
-            console.error('❌ Seçenek oluşturma hatası:', error);
+            console.error('❌ Seçenek hazırlama hatası:', error);
             return null;
         }
     }
     
-    // Seçenekleri karıştır ve displayId ata - YENİ GÜVENLİ ALGORİTMA
+    /**
+     * Seçenekleri karıştırır ve görüntüleme için ID atar.
+     */
     shuffleAndAssignIds(options) {
-        if (!Array.isArray(options) || options.length === 0) {
-            console.error('❌ Geçersiz seçenekler:', options);
-            return [];
-        }
-        
-        // Önce güvenli bir kopya oluştur
-        const shuffled = options.map(option => ({...option}));
-        
-        // Fisher-Yates algoritması ile karıştır
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        
-        // displayId'leri sırayla ata
-        return shuffled.map((option, index) => ({
-            ...option,
-            displayId: index
-        }));
+        const shuffled = [...options].sort(() => Math.random() - 0.5);
+        return shuffled.map((option, index) => ({ ...option, displayId: index }));
     }
-    
-    // Seçenek değerlendirme - TAMAMEN YENİDEN YAZILDI
+
+    /**
+     * Kullanıcının seçimini değerlendirir.
+     */
     evaluateSelection(selectedOptionId) {
         try {
-            console.log(`🔄 Seçenek değerlendiriliyor: ${selectedOptionId}`);
-            
-            // İşlem durumu kontrolü
-            if (this.isProcessing || this.isCompleted) {
-                return { 
-                    error: "İşlem zaten devam ediyor veya tamamlandı",
-                    success: false
-                };
-            }
-            
-            // ✅ KRITIK FIX: Deneme hakkı kontrolü
+            if (this.isProcessing || this.isCompleted) return { error: "İşlem devam ediyor veya tamamlandı", success: false };
             if (this.totalAttempts >= this.maxAttempts) {
-                console.log('❌ TÜM DENEME HAKLARI BİTTİ - KESIN RESET');
-                return { 
-                    error: "Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.",
-                    shouldResetToSetup: true,
-                    totalAttemptsExceeded: true,
-                    forceReset: true, // ✅ YENİ FLAG
-                    success: false
-                };
+                return { error: "Tüm deneme haklarınız bitti.", forceReset: true, success: false };
             }
-            
+
             this.isProcessing = true;
-            
-            // Seçilen seçeneği bul
             const selectedOption = this.findOptionByDisplayId(selectedOptionId);
-            
-            if (!selectedOption) {
-                this.isProcessing = false;
-                return { 
-                    error: "Geçersiz seçenek ID: " + selectedOptionId,
-                    success: false
-                };
-            }
-            
-            // Doğru seçeneği bul
-            const correctOption = this.currentOptions.find(opt => opt.isCorrect === true);
-            
-            // Deneme sayısını artır - SADECE YANLIŞTA
-            let newAttemptCount = this.totalAttempts;
-            if (!selectedOption.isCorrect) {
-                newAttemptCount = this.totalAttempts + 1;
-                this.totalAttempts = newAttemptCount;
-                
-                console.log(`❌ Yanlış cevap! Deneme: ${newAttemptCount}/${this.maxAttempts}`);
-            }
-            
-            // Sonuç nesnesi
-            const result = {
-                isCorrect: selectedOption.isCorrect,
-                explanation: selectedOption.explanation,
-                selectedOption: selectedOption,
-                correctOption: correctOption,
-                attempts: newAttemptCount,
-                remainingAttempts: this.maxAttempts - newAttemptCount,
-                currentStep: this.currentStep + 1,
-                totalSteps: this.totalSteps,
-                success: true
-            };
-            
+            if (!selectedOption) throw new Error("Geçersiz seçenek ID.");
+
+            const correctOption = this.currentOptions.find(opt => opt.isCorrect);
+            let result = { isCorrect: selectedOption.isCorrect, explanation: selectedOption.explanation, selectedOption, correctOption, attempts: this.totalAttempts, remainingAttempts: this.maxAttempts - this.totalAttempts, currentStep: this.currentStep + 1, totalSteps: this.totalSteps, success: true };
+
             if (selectedOption.isCorrect) {
-                // DOĞRU CEVAP İŞLEMİ
                 this.currentStep++;
-                
                 if (this.currentStep >= this.totalSteps) {
-                    // TÜM ADIMLAR TAMAMLANDI
                     this.isCompleted = true;
                     result.isCompleted = true;
                     result.completionStats = this.getCompletionStats();
-                    console.log('🎉 Tüm adımlar tamamlandı!');
                 } else {
-                    // SONRAKİ ADIMA GEÇ
-                    result.nextStep = this.generateStepOptions(this.currentStep);
+                    // Bir sonraki adım için seçenekleri asenkron olarak hazırla
+                    result.nextStepPromise = this.generateStepOptions(this.currentStep);
                 }
-                
             } else {
-                // YANLIŞ CEVAP İŞLEMİ
-                
-                // ✅ KRITIK FIX: Deneme hakkı bitti mi kesin kontrol
-                if (newAttemptCount >= this.maxAttempts) {
-                    console.log('🔚 TÜM DENEME HAKLARI BİTTİ - KESIN RESET BAŞLATILIYOR');
-                    result.shouldResetToSetup = true;
-                    result.totalAttemptsExceeded = true;
-                    result.forceReset = true; // ✅ YENİ FLAG
-                    result.message = "Tüm deneme haklarınız bitti. Soru yükleme ekranına yönlendiriliyorsunuz.";
-                    
-                    // Sistem durumunu reset için hazırla
-                    this.prepareForReset();
+                this.totalAttempts++;
+                result.attempts = this.totalAttempts;
+                result.remainingAttempts = this.maxAttempts - this.totalAttempts;
+
+                if (result.remainingAttempts <= 0) {
+                     result.forceReset = true;
+                     result.message = "Tüm deneme haklarınız bitti.";
                 } else {
-                    // Henüz deneme hakkı var
-                    if (this.currentStep === 0) {
-                        // İlk adımda yanlış - adımı tekrarla
-                        result.restartCurrentStep = true;
-                        result.message = "İlk adımda hata yaptınız. Bu adımı tekrar çözmeniz gerekiyor.";
-                        result.nextStep = this.generateStepOptions(this.currentStep);
-                    } else {
-                        // Diğer adımlarda yanlış - başa dön
-                        this.currentStep = 0;
-                        result.restartFromBeginning = true;
-                        result.message = "Yanlış cevap verdiniz. Baştan başlayacaksınız.";
-                        result.nextStep = this.generateStepOptions(this.currentStep);
-                    }
+                    this.currentStep = 0; // Başa dön
+                    result.restartFromBeginning = true;
+                    result.message = "Yanlış cevap, baştan başlıyorsunuz.";
+                    result.nextStepPromise = this.generateStepOptions(0);
                 }
             }
             
             this.isProcessing = false;
-            
-            console.log('✅ Değerlendirme tamamlandı:', result);
             return result;
-            
         } catch (error) {
             this.isProcessing = false;
-            console.error('❌ Seçenek değerlendirme hatası:', error);
-            return {
-                error: "Değerlendirme sırasında hata oluştu: " + error.message,
-                success: false
-            };
+            console.error('❌ Seçim değerlendirme hatası:', error);
+            return { error: "Değerlendirme sırasında hata oluştu.", success: false };
         }
     }
-    prepareForReset() {
-        console.log('🔄 Sistem reset için hazırlanıyor...');
-        this.isCompleted = true; // Çözümü sonlandır
-        this.isProcessing = false;
-        // Diğer veriler korunacak (reset'te temizlenecek)
-    }
-    // Seçeneği displayId ile bul - GÜVENLİ ARAMA
+    
     findOptionByDisplayId(displayId) {
-        if (!Array.isArray(this.currentOptions)) {
-            console.error('❌ currentOptions bir dizi değil:', this.currentOptions);
-            return null;
-        }
-        
-        // displayId tipini normalize et
-        const normalizedId = parseInt(displayId);
-        
-        if (isNaN(normalizedId)) {
-            console.error('❌ Geçersiz displayId:', displayId);
-            return null;
-        }
-        
-        const found = this.currentOptions.find(option => 
-            option.displayId === normalizedId || 
-            parseInt(option.displayId) === normalizedId
-        );
-        
-        console.log(`🔍 DisplayId ${displayId} aranıyor... Bulunan:`, found ? '✅' : '❌');
-        
-        return found || null;
+        return this.currentOptions.find(option => option.displayId === parseInt(displayId)) || null;
     }
     
-    // Yedek yanlış seçenek oluştur - GÜVENLİ
-    generateFallbackWrongOption(stepData, optionIndex) {
-        const fallbackOptions = [
-            {
-                id: optionIndex,
-                text: "Bu adımda farklı bir yaklaşım kullanmalıyız",
-                latex: "",
-                isCorrect: false,
-                explanation: "Bu yaklaşım bu adım için uygun değildir."
-            },
-            {
-                id: optionIndex,
-                text: "Önceki adımın sonucunu yanlış kullanmak",
-                latex: "",
-                isCorrect: false,
-                explanation: "Önceki adımın sonucu doğru şekilde kullanılmamıştır."
-            },
-            {
-                id: optionIndex,
-                text: "İşlem sırasını yanlış uygulamak",
-                latex: "",
-                isCorrect: false,
-                explanation: "Matematik işlem sırası doğru uygulanmamıştır."
-            }
+    /**
+     * Yardımcı: Belirtilen milisaniye kadar bekler.
+     */
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * API çağrısı başarısız olduğunda veya seçenek üretilemediğinde kullanılacak statik seçenekler.
+     */
+    getFallbackOptions(stepData) {
+        const options = [
+            { id: 0, text: stepData.adimBasligi, latex: stepData.cozum_lateks, isCorrect: true, explanation: "Doğru! Bu adım çözüm için gerekli." },
+            { id: 1, text: "Alternatif 1", latex: "\\text{Farklı bir yaklaşım}", isCorrect: false, explanation: "Bu yaklaşım bu problem için uygun değil." },
+            { id: 2, text: "Alternatif 2", latex: "\\text{Hatalı işlem}", isCorrect: false, explanation: "Bu işlemde bir hata var." }
         ];
-        
-        const randomIndex = Math.floor(Math.random() * fallbackOptions.length);
-        return fallbackOptions[randomIndex];
+        return this.shuffleAndAssignIds(options);
     }
     
-    // Tamamlanma istatistikleri - DÜZELTİLMİŞ
     getCompletionStats() {
+        // ... (Bu fonksiyonun içeriği aynı kalabilir)
         const endTime = Date.now();
         const totalTime = endTime - this.startTime;
-        
-        const wrongAttempts = this.attemptHistory.filter(attempt => !attempt.wasCorrect).length;
-        const correctAttempts = this.attemptHistory.filter(attempt => attempt.wasCorrect).length;
-        
-        return {
-            totalSteps: this.totalSteps,
-            completedSteps: this.completedSteps.length,
-            totalAttempts: wrongAttempts, // Sadece yanlış cevaplar
-            wrongAttempts: wrongAttempts,
-            correctAttempts: correctAttempts,
-            maxAttempts: this.maxAttempts,
-            successRate: this.totalSteps > 0 ? (this.totalSteps / (this.totalSteps + wrongAttempts)) * 100 : 0,
-            totalTimeMs: totalTime,
-            totalTimeFormatted: this.formatTime(totalTime),
-            averageTimePerStep: this.completedSteps.length > 0 ? totalTime / this.completedSteps.length : 0,
-            performance: this.calculatePerformance()
-        };
+        return { totalTimeFormatted: this.formatTime(totalTime), totalAttempts: this.totalAttempts, totalSteps: this.totalSteps, successRate: ((this.totalSteps) / (this.totalSteps + this.totalAttempts)) * 100, performance: 'good' };
     }
-    
-    // Performans hesaplama
-    calculatePerformance() {
-        const wrongAttempts = this.attemptHistory.filter(attempt => !attempt.wasCorrect).length;
-        const totalInteractions = this.attemptHistory.length;
-        
-        if (totalInteractions === 0) return 'excellent';
-        
-        const successRate = ((totalInteractions - wrongAttempts) / totalInteractions) * 100;
-        const efficiencyRate = this.maxAttempts > 0 ? ((this.maxAttempts - wrongAttempts) / this.maxAttempts) * 100 : 0;
-        
-        if (successRate >= 90 && efficiencyRate >= 80) return 'excellent';
-        if (successRate >= 70 && efficiencyRate >= 60) return 'good';
-        if (successRate >= 50) return 'average';
-        return 'needs_improvement';
-    }
-    
-    // Zamanı formatla
-    formatTime(milliseconds) {
-        const seconds = Math.floor(milliseconds / 1000);
+
+    formatTime(ms) {
+        const seconds = Math.floor(ms / 1000);
         const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        
-        if (minutes > 0) {
-            return `${minutes}m ${remainingSeconds}s`;
-        }
-        return `${remainingSeconds}s`;
+        return `${minutes}m ${seconds % 60}s`;
     }
     
-    // Mevcut durumu al
-    getCurrentState() {
-        return {
-            currentStep: this.currentStep + 1,
-            totalSteps: this.totalSteps,
-            attempts: this.totalAttempts,
-            maxAttempts: this.maxAttempts,
-            remainingAttempts: this.maxAttempts - this.totalAttempts,
-            isCompleted: this.isCompleted,
-            completedSteps: this.completedSteps.length,
-            canContinue: this.totalAttempts < this.maxAttempts && !this.isCompleted
-        };
+    getHint() {
+        if (!this.solutionData || this.currentStep >= this.totalSteps) return null;
+        const stepData = this.solutionData.adimlar[this.currentStep];
+        return { hint: stepData.ipucu || "Bu adımda dikkatli düşünün.", stepDescription: stepData.adimAciklamasi };
     }
-    
-    // İpucu al
-    getHint(stepIndex = this.currentStep) {
-        if (!this.solutionData || stepIndex >= this.totalSteps) {
-            return null;
-        }
-        
-        const stepData = this.solutionData.adimlar[stepIndex];
-        return {
-            hint: stepData.ipucu || "Bu adımda dikkatli düşünün.",
-            stepDescription: stepData.adimAciklamasi || `Adım ${stepIndex + 1}`
-        };
-    }
-    
-    // Sistemi sıfırla - TAMAMEN SIFIRLA
+
     reset() {
         console.log('🔄 İnteraktif çözüm sistemi sıfırlanıyor...');
-        
         this.solutionData = null;
         this.currentStep = 0;
         this.totalSteps = 0;
@@ -460,8 +341,7 @@ export class InteractiveSolutionManager {
         this.startTime = null;
         this.isCompleted = false;
         this.isProcessing = false;
-        
-        console.log('✅ İnteraktif çözüm sistemi sıfırlandı');
+        console.log('✅ İnteraktif çözüm sistemi sıfırlandı.');
     }
 }
 

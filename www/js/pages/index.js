@@ -10,8 +10,6 @@ import {
     renderSmartContent,
     waitForRenderSystem,
     initializeRenderSystem,
-    
-    
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
@@ -21,22 +19,13 @@ import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
 import { renderStateManager } from '../modules/renderStateManager.js';
-
 import { globalRenderManager } from '../modules/globalRenderManager.js';
-
-import { getProblemSummary, getFullSolution, getInteractiveOptions, validateMathProblem} from '../services/apiService.js';
-
-
-
+import { getProblemSummary, getFullSolution, getInteractiveOptions, validateMathProblem } from '../services/apiService.js';
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
 const errorHandler = new AdvancedErrorHandler();
 const stateManager = new StateManager();
-
-
-
-
 
 // --- Global DOM Önbelleği ---
 const elements = {};
@@ -49,14 +38,10 @@ window.addEventListener('load', () => {
 async function initializeApp(userData) {
     if (userData) {
         showLoading("Matematik render sistemi başlatılıyor...");
-        
-        // Yeni render sistemi başlatma
         const renderReady = await initializeRenderSystem();
         
         if (!renderReady) {
-            showError("Render sistemi başlatılamadı. Sayfayı yenileyin.", true, () => {
-                location.reload();
-            });
+            showError("Render sistemi başlatılamadı. Sayfayı yenileyin.", true, () => location.reload());
             return;
         }
         
@@ -91,45 +76,22 @@ function cacheDOMElements() {
         'step-by-step-container'
     ];
     ids.forEach(id => { elements[id] = document.getElementById(id); });
-
-    // Ana soru sorma canvas'ını başlat
     canvasManager.initCanvas('handwritingCanvas');
 }
-/**
- * YENİ YARDIMCI FONKSİYON: Arayüzü Temizler
- * Çözüm, durum ve hata mesajlarının gösterildiği tüm konteynerları gizler ve temizler.
- * Ana menüye veya yeni bir soruya geçerken kullanılır.
- */
+
 function resetUI() {
     console.log('🧹 Arayüz temizleniyor...');
-    
-    // 1. Ana sonuç konteynerını gizle
-    if (elements['result-container']) {
-        elements['result-container'].classList.add('hidden');
-    }
-    
-    // 2. Durum mesajı alanını (Yükleniyor..., Hata vb.) temizle
-    if (elements['status-message']) {
-        elements['status-message'].innerHTML = '';
-        elements['status-message'].className = ''; // Class'ları sıfırla
-    }
-    
-    // 3. Çözüm çıktısı alanını temizle
-    if (elements['solution-output']) {
-        elements['solution-output'].innerHTML = '';
-        elements['solution-output'].classList.add('hidden');
-    }
-
-    // 4. (Varsa) Akıllı Rehber veya İnteraktif Çözüm konteynerlarını temizle
-    if (elements['step-by-step-container']) {
-        elements['step-by-step-container'].innerHTML = '';
-    }
-
-    // 5. Loading durumunu state'den de temizle (önemli)
+    const containers = ['result-container', 'status-message', 'solution-output', 'step-by-step-container'];
+    containers.forEach(id => {
+        if (elements[id]) {
+            elements[id].innerHTML = '';
+            elements[id].classList.add('hidden');
+        }
+    });
     showLoading(false);
-
     console.log('✅ Arayüz başarıyla temizlendi.');
 }
+
 
 
 function setupEventListeners() {
@@ -148,16 +110,13 @@ function setupEventListeners() {
     });
 
     const add = (id, event, handler) => {
-        if (elements[id]) {
-            elements[id].addEventListener(event, handler);
-        } else {
-            console.warn(`Element bulunamadı: ${id}`);
-        }
+        if (elements[id]) elements[id].addEventListener(event, handler);
+        else console.warn(`Element bulunamadı: ${id}`);
     };
 
     add('logout-btn', 'click', AuthManager.logout);
     add('new-question-btn', 'click', () => {
-        resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
+        resetUI();
         stateManager.reset();
         smartGuide.reset();
         setTimeout(() => stateManager.setView('setup'), 100);
@@ -170,47 +129,26 @@ function setupEventListeners() {
     add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
     add('startFromTextBtn', 'click', () => handleNewProblem('text'));
 
-    // Ana çözüm seçenekleri
     add('start-solving-workspace-btn', 'click', async () => {
-        // 1. ADIM: Önce problemin doğru çözüm yol haritasını al.
         const stepsReady = await ensureSolutionStepsAvailable();
-        
         if (stepsReady) {
-            const currentState = stateManager.getStateValue('problem');
-            // 2. ADIM: Adımlar hazır. smartGuide modülünü bu veriyle başlat.
-            await smartGuide.initializeGuidance(currentState.solution);
-            
-            // 3. ADIM: "Kendim Çözeceğim" görünümüne geç.
+            await smartGuide.initializeGuidance(stateManager.getStateValue('problem').solution);
             stateManager.setView('solving');
         }
     });
 
     add('show-full-solution-btn', 'click', async () => {
-        // Yardımcı fonksiyonu çağır. Adımların hazır olduğundan emin ol.
         const stepsReady = await ensureSolutionStepsAvailable();
-        
-        // Eğer adımlar başarılı bir şekilde hazırlandıysa, görünümü değiştir.
-        if (stepsReady) {
-            stateManager.setView('fullSolution');
-        }
+        if (stepsReady) stateManager.setView('fullSolution');
     });
 
     add('solve-all-btn', 'click', async () => {
-        // 1. ADIM: Önce problemin doğru çözüm yol haritasını al.
         const stepsReady = await ensureSolutionStepsAvailable();
-        if (!stepsReady) {
-            // Eğer adımlar alınamazsa işlemi durdur. ensureSolutionStepsAvailable zaten hata mesajını gösterir.
-            return;
-        }
-
-        // 2. ADIM: Adımlar hazır olduğuna göre, interaktif görünümü başlat.
-        // renderApp fonksiyonu, 'interactive' view'a geçildiğinde
-        // renderInteractiveSolution'ı çağırarak süreci başlatacak.
-        stateManager.setView('interactive');
+        if (stepsReady) stateManager.setView('interactive');
     });
 
     add('goBackBtn', 'click', () => {
-        resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
+        resetUI();
         stateManager.setView('summary');
     });
 
@@ -237,37 +175,22 @@ function setupEventListeners() {
             showError("Önce bir soru yüklemelisiniz.", false);
             return false;
         }
-
         if (currentState.solution.adimlar) return true;
 
         try {
             showLoading("Çözüm adımları hazırlanıyor...");
-            
-            const onProgressCallback = (message) => {
-                showLoading(message);
-            };
-
             const source = currentState.solution._source;
             if (!source || !source.context) {
                 showError("Orijinal soru verisi bulunamadı.", true);
                 return false;
             }
-
-            const solutionSteps = await getFullSolution(
-                source.context,
-                source.image,
-                onProgressCallback
-            );
-
+            const solutionSteps = await getFullSolution(source.context, source.image, (msg) => showLoading(msg));
             if (solutionSteps && solutionSteps.adimlar) {
-                const completeSolution = { ...currentState.solution, ...solutionSteps };
-                stateManager.setSolution(completeSolution);
+                stateManager.setSolution({ ...currentState.solution, ...solutionSteps });
                 showLoading(false);
                 return true;
             } else {
-                showLoading(false);
-                showError("Çözüm adımları alınamadı. Lütfen tekrar deneyin.", false);
-                return false;
+                throw new Error("Çözüm adımları alınamadı.");
             }
         } catch (error) {
             showLoading(false);
@@ -815,110 +738,47 @@ async function renderApp(state) {
     }
 
     // 3. Ana Görünüm (View) Yönetimi
-    const { view, inputMode, handwritingInputType } = ui;
-    const isVisible = (v) => v === view;
+    const { view, inputMode, handwritingInputType } = state.ui;
 
-    // View'lara göre container görünürlüğü
-    toggleContainerVisibility(view, problem);
+    toggleContainerVisibility(view, state.problem); // Görünürlükleri ayarla
     
     try {
-        // 4. View-Specific Render İşlemleri
         switch(view) {
             case 'setup':
                 await renderSetupView(inputMode, handwritingInputType);
                 break;
-                
             case 'summary':
-                // Sadece soru özetini göster
-                if (problem.solution) {
-                    await renderStateManager.trackRender('summary', () => 
-                        displayQuestionSummary(problem.solution.problemOzeti)
-                    );
+                if (state.problem.solution) {
+                    await displayQuestionSummary(state.problem.solution.problemOzeti);
                 }
                 break;
-                
             case 'fullSolution':
-                console.log('Rendering full solution view with Advanced Math Renderer');
-                
-                // Container'ları göster
                 showSolutionContainers();
-                
-                // Çözümü render et
-                await renderStateManager.trackRender('fullSolution', async () => {
-                    await renderFullSolution(problem.solution);
-                });
-                
-                // Soru özetini de render et
-                if (problem.solution) {
-                    await renderStateManager.trackRender('summary-full', () => 
-                        displayQuestionSummary(problem.solution.problemOzeti)
-                    );
+                await renderFullSolution(state.problem.solution);
+                if (state.problem.solution) {
+                    await displayQuestionSummary(state.problem.solution.problemOzeti);
                 }
                 break;
-                
             case 'interactive':
                 console.log('Rendering interactive view - starting');
-                
-                try {
-                    showLoading("İnteraktif çözüm hazırlanıyor...");
-                    
-                    // Container'ları göster
-                    showSolutionContainers();
-                    
-                    // Kısa bekleme
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // İnteraktif çözümü render et
-                    await renderStateManager.trackRender('interactive', async () => {
-                        await renderInteractiveSolution(problem.solution);
-                    });
-                    
-                    // Soru özetini render et
-                    if (problem.solution) {
-                        await renderStateManager.trackRender('summary-interactive', () => 
-                            displayQuestionSummary(problem.solution.problemOzeti)
-                        );
-                    }
-                    
-                } catch (error) {
-                    console.error('İnteraktif view render hatası:', error);
-                    showError('İnteraktif çözüm yüklenirken bir hata oluştu. Lütfen tekrar deneyin.', false);
-                } finally {
-                    showLoading(false);
+                showSolutionContainers();
+                await renderInteractiveSolution(state.problem.solution);
+                if (state.problem.solution) {
+                    await displayQuestionSummary(state.problem.solution.problemOzeti);
                 }
                 break;
-                
             case 'solving':
-                console.log('Rendering solving view with Smart Guide');
-                
-                // Workspace'i render et
-                await renderStateManager.trackRender('solving', async () => {
-                    await renderSmartGuideWorkspace();
-                });
-                
-                // Soru özetini render et
-                if (problem.solution) {
-                    await renderStateManager.trackRender('summary-solving', () => 
-                        displayQuestionSummary(problem.solution.problemOzeti)
-                    );
+                await renderSmartGuideWorkspace();
+                if (state.problem.solution) {
+                    await displayQuestionSummary(state.problem.solution.problemOzeti);
                 }
                 break;
-                
             default:
                 console.warn('Bilinmeyen view:', view);
         }
-        
-        // 5. Render istatistiklerini logla
-        if (window.renderStateManager) {
-            const stats = renderStateManager.getStats();
-            console.log('Render stats:', stats);
-        }
-        
     } catch (error) {
         console.error('View render hatası:', error);
-        showError('İçerik yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.', true, () => {
-            location.reload();
-        });
+        showError('İçerik yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.', true, () => location.reload());
     }
 }
 
@@ -2402,7 +2262,6 @@ if (!document.getElementById('solution-animations')) {
 
 async function renderInteractiveSolution(solution) {
     console.log('🔄 İnteraktif Çözüm Başlatılıyor');
-    
     showLoading("İnteraktif çözüm hazırlanıyor...");
 
     try {
@@ -2411,28 +2270,19 @@ async function renderInteractiveSolution(solution) {
             return;
         }
         
+        // 1. InteractiveSolutionManager'ı çözüm verisiyle başlat
         interactiveSolutionManager.initializeInteractiveSolution(solution);
         
-        // İLK ADIM İÇİN - tüm adımları gönder
-        const firstStepData = solution.adimlar[0];
-        const optionsResponse = await getInteractiveOptions(
-            firstStepData,
-            solution.adimlar,  // Tüm adımlar
-            0,                 // İlk adım indeksi
-            (msg) => showLoading(msg)
-        );
+        // 2. İlk adım için seçenekleri OLUŞTUR ve BEKLE (await)
+        // Gereksiz API çağrısı buradan kaldırıldı. Manager kendi verisini kendi alacak.
+        const stepOptionsToRender = await interactiveSolutionManager.generateStepOptions(0);
 
-        if (!optionsResponse || !optionsResponse.yanlisSecenekler) {
-            throw new Error("API'den çeldirici seçenekler alınamadı.");
-        }
-        
-        solution.adimlar[0].yanlisSecenekler = optionsResponse.yanlisSecenekler;
-        const stepOptionsToRender = interactiveSolutionManager.generateStepOptions(0);
-
+        // 3. Gelen sonucun geçerli olduğunu kontrol et
         if (!stepOptionsToRender || !stepOptionsToRender.success) {
             throw new Error("İlk adım seçenekleri oluşturulamadı.");
         }
 
+        // 4. Adımı ekrana render et
         await renderInteractiveStepSafe(stepOptionsToRender);
 
     } catch (error) {
@@ -2472,28 +2322,15 @@ function waitForDOMReady() {
 }
 async function renderInteractiveStepSafe(stepData) {
     console.log('🔄 İnteraktif adım render başlıyor:', stepData);
-
     try {
         const solutionOutput = document.getElementById('solution-output');
-        if (!solutionOutput) {
-            throw new Error('solution-output container bulunamadı');
-        }
+        if (!solutionOutput) throw new Error('solution-output container bulunamadı');
 
-        // HTML'i oluştur ve DOM'a ekle
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
-
-        // Event listener'ları kur
         setupInteractiveEventListeners(stepData);
-
-        // Global render manager ile render et
-        await globalRenderManager.renderContainer(solutionOutput, {
-            onProgress: (completed, total) => {
-                console.log(`İnteraktif render: ${completed}/${total}`);
-            }
-        });
+        await globalRenderManager.renderContainer(solutionOutput);
 
         console.log('✅ İnteraktif adım render tamamlandı');
-
     } catch (error) {
         console.error('❌ Adım render hatası:', error);
         displayInteractiveError(`Render hatası: ${error.message}`);
@@ -2883,9 +2720,7 @@ function escapeHtml(text) {
 
 async function handleInteractiveSubmissionSafe() {
     console.log('🔄 Güvenli submission başlıyor...');
-    
     try {
-        // Seçilen option'ı bul
         const selectedRadio = document.querySelector('input[name="interactive-step-options"]:checked');
         if (!selectedRadio) {
             showError("Lütfen bir seçenek seçin.", false);
@@ -2893,26 +2728,13 @@ async function handleInteractiveSubmissionSafe() {
         }
         
         const selectedOptionId = parseInt(selectedRadio.value);
-        console.log(`📝 Seçilen option ID: ${selectedOptionId}`);
-        
-        // UI'yi devre dışı bırak
         disableInteractiveUI();
         
-        // Değerlendirme yap
         const result = interactiveSolutionManager.evaluateSelection(selectedOptionId);
         
-        console.log('🎯 Evaluation result:', result);
-        
         if (!result || result.error) {
-            console.error('❌ Değerlendirme hatası:', result);
-            
-            // ✅ KRITIK FIX: Reset koşullarını netleştir
-            if (result && (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded)) {
-                console.log('🔄 ZORUNLU RESET BAŞLATILIYOR...');
-                
-                // Güvenli ve garantili reset işlemi
-                await handleInteractiveForceReset(result.error || result.message);
-                return;
+            if (result && result.forceReset) {
+                await handleInteractiveForceReset(result.error || "Tüm deneme haklarınız bitti.");
             } else {
                 showError(result?.error || "Değerlendirme sırasında hata oluştu", false);
                 enableInteractiveUI();
@@ -2920,24 +2742,23 @@ async function handleInteractiveSubmissionSafe() {
             return;
         }
         
-        // Sonucu göster
         await displayInteractiveResultSafe(result);
         
-        // Sonraki adıma geçiş
+        // Asenkron olarak bir sonraki adımı hazırla ve geç
         setTimeout(async () => {
             if (result.isCorrect) {
                 if (result.isCompleted) {
                     await displayInteractiveCompletion(result.completionStats);
-                } else if (result.nextStep) {
-                    await renderInteractiveStepSafe(result.nextStep);
+                } else if (result.nextStepPromise) {
+                    const nextStep = await result.nextStepPromise;
+                    if (nextStep) await renderInteractiveStepSafe(nextStep);
                 }
             } else {
-                // ✅ KRITIK FIX: Yanlış cevap sonrası kontrol
-                if (result.forceReset || result.shouldResetToSetup || result.totalAttemptsExceeded) {
-                    console.log('🔄 YANLIŞ CEVAP + ZORUNLU RESET BAŞLATILIYOR...');
+                if (result.forceReset) {
                     await handleInteractiveForceReset(result.message);
-                } else if (result.nextStep) {
-                    await renderInteractiveStepSafe(result.nextStep);
+                } else if (result.nextStepPromise) {
+                    const nextStep = await result.nextStepPromise;
+                    if (nextStep) await renderInteractiveStepSafe(nextStep);
                 }
             }
         }, 3000);
@@ -3438,16 +3259,3 @@ window.globalRenderManager = globalRenderManager;
 // --- EXPORTS ---
 export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
 
-window.testHelpers = {
-    apiService: {
-        getProblemSummary,
-        getFullSolution,
-        getInteractiveOptions,
-        validateStudentStep,
-        validateMathProblem
-    },
-    stateManager,
-    smartGuide,
-    interactiveSolutionManager,
-    canvasManager
-};
