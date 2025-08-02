@@ -76,7 +76,7 @@ export class InteractiveSolutionManager {
     }
     
     // Mevcut adım için seçenekleri oluştur - TAMAMEN YENİDEN YAZILDI
-    generateStepOptions(stepIndex) {
+    async generateStepOptions(stepIndex) {
         try {
             console.log(`🔄 Adım ${stepIndex + 1} seçenekleri oluşturuluyor...`);
             
@@ -91,16 +91,31 @@ export class InteractiveSolutionManager {
                 return null;
             }
             
+            // Eğer yanlış seçenekler yoksa, API'den al
+            if (!currentStepData.yanlisSecenekler || currentStepData.yanlisSecenekler.length === 0) {
+                console.log('📡 Çeldiriciler API\'den alınıyor...');
+                
+                const optionsResponse = await getInteractiveOptions(
+                    currentStepData,
+                    this.solutionData.adimlar,
+                    stepIndex
+                );
+                
+                if (optionsResponse && optionsResponse.yanlisSecenekler) {
+                    currentStepData.yanlisSecenekler = optionsResponse.yanlisSecenekler;
+                }
+            }
+            
             const options = [];
             
-            // 1. Doğru cevap - DEĞİŞİKLİK BURADA: Artık sadece 'cozum_lateks' kullanılıyor.
+            // 1. Doğru cevap
             const correctOption = {
                 id: 0,
-                // "text" alanı için adimAciklamasi yerine cozum_lateks kullanıyoruz.
-                text: currentStepData.cozum_lateks || `Adım ${stepIndex + 1} için işlem bulunamadı.`,
-                latex: currentStepData.cozum_lateks || '', // latex alanını da dolduralım
+                text: currentStepData.cozum_lateks,
+                latex: currentStepData.cozum_lateks,
                 isCorrect: true,
-                explanation: "Bu doğru çözüm adımıdır."
+                explanation: currentStepData.adimAciklamasi || "Bu doğru çözüm adımıdır.",
+                feedback: "✅ Harika! Doğru adımı seçtiniz."
             };
             options.push(correctOption);
             
@@ -109,24 +124,24 @@ export class InteractiveSolutionManager {
                 currentStepData.yanlisSecenekler.slice(0, 2).forEach((wrongOption, index) => {
                     options.push({
                         id: index + 1,
-                        // "text" alanı için metin veya latex kullan
-                        text: wrongOption.metin || wrongOption.latex || `Yanlış seçenek ${index + 1}`,
+                        text: wrongOption.metin || `Yanlış seçenek ${index + 1}`,
+                        latex: wrongOption.metin,
                         isCorrect: false,
-                        explanation: wrongOption.yanlisGeriBildirimi || "Bu yanlış bir çözüm adımıdır."
+                        explanation: wrongOption.hataAciklamasi || "Bu yanlış bir çözüm adımıdır.",
+                        feedback: wrongOption.ogrenciFeedback || "Bu seçenek yanlış. Tekrar düşünün."
                     });
                 });
             }
             
             // 3. Eksik seçenekleri tamamla
             while (options.length < 3) {
-                const fallbackOption = this.generateFallbackWrongOption(currentStepData, options.length);
-                options.push(fallbackOption);
+                options.push(this.generateFallbackWrongOption(currentStepData, options.length));
             }
             
-            // 4. Seçenekleri karıştır ve ID ata
+            // 4. Seçenekleri karıştır
             this.currentOptions = this.shuffleAndAssignIds(options);
             
-            console.log(`✅ Adım ${stepIndex + 1} seçenekleri hazırlandı:`, this.currentOptions.length, 'seçenek');
+            console.log(`✅ Adım ${stepIndex + 1} seçenekleri hazırlandı`);
             
             return {
                 stepNumber: stepIndex + 1,

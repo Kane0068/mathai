@@ -591,7 +591,11 @@ resetEnforcement() {
         
         const attemptInfo = this.getCurrentStepAttemptInfo();
         if (!attemptInfo.canAttempt) {
-            return { /*...*/ }; // Bu kısım aynı kalabilir.
+            return {
+                isCorrect: false,
+                message: "Bu adım için deneme hakkınız kalmadı.",
+                shouldReset: true
+            };
         }
         
         this.isProcessing = true;
@@ -599,34 +603,64 @@ resetEnforcement() {
         try {
             const attemptResult = this.incrementStepAttempt();
             const currentStepData = this.guidanceData.steps[this.currentStep];
-
-            // Önceki karmaşık validasyon mantığı yerine, doğrudan apiService'i çağırıyoruz.
-            const validationResult = await validateStudentStep(studentInput, currentStepData);
-
-            if (!validationResult) {
-                throw new Error("API'den doğrulama yanıtı alınamadı.");
-            }
-
-            if (validationResult.dogruMu) {
-                // Cevap doğruysa
+            
+            // Önce lokal kontrol yap
+            const quickCheck = this.quickValidateStep(studentInput, currentStepData);
+            
+            if (quickCheck.isDefinitelyCorrect) {
+                // Kesinlikle doğru, API'ye gerek yok
                 this.markStepAsSuccess();
                 return {
                     isCorrect: true,
-                    message: validationResult.geriBildirim || "Harika, doğru!",
+                    message: quickCheck.message || "Harika, doğru!",
                     hint: "Bir sonraki adıma geçebilirsiniz.",
                     shouldProceed: true,
                     attempts: attemptResult.attempts,
                     remaining: attemptResult.remaining,
                     stepCompleted: true
                 };
+            }
+            
+            // API'ye sor - daha esnek prompt ile
+            const validationResult = await this.flexibleValidateWithAPI(
+                studentInput, 
+                currentStepData,
+                this.currentStep,
+                this.guidanceData.steps
+            );
+
+            if (validationResult.dogruMu) {
+                this.markStepAsSuccess();
+                
+                // Ara adım mı yoksa final cevap mı kontrol et
+                if (validationResult.isFinalAnswer) {
+                    this.completeProblem();
+                    return {
+                        isCorrect: true,
+                        message: "🎉 Tebrikler! Problemi çözdünüz!",
+                        finalAnswerGiven: true,
+                        shouldComplete: true,
+                        attempts: attemptResult.attempts
+                    };
+                }
+                
+                return {
+                    isCorrect: true,
+                    message: validationResult.geriBildirim || "Doğru!",
+                    hint: validationResult.ipucu || "Devam edin!",
+                    shouldProceed: true,
+                    attempts: attemptResult.attempts,
+                    remaining: attemptResult.remaining,
+                    stepCompleted: true
+                };
+                
             } else {
-                // Cevap yanlışsa
+                // Yanlış cevap
                 if (attemptResult.isFinalAttempt) {
-                    // Son deneme hakkı da bittiyse
                     return {
                         isCorrect: false,
                         message: validationResult.geriBildirim || "Bu adımda bir hata var.",
-                        hint: validationResult.neden || "Tüm deneme haklarınız bitti.",
+                        hint: "Tüm deneme haklarınız bitti.",
                         shouldProceed: false,
                         shouldReset: true,
                         attempts: attemptResult.attempts,
@@ -634,7 +668,6 @@ resetEnforcement() {
                         finalAttempt: true
                     };
                 } else {
-                    // Hala deneme hakkı varsa
                     return {
                         isCorrect: false,
                         message: validationResult.geriBildirim,
@@ -649,9 +682,110 @@ resetEnforcement() {
             
         } catch (error) {
             this.errorHandler.handleError(error, { operation: 'evaluateStudentStep' });
-            // ... (hata yönetimi kısmı aynı kalabilir)
+            return {
+                isCorrect: false,
+                message: "Değerlendirme sırasında hata oluştu",
+                error: true
+            };
         } finally {
             this.isProcessing = false;
+        }
+    }
+
+        // Hızlı lokal doğrulama
+    quickValidateStep(studentInput, stepData) {
+        const normalized = this.normalizeExpression(studentInput);
+        const expected = this.normalizeExpression(stepData.correctAnswer);
+        
+        // Birebir eşleşme
+        if (normalized === expected) {
+            return {
+                isDefinitelyCorrect: true,
+                message: "Mükemmel! Tam olarak doğru."
+            };
+        }
+        
+        // Çok basit kontroller
+        if (!studentInput || studentInput.trim().length < 2) {
+            return {
+                isDefinitelyCorrect: false,
+                isDefinitelyWrong: true,
+                message: "Lütfen bir çözüm yazın."
+            };
+        }
+        
+        return {
+            isDefinitelyCorrect: false,
+            needsAPICheck: true
+        };
+    }
+    normalizeExpression(expr) {
+        if (!expr) return '';
+        
+        return expr
+            .replace(/\s+/g, '')  // Boşlukları kaldır
+            .replace(/\*/g, '×')  // Çarpma işaretini standartlaştır
+            .replace(/\\/g, '')   // Backslash'ları kaldır
+            .toLowerCase()
+            .trim();
+    }
+
+    async flexibleValidateWithAPI(studentInput, stepData, currentStepIndex, allSteps) {
+        const flexiblePrompt = `
+            Öğrencinin matematik adımını ESNEKLİKLE değerlendir.
+            
+            Problem çözüm akışı:
+            ${allSteps.map((s, i) => 
+                i === currentStepIndex ? 
+                `➤ MEVCUT ADIM ${i+1}: ${s.correctAnswer}` :
+                `  Adım ${i+1}: ${s.correctAnswer}`
+            ).join('\n')}
+            
+            Öğrenci cevabı: "${studentInput}"
+            Beklenen (Adım ${currentStepIndex + 1}): "${stepData.correctAnswer}"
+            
+            DEĞERLENDİRME KURALLARI:
+            1. Öğrenci mevcut adımı doğru yapmışsa KABUL ET
+            2. Öğrenci ileriki adımları da yapmışsa KABUL ET  
+            3. Öğrenci farklı ama doğru format kullanmışsa KABUL ET
+            4. Öğrenci son cevabı (x=... gibi) verdiyse KABUL ET ve final olarak işaretle
+            
+            ÖRNEKLER:
+            - Beklenen: "2x = 30", Öğrenci: "x = 15" → DOĞRU (ileriki adım)
+            - Beklenen: "2x - 10 = 20", Öğrenci: "2x = 30" → DOĞRU  
+            - Beklenen: "x + 5 = 10", Öğrenci: "x = 5" → DOĞRU
+            
+            JSON formatı:
+            {
+                "dogruMu": boolean,
+                "isFinalAnswer": boolean,
+                "geriBildirim": "Kısa Türkçe açıklama",
+                "neden": "Eğer yanlışsa neden",
+                "ipucu": "Sonraki adım için yönlendirme"
+            }
+            
+            SADECE JSON döndür.
+        `;
+        
+        try {
+            const response = await validateStudentStep(flexiblePrompt, {
+                correctAnswer: stepData.correctAnswer,
+                description: stepData.description
+            });
+            
+            return response || {
+                dogruMu: false,
+                geriBildirim: "Cevap değerlendirilemedi",
+                neden: "Tekrar deneyin"
+            };
+            
+        } catch (error) {
+            console.error('API doğrulama hatası:', error);
+            return {
+                dogruMu: false,
+                geriBildirim: "Değerlendirme hatası",
+                neden: "Tekrar deneyin"
+            };
         }
     }
 

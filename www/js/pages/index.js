@@ -9,7 +9,9 @@ import {
     renderMathInContainer,
     renderSmartContent,
     waitForRenderSystem,
-    showAnimatedLoading
+    initializeRenderSystem,
+    
+    
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
@@ -20,8 +22,9 @@ import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
 import { renderStateManager } from '../modules/renderStateManager.js';
 
+import { globalRenderManager } from '../modules/globalRenderManager.js';
 
-import { getProblemSummary, getFullSolution, getInteractiveOptions } from '../services/apiService.js';
+import { getProblemSummary, getFullSolution, getInteractiveOptions, validateMathProblem} from '../services/apiService.js';
 
 
 
@@ -45,20 +48,27 @@ window.addEventListener('load', () => {
 
 async function initializeApp(userData) {
     if (userData) {
-        // Render sisteminin hazır olmasını bekle
         showLoading("Matematik render sistemi başlatılıyor...");
-        await waitForRenderSystem();
-
+        
+        // Yeni render sistemi başlatma
+        const renderReady = await initializeRenderSystem();
+        
+        if (!renderReady) {
+            showError("Render sistemi başlatılamadı. Sayfayı yenileyin.", true, () => {
+                location.reload();
+            });
+            return;
+        }
+        
         cacheDOMElements();
         setupEventListeners();
         stateManager.subscribe(renderApp);
         stateManager.setUser(userData);
-
-        // Akıllı Rehber sistemini başlat
+        
         smartGuide.setCanvasManager(canvasManager);
-
+        
         showLoading(false);
-        console.log('Uygulama başarıyla başlatıldı - Advanced Math Renderer hazır');
+        console.log('✅ Uygulama başarıyla başlatıldı');
     } else {
         document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
     }
@@ -1921,7 +1931,7 @@ function isCanvasEmpty(canvasId) {
     }
 }
 
-// www/js/index.js
+
 
 async function handleNewProblem(sourceType) {
     let sourceData;
@@ -1943,9 +1953,40 @@ async function handleNewProblem(sourceType) {
             problemContextForPrompt = sourceData;
         }
 
-        if (!await handleQueryDecrement()) return;
+        // YENİ: Matematik sorusu validasyonu
+        showLoading("İçerik kontrol ediliyor...");
+        
+        const validationResult = await validateMathProblem(
+            problemContextForPrompt,
+            imageBase64,
+            (msg) => showLoading(msg)
+        );
+        
+        if (!validationResult.isMathProblem) {
+            showLoading(false);
+            
+            // Kullanıcı hakkını azalt
+            if (!await handleQueryDecrement()) return;
+            
+            // Hata mesajı göster
+            showError(
+                `❌ Bu bir matematik sorusu değil!\n\n` +
+                `📝 Sebep: ${validationResult.reason}\n\n` +
+                `💡 ${validationResult.educationalMessage}\n\n` +
+                `⚠️ Dikkat: Geçersiz sorular da hakkınızdan düşer!`,
+                true,
+                () => {
+                    clearInputAreas();
+                    stateManager.setView('setup');
+                }
+            );
+            return;
+        }
+        
+        // Matematik sorusu ise devam et
+        showLoading("Matematik sorusu analiz ediliyor...");
 
-        showLoading("Soru analiz ediliyor, lütfen bekleyin...");
+        if (!await handleQueryDecrement()) return;
 
         const onProgressCallback = (message) => {
             showLoading(message);
@@ -1962,16 +2003,20 @@ async function handleNewProblem(sourceType) {
                 problemOzeti: summaryResponse.problemOzeti,
                 adimlar: null,
                 tamCozumLateks: null,
-                _source: { context: problemContextForPrompt, image: imageBase64 }
+                _source: { context: problemContextForPrompt, image: imageBase64 },
+                _mathCategory: validationResult.category // Kategoriyi sakla
             };
             stateManager.setSolution(initialSolution);
             stateManager.setView('summary');
             showLoading(false);
-            showSuccess("Problem özeti başarıyla oluşturuldu.", false);
+            showSuccess(
+                `✅ ${validationResult.category} sorusu başarıyla yüklendi!`, 
+                false
+            );
         } else {
             showLoading(false);
             showError(
-                "Yapay zeka bu soruyu işlerken bir sorunla karşılaştı. Lütfen soruyu daha net bir şekilde tekrar sormayı deneyin.",
+                "Matematik sorusu işlenirken bir sorun oluştu. Lütfen daha net bir soru sorun.",
                 true,
                 () => { stateManager.reset(); clearInputAreas(); }
             );
@@ -1980,7 +2025,6 @@ async function handleNewProblem(sourceType) {
         errorHandler.handleError(error, { operation: 'handleNewProblem' });
     }
 }
-
 
 // --- YARDIMCI FONKSİYONLAR ---
 async function handleQueryDecrement() {
@@ -2040,15 +2084,6 @@ function setQuestionCanvasTool(tool, buttonIds) {
 }
 
 
-
-
-
-
-
-// --- PROBLEM ÖZETİ VE RENDER FONKSİYONLARI ---
-
-
-
 async function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
 
@@ -2060,28 +2095,21 @@ async function displayQuestionSummary(problemOzeti) {
     if (verilenler && verilenler.length > 0) {
         summaryHTML += '<div class="mb-2"><strong>Verilenler:</strong><ul class="list-disc list-inside ml-4">';
         verilenler.forEach((veri) => {
-            // DEĞİŞİKLİK: CSS sınıfını 'smart-content' olarak güncelledik.
-            // Bu, render motorunun bu elementi bulmasını sağlar.
-            summaryHTML += `<li class="smart-content">${veri}</li>`;
+            summaryHTML += `<li class="smart-content" data-content="${escapeHtml(veri)}">${escapeHtml(veri)}</li>`;
         });
         summaryHTML += '</ul></div>';
     }
 
     if (istenen) {
-        // DEĞİŞİKLİK: CSS sınıfını 'smart-content' olarak güncelledik.
-        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content">${istenen}</span></div>`;
+        summaryHTML += `<div><strong>İstenen:</strong> <span class="smart-content" data-content="${escapeHtml(istenen)}">${escapeHtml(istenen)}</span></div>`;
     }
 
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
 
-    // Bu kısım doğru. DOM güncellendikten sonra render motorunu çağırır.
-    setTimeout(() => {
-        renderMathInContainer(elements['question']);
-    }, 100);
+    // Global render manager kullan
+    await globalRenderManager.renderContainer(elements['question']);
 }
-
-
 
 
 // HTML oluşturma fonksiyonu - Full Solution için
@@ -2370,23 +2398,29 @@ if (!document.getElementById('solution-animations')) {
 
 
 
+// index.js - renderInteractiveSolution fonksiyonunu güncelleyin
+
 async function renderInteractiveSolution(solution) {
-    console.log('🔄 Dinamik İnteraktif Çözüm Başlatılıyor (Nihai Düzeltme)');
+    console.log('🔄 İnteraktif Çözüm Başlatılıyor');
     
-    showLoading("İlk interaktif adım hazırlanıyor...");
+    showLoading("İnteraktif çözüm hazırlanıyor...");
 
     try {
-        if (!solution || !solution.adimlar || !solution.adimlar.length === 0) {
+        if (!solution || !solution.adimlar || solution.adimlar.length === 0) {
             displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
             return;
         }
-
-        // SORUNA NEDEN OLAN forceShowContainers() SATIRI BURADAN KALDIRILDI.
         
         interactiveSolutionManager.initializeInteractiveSolution(solution);
         
+        // İLK ADIM İÇİN - tüm adımları gönder
         const firstStepData = solution.adimlar[0];
-        const optionsResponse = await getInteractiveOptions(firstStepData);
+        const optionsResponse = await getInteractiveOptions(
+            firstStepData,
+            solution.adimlar,  // Tüm adımlar
+            0,                 // İlk adım indeksi
+            (msg) => showLoading(msg)
+        );
 
         if (!optionsResponse || !optionsResponse.yanlisSecenekler) {
             throw new Error("API'den çeldirici seçenekler alınamadı.");
@@ -2405,10 +2439,7 @@ async function renderInteractiveSolution(solution) {
         console.error('❌ İnteraktif çözüm başlatma hatası:', error);
         displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
     } finally {
-        // Bu blok artık inline stil tarafından engellenmeyeceği için
-        // yükleme mesajını başarıyla gizleyecektir.
         showLoading(false);
-        console.log('✅ İnteraktif hazırlık süreci tamamlandı, yükleme mesajı gizlendi.');
     }
 }
 
@@ -2439,10 +2470,8 @@ function waitForDOMReady() {
         }
     });
 }
-// www/js/index.js
-
 async function renderInteractiveStepSafe(stepData) {
-    console.log('🔄 Güvenli adım render başlıyor (NİHAİ DÜZELTME İLE):', stepData);
+    console.log('🔄 İnteraktif adım render başlıyor:', stepData);
 
     try {
         const solutionOutput = document.getElementById('solution-output');
@@ -2450,41 +2479,20 @@ async function renderInteractiveStepSafe(stepData) {
             throw new Error('solution-output container bulunamadı');
         }
 
-        // 1. HTML'i oluştur ve DOM'a ekle
+        // HTML'i oluştur ve DOM'a ekle
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
 
-        // 2. Event listener'ları kur
+        // Event listener'ları kur
         setupInteractiveEventListeners(stepData);
 
-        // 3. NİHAİ RENDER MANTIĞI:
-        // DOM güncellendikten sonra, her bir seçeneği tek tek bul ve render et.
-        setTimeout(() => {
-            try {
-                console.log('🔄 Her bir seçenek tek tek render ediliyor...');
-                
-                // Konteyner içindeki TÜM '.smart-content' elementlerini bul
-                const mathElements = solutionOutput.querySelectorAll('.smart-content');
-                
-                if (mathElements.length === 0) {
-                    console.warn('Render edilecek matematik içeriği bulunamadı.');
-                    return;
-                }
-
-                console.log(`${mathElements.length} adet matematik içeriği bulundu ve işleniyor.`);
-
-                // Her birini render et
-                mathElements.forEach(element => {
-                    // Elementin kendi içeriğini al ve doğrudan kendisine render et
-                    const contentToRender = element.textContent || element.innerHTML;
-                    renderMath(contentToRender, element, false);
-                });
-
-                console.log('✅ Tüm seçeneklerin render işlemi tamamlandı.');
-
-            } catch (mathError) {
-                console.error('⚠️ Seçenekler render edilirken kritik hata:', mathError);
+        // Global render manager ile render et
+        await globalRenderManager.renderContainer(solutionOutput, {
+            onProgress: (completed, total) => {
+                console.log(`İnteraktif render: ${completed}/${total}`);
             }
-        }, 150); // DOM'un tam olarak güncellenmesi için kısa bir bekleme süresi
+        });
+
+        console.log('✅ İnteraktif adım render tamamlandı');
 
     } catch (error) {
         console.error('❌ Adım render hatası:', error);
@@ -3424,7 +3432,22 @@ window.setupInteractiveEventListeners = setupInteractiveEventListeners;
 window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
+window.globalRenderManager = globalRenderManager;
 
 
 // --- EXPORTS ---
 export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
+
+window.testHelpers = {
+    apiService: {
+        getProblemSummary,
+        getFullSolution,
+        getInteractiveOptions,
+        validateStudentStep,
+        validateMathProblem
+    },
+    stateManager,
+    smartGuide,
+    interactiveSolutionManager,
+    canvasManager
+};

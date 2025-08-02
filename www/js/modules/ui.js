@@ -3,6 +3,7 @@
 // =================================================================================
 
 import { advancedMathRenderer } from './advancedMathRenderer.js';
+import { globalRenderManager } from './globalRenderManager.js';
 
 /**
  * Ekranda bir yükleme mesajı gösterir.
@@ -163,21 +164,11 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
     showStep();
 }
 
-/**
- * Gelişmiş matematiksel ifade render fonksiyonu.
- * @param {string} content - Render edilecek içerik.
- * @param {HTMLElement} element - Hedef HTML elementi.
- * @param {boolean} displayMode - Display modu (blok/inline).
- */
 export async function renderMath(content, element, displayMode = false) {
     if (!content || !element) return false;
+    
     try {
-        const result = await advancedMathRenderer.render(content, element, displayMode);
-        if (!result) {
-            element.textContent = content;
-            element.classList.add('render-fallback');
-        }
-        return result;
+        return await globalRenderManager.renderElement(element, content, { displayMode });
     } catch (error) {
         console.error('renderMath hatası:', error);
         element.textContent = content;
@@ -185,51 +176,34 @@ export async function renderMath(content, element, displayMode = false) {
         return false;
     }
 }
-
-/**
- * Container içindeki tüm matematik içeriğini verimli bir şekilde render eder.
- * @param {HTMLElement} container - Render edilecek container.
- * @param {boolean} displayMode - Display modu.
- */
+// renderMathInContainer fonksiyonunu değiştirin
 export async function renderMathInContainer(container, displayMode = false) {
     if (!container) return;
     
-    await waitForDOMReady();
-    
-    if (!isElementVisible(container)) {
-        console.warn('Container görünür değil, render erteleniyor');
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                observer.disconnect();
-                renderMathInContainer(container, displayMode);
+    try {
+        await globalRenderManager.renderContainer(container, {
+            displayMode,
+            onProgress: (completed, total) => {
+                console.log(`Render ilerleme: ${completed}/${total}`);
             }
         });
-        observer.observe(container);
-        return;
-    }
-    
-    const elements = collectRenderableElements(container);
-    
-    let completed = 0;
-    const total = elements.length;
-    
-    for (const batch of chunk(elements, 5)) {
-        await Promise.all(batch.map(async ({element, content, type}) => {
-            try {
-                await renderMath(content, element, type === 'latex' ? displayMode : false);
-                completed++;
-                if (window.onRenderProgress) {
-                    window.onRenderProgress(completed, total);
-                }
-            } catch (error) {
-                console.error('Element render hatası:', error);
-                element.classList.add('render-failed');
-            }
-        }));
-        await new Promise(resolve => setTimeout(resolve, 50));
+    } catch (error) {
+        console.error('Container render hatası:', error);
     }
 }
-
+// Yeni: Render sistemini başlat
+export async function initializeRenderSystem() {
+    console.log('🚀 Render sistemi başlatılıyor...');
+    const initialized = await globalRenderManager.initializeMathJax();
+    
+    if (initialized) {
+        console.log('✅ Render sistemi hazır');
+    } else {
+        console.error('❌ Render sistemi başlatılamadı');
+    }
+    
+    return initialized;
+}
 
 /**
  * Smart content elementlerini render eder.
@@ -381,4 +355,20 @@ function chunk(array, size) {
         chunks.push(array.slice(i, i + size));
     }
     return chunks;
+}
+
+// Dosyanın sonunda global erişim ekleyin
+if (typeof window !== 'undefined') {
+    window.mathUI = {
+        renderMath, 
+        renderMathInContainer, 
+        renderSmartContent, 
+        renderLatexContent,
+        smartRender, 
+        batchRender, 
+        getRenderStats, 
+        clearRenderCache, 
+        waitForRenderSystem,
+        globalRenderManager // Bunu ekleyin
+    };
 }
