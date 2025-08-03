@@ -201,48 +201,20 @@ export class SmartGuideSystem {
 
     async initializeGuidance(solutionData) {
         if (!solutionData) {
-            throw new Error('Çözüm verisi bulunamadı');
-        }
+        throw new Error('Çözüm verisi bulunamadı');
+    }
 
-        try {
-            // Mevcut çözüm verisinden rehberlik verisi oluştur
-            this.guidanceData = this.processGuidanceData(solutionData);
-            this.currentStep = 0;
-            this.studentAttempts = [];
-            this.progressiveHints = [];
-            
-            // YENİ: Zorunluluk seviyesini hesapla
-            const enforcementLevel = this.calculateEnforcementLevel(solutionData);
-            
-            // Zorunluluk kurallarını ayarla
-            this.stepEnforcementRules.minStepsRequired = Math.max(2, this.guidanceData.totalSteps - 1);
-            
-            switch(enforcementLevel) {
-                case 'flexible':
-                    this.stepEnforcementRules.finalAnswerEarlyThreshold = 0.5; // %50'den sonra izin ver
-                    this.stepEnforcementRules.maxConsecutiveFinalAnswers = 3;
-                    break;
-                case 'strict':
-                    this.stepEnforcementRules.finalAnswerEarlyThreshold = 0.8; // %80'den sonra izin ver
-                    this.stepEnforcementRules.maxConsecutiveFinalAnswers = 1;
-                    break;
-                default: // normal
-                    this.stepEnforcementRules.finalAnswerEarlyThreshold = 0.7; // %70'den sonra izin ver
-                    this.stepEnforcementRules.maxConsecutiveFinalAnswers = 2;
-            }
-            
-            // Enforcement sistemini sıfırla
-            this.resetEnforcement();
-            
-            console.log(`Rehberlik sistemi başlatıldı - Seviye: ${enforcementLevel}, Toplam adım: ${this.guidanceData.totalSteps}`);
-            
-            return this.guidanceData;
-        } catch (error) {
-            this.errorHandler.handleError(error, { 
-                operation: 'initializeGuidance',
-                fallbackMessage: 'Rehberlik sistemi başlatılamadı'
-            });
-            throw error;
+    try {
+        this.reset(); // Önceki durumdan kalan her şeyi temizle
+        this.guidanceData = this.processGuidanceData(solutionData);
+        console.log(`Rehberlik sistemi başlatıldı - Toplam adım: ${this.guidanceData.totalSteps}`);
+        return this.guidanceData;
+    } catch (error) {
+        this.errorHandler.handleError(error, { 
+            operation: 'initializeGuidance',
+            fallbackMessage: 'Rehberlik sistemi başlatılamadı'
+        });
+        throw error;
         }
     }
 
@@ -371,17 +343,17 @@ export class SmartGuideSystem {
 
     // Bir sonraki adıma geç (deneme sayısını sıfırla)
     proceedToNextStep() {
-        if (this.currentStep < this.guidanceData.totalSteps - 1) {
-            this.currentStep++;
-            this.progressiveHints = [];
-            this.resetHintForCurrentStep();
-            
-            // YENİ ADIM İÇİN DENEMELERİ SIFIRLA
-            this.currentStepAttempts = 0;
-            this.stepFailed = false;
-            
-            return true;
-        }
+         if (this.currentStep < this.guidanceData.totalSteps - 1) {
+        this.currentStep++;
+        this.progressiveHints = [];
+        this.resetHintForCurrentStep();
+
+        // YENİ ADIM İÇİN DENEMELERİ SIFIRLA
+        this.currentStepAttempts = 0;
+        this.stepFailed = false;
+
+        return true;
+     }
         return false; // Son adıma ulaşıldı
     }
 
@@ -441,7 +413,7 @@ export class SmartGuideSystem {
                 description: step.adimAciklamasi || `${index + 1}. Adım`,
                 correctAnswer: step.cozum_lateks || '',
                 hints: this.generateProgressiveHints(step),
-                commonMistakes: step.yanlisSecenekler || [],
+                yanlisSecenekler: step.yanlisSecenekler || [],
                 validationKeywords: this.extractValidationKeywords(step.cozum_lateks || ''),
                 ipucu: step.ipucu || 'Bu adımda dikkatli olun.',
                 difficulty: this.calculateStepDifficulty(step)
@@ -586,107 +558,90 @@ resetEnforcement() {
     }
 
 
+    // MEVCUT evaluateStudentStep fonksiyonunu SİLİP BUNU EKLEYİN
+
     async evaluateStudentStep(studentInput, inputType = 'text') {
-        if (this.isProcessing) return;
-        
+        if (this.isProcessing) {
+            console.warn("Mevcut bir değerlendirme zaten devam ediyor.");
+            return;
+        }
+
         const attemptInfo = this.getCurrentStepAttemptInfo();
         if (!attemptInfo.canAttempt) {
             return {
                 isCorrect: false,
                 message: "Bu adım için deneme hakkınız kalmadı.",
-                shouldReset: true
+                shouldReset: true,
+                finalAttempt: true
             };
         }
-        
+
         this.isProcessing = true;
-        
+
         try {
             const attemptResult = this.incrementStepAttempt();
             const currentStepData = this.guidanceData.steps[this.currentStep];
             
-            // Önce lokal kontrol yap
-            const quickCheck = this.quickValidateStep(studentInput, currentStepData);
-            
-            if (quickCheck.isDefinitelyCorrect) {
-                // Kesinlikle doğru, API'ye gerek yok
-                this.markStepAsSuccess();
-                return {
-                    isCorrect: true,
-                    message: quickCheck.message || "Harika, doğru!",
-                    hint: "Bir sonraki adıma geçebilirsiniz.",
-                    shouldProceed: true,
-                    attempts: attemptResult.attempts,
-                    remaining: attemptResult.remaining,
-                    stepCompleted: true
-                };
+            // API'ye daha zengin bir prompt göndereceğiz
+            const validationResult = await validateStudentStep(studentInput, {
+                description: currentStepData.adimAciklamasi,
+                correctAnswer: currentStepData.cozum_lateks,
+            });
+
+            if (!validationResult) {
+                throw new Error("API'den değerlendirme yanıtı alınamadı.");
             }
-            
-            // API'ye sor - daha esnek prompt ile
-            const validationResult = await this.flexibleValidateWithAPI(
-                studentInput, 
-                currentStepData,
-                this.currentStep,
-                this.guidanceData.steps
-            );
 
             if (validationResult.dogruMu) {
                 this.markStepAsSuccess();
-                
-                // Ara adım mı yoksa final cevap mı kontrol et
-                if (validationResult.isFinalAnswer) {
-                    this.completeProblem();
-                    return {
+                // Eğer kullanıcı sonuca ulaştıysa veya ileriki bir adımı çözdüyse, problemi tamamla
+                if (validationResult.isFinalAnswer || (this.currentStep + 1) >= this.guidanceData.totalSteps) {
+                     this.completeProblem();
+                     return {
                         isCorrect: true,
-                        message: "🎉 Tebrikler! Problemi çözdünüz!",
-                        finalAnswerGiven: true,
+                        message: validationResult.geriBildirim || "Tebrikler! Problemi başarıyla çözdünüz!",
+                        finalAnswerGiven: true, // UI'ın tamamlama ekranını göstermesi için
                         shouldComplete: true,
-                        attempts: attemptResult.attempts
-                    };
+                        attempts: attemptResult.attempts,
+                     };
                 }
                 
+                // Normal doğru adım
                 return {
                     isCorrect: true,
-                    message: validationResult.geriBildirim || "Doğru!",
-                    hint: validationResult.ipucu || "Devam edin!",
+                    message: validationResult.geriBildirim || "Harika! Bu adım doğru.",
                     shouldProceed: true,
                     attempts: attemptResult.attempts,
-                    remaining: attemptResult.remaining,
-                    stepCompleted: true
+                    remaining: attemptResult.remaining
                 };
-                
             } else {
-                // Yanlış cevap
+                // Yanlış cevap senaryosu
                 if (attemptResult.isFinalAttempt) {
                     return {
                         isCorrect: false,
-                        message: validationResult.geriBildirim || "Bu adımda bir hata var.",
-                        hint: "Tüm deneme haklarınız bitti.",
-                        shouldProceed: false,
-                        shouldReset: true,
+                        message: validationResult.geriBildirim || "Maalesef bu son denemeydi.",
+                        hint: validationResult.neden || "Bu konuyu tekrar gözden geçirmelisin.",
+                        shouldReset: true, // 3 hata sonrası sistemi sıfırlama sinyali
+                        finalAttempt: true,
                         attempts: attemptResult.attempts,
-                        remaining: 0,
-                        finalAttempt: true
+                        remaining: 0
                     };
                 } else {
+                    // Henüz deneme hakkı var
                     return {
                         isCorrect: false,
                         message: validationResult.geriBildirim,
-                        hint: validationResult.neden,
-                        shouldProceed: false,
+                        hint: validationResult.ipucu || validationResult.neden,
+                        canRetry: true,
                         attempts: attemptResult.attempts,
-                        remaining: attemptResult.remaining,
-                        canRetry: true
+                        remaining: attemptResult.remaining
                     };
                 }
             }
-            
+
         } catch (error) {
             this.errorHandler.handleError(error, { operation: 'evaluateStudentStep' });
-            return {
-                isCorrect: false,
-                message: "Değerlendirme sırasında hata oluştu",
-                error: true
-            };
+            return { isCorrect: false, message: "Cevabınız değerlendirilirken bir hata oluştu.", error: true };
         } finally {
             this.isProcessing = false;
         }
