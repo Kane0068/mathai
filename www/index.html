@@ -5,654 +5,163 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MathAi - Gelişmiş Çözüm Asistanı</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Premium Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- KaTeX Kütüphaneleri -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.2/lib/browser/math.js"></script>
+
+    <script>
+        // MathJax erken yapılandırma
+        window.MathJax = {
+            startup: {
+                typeset: false // Otomatik render'ı kapat
+            }
+        };
+    </script>
+
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 
     <style>
-        * {
-            font-family: 'Poppins', sans-serif;
-        }
-        
-        .mono-font {
-            font-family: 'JetBrains Mono', monospace;
-        }
-        
-        /* Premium Glassmorphism Effect */
-        .glass {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .glass-dark {
-            background: rgba(0, 0, 0, 0.05);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        /* Animated Gradient Backgrounds */
-        .gradient-bg {
-            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c, #4facfe, #00f2fe);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-        }
-        
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        /* Floating Particles */
-        .particle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            border-radius: 50%;
-            pointer-events: none;
-            animation: float 6s ease-in-out infinite;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.4; }
-            50% { transform: translateY(-20px) rotate(180deg); opacity: 0.8; }
-        }
-        
-        /* Premium Button Styles */
-        .btn-premium {
+        /* Render bekleyen elementler */
+        .render-pending {
             position: relative;
-            overflow: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 16px;
-            padding: 14px 28px;
-            color: white;
-            font-weight: 600;
-            font-size: 15px;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+            min-height: 1.5em;
         }
         
-        .btn-premium:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 15px 45px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-premium:active {
-            transform: translateY(-1px) scale(0.98);
-        }
-        
-        .btn-premium::before {
-            content: '';
+        .render-pending::after {
+            content: "⏳";
             position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            animation: pulse 1s infinite;
         }
         
-        .btn-premium:hover::before {
-            left: 100%;
-        }
-        
-        .btn-secondary-premium {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #374151;
-            font-weight: 500;
-        }
-        
-        .btn-secondary-premium:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-        }
-        
-        /* Icon Button Styles */
-        .icon-btn {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: #374151;
-        }
-        
-        .icon-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* Input Styles */
-        .input-premium {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 16px;
-            padding: 16px 20px;
-            font-size: 16px;
-            font-weight: 400;
-            color: #374151;
-            transition: all 0.3s ease;
-            outline: none;
-        }
-        
-        .input-premium:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-            background: rgba(255, 255, 255, 0.95);
-        }
-        
-        /* Card Styles */
-        .card-premium {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.05);
-        }
-        
-        /* Status Badge */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border-radius: 50px;
-            font-weight: 600;
-            font-size: 14px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-        
-        /* Mode Toggle */
-        .mode-toggle {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 6px;
-            display: flex;
-            gap: 4px;
-        }
-        
-        .mode-btn {
-            flex: 1;
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: none;
-            background: transparent;
-            color: #6b7280;
-        }
-        
-        .mode-btn.active {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-        
-        /* Upload Area */
-        .upload-area {
-            border: 2px dashed rgba(102, 126, 234, 0.3);
-            border-radius: 20px;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
-            transition: all 0.3s ease;
-        }
-        
-        .upload-area:hover {
-            border-color: rgba(102, 126, 234, 0.5);
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
-        }
-        
-        /* Canvas Container */
-        .canvas-container {
-            border-radius: 16px;
-            background: white;
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
-            border: 2px solid rgba(102, 126, 234, 0.2);
-        }
-        
-        /* Tool Button */
-        .tool-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            color: #374151;
-        }
-        
-        .tool-btn:hover {
-            background: rgba(102, 126, 234, 0.1);
-            color: #667eea;
-            transform: scale(1.05);
-        }
-        
-        .tool-btn.active {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        
-        /* Pulse Animation */
-        .pulse-glow {
-            animation: pulseGlow 2s ease-in-out infinite alternate;
-        }
-        
-        @keyframes pulseGlow {
-            from { box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
-            to { box-shadow: 0 0 30px rgba(102, 126, 234, 0.6); }
-        }
-        
-        /* Scroll Animation */
-        .fade-in {
-            animation: fadeIn 0.6s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
     </style>
+
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.2/lib/browser/math.js"></script>
 </head>
 
-<body class="min-h-screen gradient-bg relative overflow-x-hidden">
-    <!-- Floating Particles -->
-    <div class="particle" style="top: 10%; left: 10%; animation-delay: 0s;"></div>
-    <div class="particle" style="top: 20%; left: 80%; animation-delay: 1s;"></div>
-    <div class="particle" style="top: 50%; left: 15%; animation-delay: 2s;"></div>
-    <div class="particle" style="top: 70%; left: 85%; animation-delay: 3s;"></div>
-    <div class="particle" style="top: 30%; left: 50%; animation-delay: 4s;"></div>
-    <div class="particle" style="top: 80%; left: 30%; animation-delay: 5s;"></div>
-    
-    <div class="w-full max-w-6xl mx-auto my-8 px-4">
-        <div class="card-premium p-8 md:p-12 fade-in">
-            <!-- HEADER -->
-            <header class="relative text-center mb-10">
-                <!-- Navigation Icons -->
-                <div class="absolute top-0 left-0 flex space-x-3">
-                    <a href="profile.html" class="icon-btn" title="Profilim">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="7" r="4"/>
-                            <path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
-                        </svg>
-                    </a>
-                    <a href="math-test.html" class="icon-btn" title="Test Sistemi">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="M2 17l10 5 10-5"/>
-                            <path d="M2 12l10 5 10-5"/>
-                        </svg>
-                    </a>
-                    <a href="debug.html" class="icon-btn" title="Debug Sistemi">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 2v20"/>
-                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                        </svg>
-                    </a>
-                </div>
-                
-                <!-- Logout Button -->
-                <button id="logout-btn" class="absolute top-0 right-0 icon-btn" title="Çıkış Yap">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/>
-                        <line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
-                </button>
-                
-                <!-- Main Title -->
-                <div class="mb-6">
-                    <h1 class="text-6xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-purple-200 to-pink-200 mb-4 tracking-tight">
-                        MathAI
-                    </h1>
-                    <div class="w-24 h-1 bg-gradient-to-r from-purple-400 to-pink-400 mx-auto rounded-full mb-4"></div>
-                    <p id="header-subtitle" class="text-white/80 text-lg font-medium">Yeni nesil matematik çözüm asistanı</p>
-                </div>
-                
-                <!-- Status Area -->
-                <div id="user-status-area" class="flex justify-center">
-                    <div class="status-badge">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
-                        Kalan Hak: <span id="query-count" class="mono-font font-bold">∞</span>
-                    </div>
-                </div>
-            </header>
-
-            <!-- SORU YÜKLEME ALANI -->
-            <div id="question-setup-area" class="space-y-8 mb-10">
-                <div class="text-center mb-8">
-                    <h2 class="text-3xl font-bold text-white mb-4">Sorunuzu Nasıl Girmek İstersiniz?</h2>
-                    <p class="text-white/70 text-lg">En uygun yöntemi seçin ve çözüme başlayalım</p>
-                </div>
-                
-                <!-- Mode Toggle -->
-                <div class="mode-toggle max-w-md mx-auto">
-                    <button id="photo-mode-btn" class="mode-btn active">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21,15 16,10 5,21"/>
-                        </svg>
-                        Fotoğraf
-                    </button>
-                    <button id="handwriting-mode-btn" class="mode-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                            <path d="M13.5 6.5L17.5 10.5"/>
-                        </svg>
-                        El Yazısı
-                    </button>
-                </div>
-                
-                <!-- Fotoğraf Modu -->
-                <div id="photo-mode-container" class="fade-in">
-                    <div class="upload-area p-12 text-center">
-                        <input type="file" id="imageUploader" class="hidden" accept="image/*">
-                        <input type="file" id="cameraUploader" class="hidden" accept="image/*" capture="environment">
-                        
-                        <div id="upload-selection">
-                            <div class="mb-6">
-                                <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                                        <polyline points="21,15 16,10 5,21"/>
-                                    </svg>
-                                </div>
-                                <h3 class="text-2xl font-bold text-white mb-2">Sorunuzu Yükleyin</h3>
-                                <p class="text-white/70">Fotoğraf çekin veya dosya yükleyin</p>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
-                                <button id="selectFileBtn" class="btn-premium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                        <polyline points="14,2 14,8 20,8"/>
-                                        <line x1="16" y1="13" x2="8" y2="13"/>
-                                        <line x1="16" y1="17" x2="8" y2="17"/>
-                                        <polyline points="10,9 9,9 8,9"/>
-                                    </svg>
-                                    Dosya Seç
-                                </button>
-                                <button id="takePhotoBtn" class="btn-premium">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                                        <circle cx="12" cy="13" r="4"/>
-                                    </svg>
-                                    Kamera
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="preview-container" class="hidden">
-                            <img id="imagePreview" src="" class="max-h-64 mx-auto rounded-2xl shadow-2xl mb-6" alt="Yüklenen Soru">
-                            <button id="changePhotoBtn" class="btn-secondary-premium">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                                    <path d="M21 3v5h-5"/>
-                                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                                    <path d="M8 16l-5-5h5"/>
-                                </svg>
-                                Değiştir
-                            </button>
-                        </div>
-                    </div>
-                    <div class="text-center mt-6">
-                        <button id="startFromPhotoBtn" class="btn-premium px-12 py-4 text-lg pulse-glow" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                <polygon points="5,3 19,12 5,21"/>
-                            </svg>
-                            Çözüme Başla
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Metin/El Yazısı Modu -->
-                <div id="handwriting-mode-container" class="hidden fade-in">
-                    <!-- Klavye Girişi -->
-                    <div id="keyboard-input-container">
-                        <div class="mb-6 text-center">
-                            <h3 class="text-2xl font-bold text-white mb-2">Sorunuzu Yazın</h3>
-                            <p class="text-white/70">Matematik formüllerini ve sembolleri kullanabilirsiniz</p>
-                        </div>
-                        
-                        <textarea id="keyboard-input" class="input-premium w-full h-48 resize-none" placeholder="Örnek: x² + 5x - 6 = 0 denklemini çözünüz..."></textarea>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                            <button id="startFromTextBtn" class="btn-premium">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                    <polyline points="14,2 14,8 20,8"/>
-                                    <line x1="16" y1="13" x2="8" y2="13"/>
-                                </svg>
-                                Metinden Başla
-                            </button>
-                            <button id="switchToCanvasBtn" class="btn-secondary-premium">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                                </svg>
-                                El Yazısına Geç
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- El Yazısı Canvas -->
-                    <div id="handwriting-canvas-container" class="hidden">
-                        <div class="mb-6 text-center">
-                            <h3 class="text-2xl font-bold text-white mb-2">El Yazınızla Çizin</h3>
-                            <p class="text-white/70">Matematik formüllerini doğrudan çizebilirsiniz</p>
-                        </div>
-                        
-                        <div class="canvas-container w-full h-80 mb-6">
-                            <canvas id="handwritingCanvas" class="w-full h-full"></canvas>
-                        </div>
-                        
-                        <!-- Araç Çubuğu -->
-                        <div class="flex justify-center items-center gap-3 p-4 glass-dark rounded-2xl mb-6">
-                            <button id="hw-pen-btn" class="tool-btn active" title="Kalem">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                                </svg>
-                            </button>
-                            <button id="hw-eraser-btn" class="tool-btn" title="Silgi">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
-                                    <path d="M5 12.5 12 19.5"/>
-                                </svg>
-                            </button>
-                            <div class="w-px h-8 bg-white/20"></div>
-                            <button id="hw-undo-btn" class="tool-btn" title="Geri Al">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 7v6h6"/>
-                                    <path d="M21 17a9 9 0 0 0-9-15 9 9 0 0 0-6 2.3L3 13"/>
-                                </svg>
-                            </button>
-                            <button id="hw-clear-btn" class="tool-btn" title="Temizle">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 6h18"/>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-                                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                </svg>
-                            </button>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button id="recognizeHandwritingBtn" class="btn-premium">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="7,10 12,15 17,10"/>
-                                    <line x1="12" y1="15" x2="12" y2="3"/>
-                                </svg>
-                                Yazıyı Tanı
-                            </button>
-                            <button id="switchToKeyboardBtn" class="btn-secondary-premium">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                    <rect x="2" y="4" width="20" height="16" rx="2"/>
-                                    <path d="M6 8h.01"/>
-                                    <path d="M10 8h.01"/>
-                                    <path d="M14 8h.01"/>
-                                    <path d="M18 8h.01"/>
-                                    <path d="M8 12h.01"/>
-                                    <path d="M12 12h.01"/>
-                                    <path d="M16 12h.01"/>
-                                    <path d="M7 16h10"/>
-                                </svg>
-                                Klavyeye Geç
-                            </button>
-                        </div>
-                    </div>
+<body class="p-4 bg-slate-100">
+    <div class="w-full max-w-5xl mx-auto my-8 bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-6 md:p-8 border border-gray-200">
+        <header class="relative text-center mb-6">
+            <div class="absolute top-0 left-0 flex space-x-2">
+                <a href="profile.html" class="btn btn-tertiary !p-2" title="Profilim">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </a>
+                <a href="math-test.html" class="btn btn-tertiary !p-2" title="Test Sistemi">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+                </a>
+                <a href="debug.html" class="btn btn-tertiary !p-2" title="Debug Sistemi">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                </a>
+            </div>
+            <button id="logout-btn" class="absolute top-0 right-0 btn btn-secondary !p-2" title="Çıkış Yap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 pb-2">MathAi</h1>
+            <p id="header-subtitle" class="text-gray-500 mt-1">Yükleniyor...</p>
+            
+            <div id="user-status-area" class="mt-4 space-y-2">
+                <div id="query-counter-container" class="font-semibold text-indigo-700 bg-indigo-100/80 rounded-full px-4 py-2 text-sm inline-block border border-indigo-200">
+                    Kalan Sorgu Hakkı: <span id="query-count">...</span>
                 </div>
             </div>
+        </header>
 
-            <!-- SORU ÖZETİ -->
-            <div id="question-summary-container" class="hidden mb-10 fade-in">
-                <div class="card-premium p-8 border-l-4" style="border-left-color: #667eea;">
-                    <div class="flex items-center mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center mr-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4l3 3h7a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-7l-3 3z"/>
-                            </svg>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Soru Analizi</h2>
-                    </div>
-                    <div id="question" class="glass-dark p-6 rounded-2xl text-white text-lg leading-relaxed"></div>
-                </div>
+        <div id="question-setup-area" class="space-y-4 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Soru Girişi</h2>
+                <div class="text-sm text-gray-500" id="question-status">Aktif</div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 rounded-xl bg-gray-200/70 p-1.5 max-w-lg mx-auto">
+                <button id="photo-mode-btn" class="w-full py-2.5 px-4 rounded-lg font-semibold transition-all duration-300">Fotoğraf ile Yükle</button>
+                <button id="handwriting-mode-btn" class="w-full py-2.5 px-4 rounded-lg font-semibold transition-all duration-300">Metin/El Yazısı ile Yaz</button>
             </div>
             
-            <!-- AKSİYON BUTONLARI -->
-            <div id="top-action-buttons" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 fade-in">
-                <button id="start-solving-workspace-btn" class="group relative overflow-hidden rounded-2xl p-6 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl" style="background: linear-gradient(135deg, #8b5cf6, #d946ef);">
-                    <div class="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-pink-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div class="relative flex flex-col items-center text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-3">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                        </svg>
-                        <span class="text-lg">Kendim Çözeceğim</span>
-                        <span class="text-sm opacity-80 mt-1">Adım adım rehberlik</span>
-                    </div>
-                </button>
-                
-                <button id="solve-all-btn" class="group relative overflow-hidden rounded-2xl p-6 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl" style="background: linear-gradient(135deg, #2563eb, #7c3aed);">
-                    <div class="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div class="relative flex flex-col items-center text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-3">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="M2 17l10 5 10-5"/>
-                            <path d="M2 12l10 5 10-5"/>
-                        </svg>
-                        <span class="text-lg">İnteraktif Çözüm</span>
-                        <span class="text-sm opacity-80 mt-1">Etkileşimli süreç</span>
-                    </div>
-                </button>
-                
-                <button id="show-full-solution-btn" class="group relative overflow-hidden rounded-2xl p-6 text-white font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl" style="background: linear-gradient(135deg, #16a34a, #22c55e);">
-                    <div class="absolute inset-0 bg-gradient-to-r from-green-600/20 to-emerald-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div class="relative flex flex-col items-center text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-3">
-                            <polyline points="20,6 9,17 4,12"/>
-                        </svg>
-                        <span class="text-lg">Tam Çözüm</span>
-                        <span class="text-sm opacity-80 mt-1">Detaylı açıklama</span>
-                    </div>
-                </button>
-                
-                <button id="new-question-btn" class="group relative overflow-hidden rounded-2xl p-6 text-gray-700 font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl glass-dark border-2 border-white/20">
-                    <div class="absolute inset-0 bg-gradient-to-r from-gray-100/10 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div class="relative flex flex-col items-center text-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-3">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="16"/>
-                            <line x1="8" y1="12" x2="16" y2="12"/>
-                        </svg>
-                        <span class="text-lg text-white">Yeni Soru</span>
-                        <span class="text-sm opacity-80 mt-1 text-white/70">Baştan başla</span>
-                    </div>
-                </button>
-            </div>
-            
-            <!-- ÇÖZÜM ÇALIŞMA ALANI -->
-            <div id="solving-workspace" class="hidden fade-in">
-                <div class="card-premium p-8 mb-8">
-                    <div class="flex justify-between items-center mb-8">
-                        <div class="flex items-center">
-                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center mr-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                    <path d="M2 17l10 5 10-5"/>
-                                    <path d="M2 12l10 5 10-5"/>
-                                </svg>
-                            </div>
-                            <h2 class="text-3xl font-bold text-white">Adım Adım Çözüm</h2>
+            <div id="photo-mode-container">
+                <div class="bg-indigo-50/50 rounded-2xl p-6 text-center transition-all duration-300 border-2 border-dashed border-indigo-200">
+                    <input type="file" id="imageUploader" class="hidden" accept="image/*">
+                    <input type="file" id="cameraUploader" class="hidden" accept="image/*" capture="environment">
+                    <div id="upload-selection">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        <p class="mt-2 text-sm text-gray-600">Soruyu yüklemek için bir yöntem seçin</p>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-sm mx-auto">
+                            <button id="selectFileBtn" class="btn btn-tertiary">Dosya Seç</button>
+                            <button id="takePhotoBtn" class="btn btn-tertiary">Kamera ile Çek</button>
                         </div>
-                        <button id="goBackBtn" class="btn-secondary-premium">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                                <path d="M19 12H5"/>
-                                <path d="M12 19l-7-7 7-7"/>
-                            </svg>
-                            Geri Dön
-                        </button>
                     </div>
-                    
-                    <div id="step-by-step-container" class="space-y-6">
-                        <!-- Dinamik içerik buraya gelecek -->
+                    <div id="preview-container" class="hidden">
+                         <img id="imagePreview" src="" class="max-h-48 mx-auto rounded-md shadow-sm" alt="Yüklenen Soru Önizlemesi">
+                         <button id="changePhotoBtn" class="btn btn-tertiary mt-4 text-sm !p-2">Değiştir</button>
                     </div>
                 </div>
+                <button id="startFromPhotoBtn" class="mt-4 w-full btn btn-primary" disabled>Çözüme Başla</button>
             </div>
 
-            <!-- SONUÇ VE İNTERAKTİF ÇÖZÜM ALANI -->
-            <div id="result-container" class="hidden fade-in">
-                <div id="status-message" class="card-premium p-8 mb-8 text-center">
-                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
+            <div id="handwriting-mode-container" class="hidden">
+                <div id="keyboard-input-container">
+                    <textarea id="keyboard-input" class="w-full h-40 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow" placeholder="Matematik sorusunu buraya yazın..."></textarea>
+                    <div class="grid grid-cols-2 gap-3 mt-3">
+                        <button id="startFromTextBtn" class="btn btn-primary">Metinden Tanı</button>
+                        <button id="switchToCanvasBtn" class="btn btn-tertiary">El Yazısı</button>
                     </div>
-                    <h3 class="text-2xl font-bold text-white mb-2">Çözüm İşleniyor</h3>
-                    <p class="text-white/70">Matematik uzmanımız sorununuzu analiz ediyor...</p>
                 </div>
-                
-                <div id="solution-output" class="hidden">
-                    <!-- Dinamik çözüm içeriği buraya gelecek -->
+                 <div id="handwriting-canvas-container" class="hidden">
+                    <div class="canvas-container w-full h-56 md:h-64 rounded-lg overflow-hidden bg-white shadow-inner"><canvas id="handwritingCanvas"></canvas></div>
+                    <div class="flex justify-center items-center gap-2 p-2 mt-2 bg-gray-100 rounded-lg border">
+                        <button id="hw-pen-btn" class="tool-btn p-2 rounded-md" title="Kalem"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                        <button id="hw-eraser-btn" class="tool-btn p-2 rounded-md" title="Silgi"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7Z"/><path d="M5 12.5 12 19.5"/></svg></button>
+                        <button id="hw-undo-btn" class="tool-btn p-2 rounded-md" title="Geri Al"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-15 9 9 0 0 0-6 2.3L3 13"/></svg></button>
+                        <button id="hw-clear-btn" class="tool-btn p-2 rounded-md" title="Hepsini Sil"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                    </div>
+                     <div class="grid grid-cols-2 gap-3 mt-3">
+                        <button id="recognizeHandwritingBtn" class="btn btn-primary">El Yazısını Tanı</button>
+                        <button id="switchToKeyboardBtn" class="btn btn-tertiary">Klavye</button>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <div id="question-summary-container" class="bg-gradient-to-r from-blue-100 to-indigo-100 border-l-4 border-indigo-500 rounded-xl mb-6 p-4 shadow-md hidden">
+            <h2 class="font-semibold text-lg mb-3">Soru Özeti</h2>
+            <div id="question" class="bg-white/60 p-3 rounded-lg shadow-inner"></div>
+        </div>
+        
+        <div id="top-action-buttons" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+            <button id="start-solving-workspace-btn" class="btn text-white w-full" style="background-image: linear-gradient(to right, #8b5cf6, #d946ef);">Kendim Çözeceğim</button>
+            <button id="solve-all-btn" class="btn text-white w-full" style="background-image: linear-gradient(to right, #2563eb, #7c3aed);">İnteraktif Çözüm</button>
+            <button id="show-full-solution-btn" class="btn text-white w-full" style="background-image: linear-gradient(to right, #16a34a, #22c55e);">Tüm Çözümü Göster</button>
+            <button id="new-question-btn" class="btn btn-secondary w-full">Yeni Soru</button>
+        </div>
+        
+        <div id="solving-workspace" class="hidden w-full max-w-2xl mx-auto mt-4 px-2">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Adım Adım Çözüm</h2>
+                <button id="goBackBtn" class="btn btn-secondary">Geri Dön</button>
+            </div>
+            
+            <div id="step-by-step-container" class="space-y-4">
+            </div>
+        </div>
+
+        <div id="result-container" class="mt-6 hidden">
+             <div id="status-message" class="flex items-center justify-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                 </div>
+            <div id="solution-output" class="hidden">
+                </div>
+        </div>
     </div>
-    <!-- Sayfaya Özel JavaScript Dosyası -->
+    
     <script type="module" src="js/pages/index.js"></script>
 </body>
 </html>
