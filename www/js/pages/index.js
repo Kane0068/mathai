@@ -21,7 +21,7 @@ import { interactiveSolutionManager } from '../modules/interactiveSolutionManage
 import { renderStateManager } from '../modules/renderStateManager.js';
 import { globalRenderManager } from '../modules/globalRenderManager.js';
 
-import { getUnifiedSolution, validateMathProblem } from '../services/apiService.js';
+import { getUnifiedSolution, validateMathProblem, validateStudentStep } from '../services/apiService.js';
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
@@ -80,34 +80,70 @@ function cacheDOMElements() {
     canvasManager.initCanvas('handwritingCanvas');
 }
 
-function resetUI() {
-    console.log('🧹 Arayüz temizleniyor...');
-    const containers = ['result-container', 'status-message', 'solution-output', 'step-by-step-container'];
-    containers.forEach(id => {
+// js/pages/index.js dosyasındaki mevcut resetUI fonksiyonunu silip,
+// yerine bu yeni ve kapsamlı resetAppState fonksiyonunu yapıştırın.
+
+function resetForNewProblem() {
+    console.log('🧹 YENİ PROBLEM İÇİN TAM SIFIRLAMA...');
+
+    // 1. Modül Yöneticilerini Sıfırla
+    // Bu, en kritik adımdır. Modüllerin iç durumlarını temizler.
+    interactiveSolutionManager.reset();
+    smartGuide.reset();
+    console.log('✅ İnteraktif ve Mentor modülleri sıfırlandı.');
+
+    // 2. Ana Konteynerların İçeriğini Temizle ve Gizle
+    const containerIds = [
+        'question-summary-container',
+        'top-action-buttons',
+        'solving-workspace',
+        'result-container',
+        'solution-output',
+        'goBackBtn'
+    ];
+    containerIds.forEach(id => {
         if (elements[id]) {
             elements[id].innerHTML = '';
             elements[id].classList.add('hidden');
         }
     });
+    console.log('✅ Ana konteynerlar temizlendi ve gizlendi.');
+
+    const statusMessage = document.getElementById('status-message');
+    if (statusMessage) {
+        statusMessage.innerHTML = '';
+        statusMessage.classList.add('hidden');
+    }
     showLoading(false);
-    console.log('✅ Arayüz başarıyla temizlendi.');
+
+    stateManager.reset(); // Bu fonksiyon, problem verisini de sıfırlar.
+    console.log('✅ State Manager (UI & Problem) sıfırlandı.');
+    console.log('✅ Sistem yeni bir problem için tamamen hazır.');
 }
 
+// js/pages/index.js dosyasına, resetForNewProblem'ın altına bu yeni fonksiyonu ekleyin.
 
+function resetToSummary() {
+    console.log('🔄 ANA MENÜYE DÖNÜLÜYOR...');
+
+    // 1. Aktif modül yöneticilerini sıfırla (hafızalarını temizle)
+    interactiveSolutionManager.reset();
+    smartGuide.reset();
+    console.log('✅ Aktif modüller sıfırlandı.');
+
+    // 2. State'i "summary" görünümüne ayarla. Bu, renderApp'i tetikleyecek.
+    // Problem verisi korunmuş olacak.
+    stateManager.setView('summary');
+    console.log('✅ Görünüm "summary" olarak ayarlandı.');
+}
+// js/pages/index.js dosyasındaki mevcut setupEventListeners fonksiyonunu silip,
+// yerine bu nihai versiyonu yapıştırın.
 
 function setupEventListeners() {
-    window.addEventListener('show-error-message', (event) => {
-        stateManager.setError(event.detail.message);
-    });
-
     // ErrorHandler'dan gelen hata mesajlarını dinle
     window.addEventListener('show-error-message', (event) => {
         const { message, isCritical } = event.detail;
-        if (isCritical) {
-            showError(message, true, () => stateManager.clearError());
-        } else {
-            stateManager.setError(message);
-        }
+        showError(message, isCritical, () => stateManager.clearError());
     });
 
     const add = (id, event, handler) => {
@@ -115,13 +151,22 @@ function setupEventListeners() {
         else console.warn(`Element bulunamadı: ${id}`);
     };
 
+    // --- TEMEL NAVİGASYON BUTONLARI ---
     add('logout-btn', 'click', AuthManager.logout);
+
+    // YENİ SORU: Her şeyi sıfırlayan "hard reset" fonksiyonunu kullanır.
     add('new-question-btn', 'click', () => {
-        resetUI();
-        stateManager.reset();
-        smartGuide.reset();
-        setTimeout(() => stateManager.setView('setup'), 100);
+        resetForNewProblem(); // <-- DOĞRU FONKSİYON KULLANILIYOR
+        stateManager.setView('setup');
     });
+
+    // ÖZETE GERİ DÖN: Sadece görünümü değiştiren "soft reset" fonksiyonunu kullanır.
+    add('goBackBtn', 'click', () => {
+        resetToSummary(); // <-- DOĞRU FONKSİYON KULLANILIYOR
+    });
+
+
+    // --- SORU GİRİŞ AYARLARI ---
     add('photo-mode-btn', 'click', () => stateManager.setInputMode('photo'));
     add('handwriting-mode-btn', 'click', () => stateManager.setInputMode('handwriting'));
     add('switchToCanvasBtn', 'click', () => stateManager.setHandwritingInputType('canvas'));
@@ -130,46 +175,18 @@ function setupEventListeners() {
     add('recognizeHandwritingBtn', 'click', () => handleNewProblem('canvas'));
     add('startFromTextBtn', 'click', () => handleNewProblem('text'));
 
-    add('start-solving-workspace-btn', 'click', () => {
-        const solution = stateManager.getStateValue('problem').solution;
-        if (solution && solution.adimlar) {
-            smartGuide.initializeGuidance(solution);
-            stateManager.setView('solving'); // Mentor ile sohbet görünümüne geç
-        } else {
-            showError("Çözüm verisi bulunamadı. Lütfen tekrar bir soru yükleyin.", false);
-        }
-    });
 
-    add('show-full-solution-btn', 'click', () => {
-        const solution = stateManager.getStateValue('problem').solution;
-        if (solution && solution.adimlar) {
-            stateManager.setView('fullSolution'); // Tam çözüm görünümüne geç
-        } else {
-            showError("Çözüm verisi bulunamadı. Lütfen tekrar bir soru yükleyin.", false);
-        }
-    });
+    // --- ÇÖZÜM MODU SEÇİM BUTONLARI (Bunlar sadece view değiştirir, temizlik yapmaz) ---
+    add('start-solving-workspace-btn', 'click', () => stateManager.setView('solving'));
+    add('show-full-solution-btn', 'click', () => stateManager.setView('fullSolution'));
+    add('solve-all-btn', 'click', () => stateManager.setView('interactive'));
 
-    add('solve-all-btn', 'click', () => {
-        const solution = stateManager.getStateValue('problem').solution;
-        if (solution && solution.adimlar) {
-            stateManager.setView('interactive'); // İnteraktif çözüm görünümüne geç
-        } else {
-            showError("Çözüm verisi bulunamadı. Lütfen tekrar bir soru yükleyin.", false);
-        }
-    });
 
-    add('goBackBtn', 'click', () => {
-        resetUI();
-        stateManager.setView('summary');
-    });
-
-    // Canvas araçları
+    // --- DİĞER EVENT'LER ---
     add('hw-pen-btn', 'click', () => setQuestionCanvasTool('pen', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-eraser-btn', 'click', () => setQuestionCanvasTool('eraser', ['hw-pen-btn', 'hw-eraser-btn']));
     add('hw-clear-btn', 'click', () => canvasManager.clear('handwritingCanvas'));
     add('hw-undo-btn', 'click', () => canvasManager.undo('handwritingCanvas'));
-
-    // Fotoğraf yükleme
     add('selectFileBtn', 'click', () => elements['imageUploader'].click());
     add('takePhotoBtn', 'click', () => elements['cameraUploader'].click());
     add('imageUploader', 'change', (e) => handleFileSelect(e.target.files[0]));
@@ -180,28 +197,23 @@ function setupEventListeners() {
         elements['startFromPhotoBtn'].disabled = true;
     });
 
-    
-    // Ana menüye dönme butonları için event delegation
-        // Dinamik buton olayını bulun ve güncelleyin
-    document.addEventListener('click', (event) => {
-        const target = event.target;
+    // Event Delegation: Dinamik olarak oluşturulan butonlar için
+    document.body.addEventListener('click', (event) => {
+        const target = event.target.closest('button');
+        if (!target) return;
 
-        // Ana Menüye Dön butonu (farklı yerlerde olabilir)
-        if (target && (target.id === 'back-to-main-menu-btn' || target.closest('#back-to-main-menu-btn'))) {
-            resetUI(); // TEMİZLİK FONKSİYONUNU ÇAĞIR
-            interactiveSolutionManager.reset(); // (Güvenlik için) Manager'ları da sıfırla
-            smartGuide.reset();
-            stateManager.setView('summary');
+        // "Ana Menüye Dön" butonu (farklı yerlerdeki)
+        if (target.id === 'back-to-main-menu-btn') {
+            resetToSummary(); // <-- DOĞRU FONKSİYON KULLANILIYOR
         }
-        
-        // İnteraktif çözüm tamamlandığında çıkan butonlar
+
+        // Çözüm tamamlandıktan sonra çıkan "Yeni Problem" butonu
         if (target.id === 'interactive-new-problem-btn' || target.id === 'guide-new-problem-btn') {
-            resetUI();
-            // Bu butonlar zaten stateManager.reset() çağırıyor, o yüzden ekstra bir şey gerekmez.
+            resetForNewProblem(); // <-- DOĞRU FONKSİYON KULLANILIYOR
+            stateManager.setView('setup');
         }
     });
 }
-
 // --- AKILLI REHBER FONKSİYONLARI ---
 async function initializeSmartGuide() {
     try {
@@ -686,120 +698,95 @@ function displayGuideCompletion() {
     }
 }
 
+// js/pages/index.js dosyasındaki mevcut renderApp fonksiyonunu silip bu NİHAİ versiyonu yapıştırın.
+
+// js/pages/index.js dosyasındaki mevcut renderApp fonksiyonunu silip bu NİHAİ versiyonu yapıştırın.
 
 async function renderApp(state) {
     const { user, ui, problem } = state;
-    
     console.log('renderApp executed, current view:', ui.view);
 
-    // Önceki render'ları iptal et
-    if (window.renderStateManager) {
-        renderStateManager.cancelAllRenders();
-    }
-
-    // 1. Kullanıcı Bilgilerini Güncelle
-    if (user && elements['header-subtitle'] && elements['query-count']) {
+    // 1. Kullanıcı ve Yükleme Durumlarını Yönet
+    if (user && elements['header-subtitle']) {
         elements['header-subtitle'].textContent = `Hoş geldin, ${user.displayName}!`;
         const limit = user.membershipType === 'premium' ? 200 : 5;
         elements['query-count'].textContent = limit - (user.dailyQueryCount || 0);
     }
-    
-    // 2. Loading ve Error Durumları
     if (ui.isLoading) {
         showLoading(ui.loadingMessage || "Yükleniyor...");
     } else {
         showLoading(false);
     }
-    
-    if (elements['question-setup-area']) {
-        elements['question-setup-area'].classList.toggle('disabled-area', ui.isLoading);
-    }
-    
     if (ui.error) {
         showError(ui.error, true, () => stateManager.clearError());
     }
 
-    // 3. Ana Görünüm (View) Yönetimi
+    // 2. Ana Konteynerların Görünürlüğünü Sıfırla (Her render'da temiz bir başlangıç)
+    ['question-summary-container', 'top-action-buttons', 'solving-workspace', 'result-container', 'solution-output', 'goBackBtn'].forEach(id => {
+        if (elements[id]) elements[id].classList.add('hidden');
+    });
+    if (elements['question-setup-area']) {
+        elements['question-setup-area'].classList.toggle('disabled-area', ui.view !== 'setup');
+    }
+
+    // 3. Mevcut Görünüme Göre Arayüzü Çiz
     const { view, inputMode, handwritingInputType } = state.ui;
 
-    toggleContainerVisibility(view, state.problem); // Görünürlükleri ayarla
-    
     try {
-        switch(view) {
+        // Çözüm verisi gerektiren görünümler için ortak bir kontrol
+        if (['summary', 'fullSolution', 'interactive', 'solving'].includes(view) && !problem.solution) {
+            console.error(`'${view}' görünümü için çözüm verisi bulunamadı. Setup'a yönlendiriliyor.`);
+            stateManager.setView('setup');
+            return; // Fonksiyonun geri kalanının çalışmasını engelle
+        }
+
+        switch (view) {
             case 'setup':
                 await renderSetupView(inputMode, handwritingInputType);
                 break;
+
             case 'summary':
-                if (state.problem.solution) {
-                    await displayQuestionSummary(state.problem.solution.problemOzeti);
-                }
+                elements['question-summary-container'].classList.remove('hidden');
+                elements['top-action-buttons'].classList.remove('hidden');
+                await displayQuestionSummary(problem.solution.problemOzeti);
                 break;
+
             case 'fullSolution':
-                showSolutionContainers();
-                await renderFullSolution(state.problem.solution);
-                if (state.problem.solution) {
-                    await displayQuestionSummary(state.problem.solution.problemOzeti);
-                }
+                elements['question-summary-container'].classList.remove('hidden');
+                elements['result-container'].classList.remove('hidden');
+                elements['solution-output'].classList.remove('hidden');
+                elements['goBackBtn'].classList.remove('hidden');
+                await displayQuestionSummary(problem.solution.problemOzeti);
+                await renderFullSolution(problem.solution);
                 break;
+
             case 'interactive':
-                console.log('Rendering interactive view - starting');
-                showSolutionContainers();
-                await renderInteractiveSolution(state.problem.solution);
-                if (state.problem.solution) {
-                    await displayQuestionSummary(state.problem.solution.problemOzeti);
-                }
+                elements['question-summary-container'].classList.remove('hidden');
+                elements['result-container'].classList.remove('hidden');
+                elements['solution-output'].classList.remove('hidden');
+                elements['goBackBtn'].classList.remove('hidden');
+                await displayQuestionSummary(problem.solution.problemOzeti);
+                await renderInteractiveSolution(problem.solution);
                 break;
+
             case 'solving':
-                // Sadece solving-workspace'in görünür olduğundan emin ol
-                if(elements['solving-workspace']) elements['solving-workspace'].classList.remove('hidden');
+                // *** ÇÖZÜM BURADA: Mentor görünümünü çizmeden önce veriyi yükle ***
+                await smartGuide.initializeGuidance(problem.solution); // <-- KRİTİK EKLEME
+                
+                elements['solving-workspace'].classList.remove('hidden');
+                elements['goBackBtn'].classList.remove('hidden');
                 await renderSmartGuideWorkspace();
                 break;
-                        default:
+
+            default:
                 console.warn('Bilinmeyen view:', view);
         }
     } catch (error) {
-        console.error('View render hatası:', error);
-        showError('İçerik yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.', true, () => location.reload());
-    }
-}
-
-// Yardımcı fonksiyonlar
-
-function toggleContainerVisibility(view, problem) {
-    // Setup area
-    if (elements['question-setup-area']) {
-        // Setup view'da setup area'yı göster, diğerlerinde disabled yap
-        elements['question-setup-area'].classList.toggle('disabled-area', view !== 'setup');
-    }
-    
-    // Question summary container
-    if (elements['question-summary-container']) {
-        elements['question-summary-container'].classList.toggle('hidden', 
-            view === 'setup' || !problem.solution
-        );
-    }
-    
-    // Top action buttons (Çözüme Başla, Tüm Çözümü Göster, vb.)
-    if (elements['top-action-buttons']) {
-        elements['top-action-buttons'].classList.toggle('hidden', view !== 'summary');
-    }
-    
-    // Solving workspace
-    if (elements['solving-workspace']) {
-        elements['solving-workspace'].classList.toggle('hidden', view !== 'solving');
-    }
-    
-    // Result container ve solution output
-    if (view === 'fullSolution' || view === 'interactive') {
-        showSolutionContainers();
-    } else {
-        hideSolutionContainers();
-    }
-    
-    // Go back button
-    if (elements['goBackBtn']) {
-        const showBackButton = ['fullSolution', 'interactive', 'solving'].includes(view);
-        elements['goBackBtn'].classList.toggle('hidden', !showBackButton);
+        console.error(`'${view}' görünümü render edilirken hata oluştu:`, error);
+        showError('Arayüz yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.', true, () => {
+            stateManager.reset();
+            stateManager.setView('setup');
+        });
     }
 }
 
@@ -3257,28 +3244,28 @@ function startMentorConversation() {
     addMentorMessage(stepInfo.description, 'ai');
 }
 
-/**
- * Kullanıcının cevabını alır, smartGuide ile değerlendirir ve sonucu arayüze yansıtır.
- */
+// js/pages/index.js dosyasındaki mevcut handleMentorSubmission fonksiyonunu silip bunu yapıştırın.
+// js/pages/index.js dosyasındaki mevcut handleMentorSubmission fonksiyonunu silip bu NİHAİ versiyonu yapıştırın.
+
 async function handleMentorSubmission() {
     const mcWrapper = document.getElementById('mentor-mc-wrapper');
-    const inputWrapper = document.getElementById('mentor-textarea-wrapper');
     const submitBtn = document.getElementById('mentor-submit-btn');
-    
+    const textInput = document.getElementById('mentor-student-input');
+
     let studentInput = '';
     let isMcSelection = !mcWrapper.classList.contains('hidden');
 
-    if(isMcSelection) {
+    if (isMcSelection) {
         const selectedRadio = mcWrapper.querySelector('input[name="solution-option"]:checked');
         if (!selectedRadio) {
             showError("Lütfen bir seçenek belirleyin.", false, 3000);
             return;
         }
-        studentInput = selectedRadio.dataset.latex;
+        studentInput = selectedRadio.value; // Değeri alıyoruz
+        addMentorMessage(studentInput, 'user');
     } else {
-        const textInput = document.getElementById('mentor-student-input');
         studentInput = textInput.value.trim();
-        if(!studentInput) {
+        if (!studentInput) {
             showError("Lütfen bir cevap yazın.", false, 3000);
             return;
         }
@@ -3291,54 +3278,95 @@ async function handleMentorSubmission() {
     submitBtn.textContent = 'Değerlendiriliyor...';
     showTypingIndicator(true);
 
-    const evaluation = await smartGuide.evaluateStudentStep(studentInput);
-    
+    const currentStepIndex = smartGuide.currentStep;
+    const allSteps = smartGuide.guidanceData.steps;
+    const currentStepData = allSteps[currentStepIndex];
+
+    const evaluation = await validateStudentStep(studentInput, {
+        description: currentStepData.description,
+        correctAnswer: currentStepData.correctAnswer,
+        allSteps: allSteps,
+        currentStepIndex: currentStepIndex
+    });
+
     showTypingIndicator(false);
-    
-    if (evaluation.isCorrect) {
-        addMentorMessage(evaluation.message, 'ai', 'success');
-        
-        // Gecikmeli olarak bir sonraki adıma geç
+    const attemptInfoBefore = smartGuide.getCurrentStepAttemptInfo(); // Mevcut deneme sayısını al
+
+    if (evaluation && evaluation.isCorrect) {
+        smartGuide.markStepAsSuccess(); // Sadece doğruysa deneme sayısını artırma
+        addMentorMessage(evaluation.feedbackMessage, 'ai', 'success');
+
+        const stepDifference = evaluation.matchedStepIndex - currentStepIndex;
+        if (stepDifference > 0) {
+            setTimeout(() => addMentorMessage(`(Bu arada ${stepDifference} adım atlayarak ${evaluation.matchedStepIndex + 1}. adıma geçtin. Süpersin!)`, 'ai', 'info'), 500);
+        }
+
+        smartGuide.goToStep(evaluation.matchedStepIndex);
+        updateMentorProgress();
+
         setTimeout(() => {
-            if(evaluation.shouldComplete){
-                addMentorMessage("Tüm adımları başarıyla tamamladın. Harika iş!", 'ai', 'final');
+            if (evaluation.isFinalAnswer || smartGuide.currentStep >= smartGuide.guidanceData.totalSteps - 1) {
+                addMentorMessage("Tebrikler, problemi başarıyla tamamladın! 🏆", 'ai', 'final');
                 document.getElementById('mentor-input-container').classList.add('hidden');
             } else {
-                const nextStepInfo = smartGuide.proceedToNextStep() ? smartGuide.getCurrentStepInfo() : null;
-                if(nextStepInfo){
-                    updateMentorProgress();
-                    switchToTextInput(); // Bir sonraki adım için metin girişine dön
-                    addMentorMessage(nextStepInfo.description, 'ai');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Gönder';
-                } else {
-                     addMentorMessage("Tüm adımları başarıyla tamamladın. Harika iş!", 'ai', 'final');
-                     document.getElementById('mentor-input-container').classList.add('hidden');
-                }
+                smartGuide.proceedToNextStep();
+                const nextStepInfo = smartGuide.getCurrentStepInfo();
+                updateMentorProgress();
+                switchToTextInput();
+                addMentorMessage(nextStepInfo.description, 'ai');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Gönder';
             }
-        }, 1500);
+        }, 2000);
 
     } else { // Yanlış cevap
-        addMentorMessage(evaluation.message, 'ai', 'error');
-        
+        smartGuide.incrementStepAttempt(); // Yanlış ise deneme sayısını artır
+        addMentorMessage(evaluation ? evaluation.feedbackMessage : "Cevabını değerlendirirken bir sorun oluştu.", 'ai', 'error');
+
         setTimeout(() => {
-            const attemptInfo = smartGuide.getCurrentStepAttemptInfo();
-            if (attemptInfo.attempts === 2) { // İkinci hatada seçenekleri göster
-                const currentStepData = smartGuide.guidanceData.steps[smartGuide.currentStep];
-                addMentorMessage("Bu adım biraz zorlayıcı görünüyor. Merak etme, bu çok normal! Senin için bazı seçenekler hazırladım. Doğru olanı seçebilir misin?", 'ai', 'info');
+            const attemptInfoAfter = smartGuide.getCurrentStepAttemptInfo();
+
+            // *** YENİ MANTIK BURADA BAŞLIYOR ***
+            // Eğer bu bir "çoktan seçmeli" denemesiydiyse ve yanlışsa...
+            if (isMcSelection && !evaluation.isCorrect) {
+                addMentorMessage("Sanırım doğru seçenek diğeriydi. Hiç sorun değil, bazen en iyilerimizin bile kafası karışabilir. Doğru cevap buydu:", 'ai', 'info');
+
+                // Doğru cevabı otomatik olarak mesaja ekle ve bir sonraki adıma geç
+                setTimeout(() => {
+                    addMentorMessage(currentStepData.correctAnswer, 'ai', 'success');
+                    smartGuide.markStepAsSuccess(); // Adımı başarılı say
+                    
+                    if (smartGuide.currentStep >= smartGuide.guidanceData.totalSteps - 1) {
+                        addMentorMessage("Ve böylece problemi tamamladık! 🏆", 'ai', 'final');
+                        document.getElementById('mentor-input-container').classList.add('hidden');
+                    } else {
+                        smartGuide.proceedToNextStep();
+                        const nextStepInfo = smartGuide.getCurrentStepInfo();
+                        updateMentorProgress();
+                        switchToTextInput();
+                        addMentorMessage(nextStepInfo.description, 'ai');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Gönder';
+                    }
+                }, 2500);
+                return; // Diğer koşulların çalışmasını engelle
+            }
+            // *** YENİ MANTIK BURADA BİTİYOR ***
+
+            if (attemptInfoAfter.attempts === 2) { // 2. yazılı hatada
+                addMentorMessage("Bu adımda biraz zorlandığını görüyorum, hiç sorun değil! Hadi birlikte bakalım. Sence doğru adım aşağıdakilerden hangisi olabilir?", 'ai', 'info');
                 switchToMcInput(currentStepData);
-            } else if (attemptInfo.shouldReset || attemptInfo.finalAttempt) {
-                 addMentorMessage("Tüm deneme hakların bitti. İstersen özete dönüp çözümü inceleyebilir veya yeni bir soruya geçebilirsin.", 'ai', 'final');
-                 document.getElementById('mentor-input-container').classList.add('hidden');
-            } else {
-                addMentorMessage(evaluation.hint, 'ai', 'info');
+            } else if (attemptInfoAfter.isFailed) { // 3. hatadan sonra (sadece yazılıda olabilir artık)
+                addMentorMessage("Tüm deneme hakların bitti. Ama unutma, her hata bir öğrenme fırsatıdır! İstersen özete dönüp çözümü inceleyebilir veya yeni bir soruya geçebilirsin.", 'ai', 'final');
+                document.getElementById('mentor-input-container').classList.add('hidden');
+            } else { // 1. yazılı hatada
+                addMentorMessage(evaluation ? evaluation.hintForNext : "Nasıl devam edebileceğini biraz düşün.", 'ai', 'info');
             }
             submitBtn.disabled = false;
             submitBtn.textContent = 'Gönder';
         }, 1500);
     }
 }
-
 /**
  * Sohbet akışına yeni bir mesaj balonu (AI veya kullanıcı) ekler.
  * @param {string} content Mesaj içeriği
@@ -3421,49 +3449,129 @@ function showTypingIndicator(show) {
         typingBubble.remove();
     }
 }
+// js/pages/index.js dosyasında switchToMcInput fonksiyonunun üstüne ekleyin
 
+// js/pages/index.js dosyasındaki mevcut generateWrongAnswer fonksiyonunu silip bu versiyonu yapıştırın.
+
+function generateWrongAnswer(correctAnswer, index = 0) {
+    if (!correctAnswer || typeof correctAnswer !== 'string') return '\\text{Hatalı İşlem}';
+
+    let wrongAnswer = correctAnswer;
+    const manipulations = [
+        // Sayıları 1 artır veya azalt
+        (latex) => latex.replace(/(\d+)/g, (match) => {
+            const num = parseInt(match);
+            // Cevabın negatif olmasını önlemek için küçük bir kontrol
+            return (num > 1) ? num + 1 : num + 2;
+        }),
+        // İşaret değiştirme
+        (latex) => {
+            if (latex.includes('+')) return latex.replace('+', '-');
+            if (latex.includes('-')) return latex.replace('-', '+');
+            return null; // Değişiklik yapılamadı
+        },
+        // Çarpma/Bölme değiştirme
+        (latex) => {
+            if (latex.includes('*') || latex.includes('\\times')) return latex.replace(/(\*|\\times)/g, '/');
+            if (latex.includes('/')) return latex.replace('/', '*');
+            return null; // Değişiklik yapılamadı
+        },
+        // Eşittir'i Eşit Değil yapma
+        (latex) => latex.replace('=', '\\neq')
+    ];
+
+    // Sırayla manipülasyonları dene, ta ki farklı bir cevap bulunana kadar
+    for (let i = 0; i < manipulations.length; i++) {
+        const currentManipulation = manipulations[(index + i) % manipulations.length];
+        const result = currentManipulation(correctAnswer);
+
+        // Eğer manipülasyon bir sonuç ürettiyse ve bu sonuç orijinalden farklıysa, onu kullan
+        if (result && result !== correctAnswer) {
+            wrongAnswer = result;
+            break;
+        }
+    }
+
+    // Eğer tüm denemelere rağmen cevap hala aynıysa, son bir çare olarak sonuna " + 1" ekle
+    if (wrongAnswer === correctAnswer) {
+        if (correctAnswer.includes('=')) {
+            const parts = correctAnswer.split('=');
+            wrongAnswer = `${parts[0].trim()} = ${parts[1].trim()} + 1`;
+        } else {
+            wrongAnswer = `${correctAnswer} + 1`;
+        }
+    }
+
+    return wrongAnswer;
+}
+
+// js/pages/index.js dosyasındaki mevcut switchToMcInput fonksiyonunu silip bu SON versiyonu yapıştırın.
 
 function switchToMcInput(stepData) {
     const mcWrapper = document.getElementById('mentor-mc-wrapper');
     const inputWrapper = document.getElementById('mentor-textarea-wrapper');
     const submitBtn = document.getElementById('mentor-submit-btn');
 
-    // 1. Doğru seçeneği oluştur
-    const correctOption = { latex: stepData.cozum_lateks, isCorrect: true };
+    // *** HATA BURADAYDI: 'cozum_lateks' yerine 'correctAnswer' kullanılmalı. ***
+    const correctOption = {
+        latex: stepData.correctAnswer, // DÜZELTİLDİ
+        isCorrect: true,
+        id: 'correct'
+    };
 
-    // 2. Yanlış seçenekleri GÜVENLİ bir şekilde işle
-    const incorrectOptions = (stepData.yanlisSecenekler || [])
-        .map(opt => ({
-            // API'nin 'metin_lateks' veya 'metin' gönderme ihtimaline karşı ikisini de kontrol et
-            latex: opt.metin_lateks || opt.metin,
-            isCorrect: false
-        }))
-        // 'latex' anahtarı undefined olan hatalı verileri filtrele
-        .filter(opt => opt.latex);
+    let wrongLatex;
 
-    // 3. Tüm seçenekleri birleştir
-    const options = [correctOption, ...incorrectOptions.slice(0, 2)]; // En fazla 2 yanlış seçenek al
+    // ÖNCELİK 1: API'den gelen hazır yanlış seçenekleri kullan.
+    if (stepData.yanlisSecenekler && Array.isArray(stepData.yanlisSecenekler) && stepData.yanlisSecenekler.length > 0) {
+        const firstWrongOption = stepData.yanlisSecenekler[0];
+        wrongLatex = firstWrongOption.metin_lateks || firstWrongOption.metin;
+    }
 
-    // Fisher-Yates shuffle ile seçenekleri karıştır
+    // ÖNCELİK 2: Eğer API'den gelen seçenek yoksa veya geçersizse, kendimiz üretelim (Fallback).
+    if (!wrongLatex) {
+        console.warn(`Adım ${stepData.stepNumber} için API'den yanlış seçenek gelmedi, manuel üretiliyor.`);
+        wrongLatex = generateWrongAnswer(correctOption.latex, 0);
+    }
+
+    const wrongOption = {
+        latex: wrongLatex,
+        isCorrect: false,
+        id: 'wrong-generated'
+    };
+
+    // 1 doğru, 1 yanlış olmak üzere 2 seçenek oluştur
+    let options = [correctOption, wrongOption];
+
+    // Seçenekleri karıştır
     for (let i = options.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [options[i], options[j]] = [options[j], options[i]];
     }
-    
-    mcWrapper.innerHTML = options.map(opt => `
-        <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-            <input type="radio" name="solution-option" class="sr-only" data-latex="${escapeHtml(opt.latex)}">
-            <span class="font-medium smart-content">${opt.latex}</span>
-        </label>
-    `).join('');
+
+    mcWrapper.innerHTML = options.map((opt, index) => {
+        const letter = String.fromCharCode(65 + index); // A, B
+        const displayLatex = opt.latex || "\\text{Hata: Seçenek içeriği boş.}";
+        return `
+            <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                <input type="radio"
+                       name="solution-option"
+                       class="sr-only"
+                       value="${escapeHtml(displayLatex)}">
+                <div class="flex items-center gap-3 w-full">
+                    <span class="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-700">
+                        ${letter}
+                    </span>
+                    <span class="font-medium smart-content flex-1" data-content="${escapeHtml(displayLatex)}">${escapeHtml(displayLatex)}</span>
+                </div>
+            </label>
+        `;
+    }).join('');
 
     renderMathInContainer(mcWrapper);
-
     inputWrapper.classList.add('hidden');
     mcWrapper.classList.remove('hidden');
-    submitBtn.disabled = true; // Seçim yapılana kadar devre dışı
+    submitBtn.disabled = true;
 }
-
 /**
  * Mentor arayüzünü metin girişi moduna geri döndürür.
  */
@@ -3505,6 +3613,31 @@ window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
 window.globalRenderManager = globalRenderManager;
+
+// js/pages/index.js dosyasında, "// --- EXPORTS ---" satırının hemen üstüne ekleyin.
+
+/**
+ * Belirtilen ID'ye sahip bir elemanın DOM'da var olmasını ve görünür olmasını bekler.
+ * @param {string} elementId Beklenecek elemanın ID'si.
+ * @param {number} timeout Maksimum bekleme süresi (milisaniye).
+ * @returns {Promise<HTMLElement>} Eleman bulunduğunda resolve olan bir Promise.
+ */
+function waitForElement(elementId, timeout = 3000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+            const element = document.getElementById(elementId);
+            // Eleman hem var hem de görünür mü kontrol et (display: none değil)
+            if (element && element.offsetParent !== null) {
+                clearInterval(interval);
+                resolve(element);
+            } else if (Date.now() - startTime > timeout) {
+                clearInterval(interval);
+                reject(new Error(`waitForElement: '${elementId}' elemanı ${timeout}ms içinde bulunamadı veya görünür olmadı.`));
+            }
+        }, 50); // Her 50ms'de bir kontrol et
+    });
+}
 
 
 // --- EXPORTS ---

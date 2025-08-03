@@ -5,49 +5,39 @@
 import { advancedMathRenderer } from './advancedMathRenderer.js';
 import { globalRenderManager } from './globalRenderManager.js';
 
-/**
- * Ekranda bir yükleme mesajı gösterir.
- * @param {string|false} message - Gösterilecek mesaj. false ise gizler.
- */
+// js/modules/ui.js içindeki showLoading fonksiyonunu bununla değiştirin
 export function showLoading(message) {
     const resultContainer = document.getElementById('result-container');
     const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
 
-    if (!resultContainer || !statusMessage || !solutionOutput) return;
+    if (!resultContainer || !statusMessage) return;
 
     if (message === false) {
-        resultContainer.classList.add('hidden');
+        // Sadece, eğer içinde başka bir hata/başarı mesajı yoksa result container'ı gizle.
+        if (!statusMessage.innerHTML || statusMessage.innerHTML.trim() === '') {
+             resultContainer.classList.add('hidden');
+        }
         return;
     }
-    
+
+    // Ana konteynerin görünürlüğüne dokunma, sadece status mesajını doldur ve göster.
+    resultContainer.classList.remove('hidden');
     statusMessage.innerHTML = `
          <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 animate-spin"></div>
          <p class="text-gray-600 font-medium">${message}</p>
     `;
     statusMessage.className = 'flex items-center justify-center space-x-3 p-4 bg-gray-50 rounded-lg';
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
+    statusMessage.classList.remove('hidden');
 }
 
-/**
- * Ekranda bir başarı mesajı gösterir.
- * @param {string} message - Gösterilecek başarı mesajı.
- * @param {boolean} autoHide - Mesajın otomatik olarak gizlenip gizlenmeyeceği.
- * @param {number} hideDelay - Otomatik gizleme için beklenecek süre (ms).
- */
+// js/modules/ui.js içindeki showSuccess fonksiyonunu bununla değiştirin
 export function showSuccess(message, autoHide = true, hideDelay = 3000) {
     const resultContainer = document.getElementById('result-container');
     const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
 
-    if (!resultContainer || !statusMessage || !solutionOutput) return;
+    if (!resultContainer || !statusMessage) return;
 
-    const currentView = window.stateManager ? window.stateManager.getStateValue('ui').view : 'setup';
-    if (['fullSolution', 'interactive', 'solving'].includes(currentView)) {
-        return;
-    }
-
+    resultContainer.classList.remove('hidden');
     statusMessage.className = 'flex flex-col items-center justify-center space-y-3 p-4 bg-green-100 text-green-700 rounded-lg';
     statusMessage.innerHTML = `
         <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,29 +45,31 @@ export function showSuccess(message, autoHide = true, hideDelay = 3000) {
         </svg>
         <p class="font-medium text-center">${message}</p>
     `;
-
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
+    statusMessage.classList.remove('hidden');
 
     if (autoHide) {
         setTimeout(() => {
-            resultContainer.classList.add('hidden');
+            statusMessage.innerHTML = '';
+            statusMessage.classList.add('hidden');
+            // Eğer solution-output görünür değilse, result-container'ı gizle
+            const solutionOutput = document.getElementById('solution-output');
+            if (solutionOutput && solutionOutput.classList.contains('hidden')) {
+                resultContainer.classList.add('hidden');
+            }
         }, hideDelay);
     }
 }
 
-/**
- * Ekranda bir hata mesajı gösterir.
- * @param {string} message - Gösterilecek hata mesajı.
- * @param {boolean} showResetButton - "Tamam" butonu gösterilsin mi?
- * @param {function} onReset - "Tamam" butonuna basıldığında çalışacak fonksiyon.
- */
+// js/modules/ui.js içindeki showError fonksiyonunu bununla değiştirin
 export function showError(message, showResetButton = false, onReset = () => {}) {
     const resultContainer = document.getElementById('result-container');
     const statusMessage = document.getElementById('status-message');
-    const solutionOutput = document.getElementById('solution-output');
 
-    if (!resultContainer || !statusMessage || !solutionOutput) return;
+    if (!resultContainer || !statusMessage) return;
+
+    resultContainer.classList.remove('hidden');
+    statusMessage.classList.remove('hidden');
+    statusMessage.className = ''; // Önceki stilleri temizle
 
     let errorHTML = `
         <div class="flex flex-col items-center justify-center space-y-3 p-4 bg-red-100 text-red-700 rounded-lg">
@@ -87,40 +79,27 @@ export function showError(message, showResetButton = false, onReset = () => {}) 
             <p class="font-medium text-center">${message}</p>
         </div>
     `;
-
-    statusMessage.className = '';
     statusMessage.innerHTML = errorHTML;
 
     if (showResetButton) {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'mt-4 text-center';
-        
         const okButton = document.createElement('button');
         okButton.textContent = 'Tamam';
-        okButton.className = 'btn btn-primary px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500';
-        
-        okButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            try {
-                resultContainer.classList.add('hidden');
-                statusMessage.innerHTML = '';
-                if (typeof onReset === 'function') {
-                    onReset();
-                }
-            } catch (error) {
-                console.error('Tamam butonu click handler hatası:', error);
-            }
-        });
-        
-        buttonContainer.appendChild(okButton);
-        statusMessage.appendChild(buttonContainer);
-        
-        setTimeout(() => okButton.focus(), 100);
-    }
+        okButton.className = 'btn btn-primary px-6 py-2';
 
-    resultContainer.classList.remove('hidden');
-    solutionOutput.classList.add('hidden');
+        okButton.onclick = function() {
+            statusMessage.innerHTML = '';
+            statusMessage.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            if (typeof onReset === 'function') {
+                onReset();
+            }
+        };
+
+        buttonContainer.appendChild(okButton);
+        statusMessage.querySelector('.rounded-lg').appendChild(buttonContainer);
+    }
 }
 
 /**

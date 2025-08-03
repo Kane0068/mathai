@@ -9,7 +9,7 @@ import {
 // --- Sabitler ve Ayarlar ---
 // API Anahtarınızı buraya güvenli bir şekilde ekleyin. Bu sadece bir örnek.
 const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 const MAX_RETRIES = 2; // Başarısız istek en fazla 2 kez daha denenecek (toplamda 3 deneme).
 
 /**
@@ -57,30 +57,28 @@ function safeJsonParse(jsonString) {
 }
 
 
-/**
- * Gemini API'sine akıllı ve kendini düzelten bir istek gönderir.
- * JSON formatlama hatalarını yakalayıp düzeltme prompt'u ile yeniden dener.
- * @param {string} initialPrompt İlk gönderilecek prompt.
- * @param {string|null} imageBase64 Eğer varsa, base64 formatında resim verisi.
- * @param {function} onProgress İlerleme durumunu bildirmek için bir callback fonksiyonu.
- * @returns {Promise<object|null>} Başarılı olursa parse edilmiş JSON nesnesi, aksi takdirde null.
- */
+// js/services/apiService.js dosyasındaki mevcut callGeminiSmart fonksiyonunu silip bu versiyonu yapıştırın.
+
 async function callGeminiSmart(initialPrompt, imageBase64, onProgress) {
     let lastError = null;
     let lastFaultyResponse = '';
     let currentPrompt = initialPrompt;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-        console.log(`API İsteği Deneme #${attempt}`);
+    // Exponential Backoff için başlangıç ayarları
+    const maxRetries = 4; // Toplamda 4 deneme
+    let delay = 1000; // Başlangıç gecikmesi 1 saniye
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`API İsteği Deneme #${attempt}. Bekleme süresi: ${delay}ms`);
         if (attempt > 1 && onProgress) {
-            const message = lastError && lastError.includes('JSON') ?
+            const message = lastError && (lastError.includes('JSON') || lastError.includes('parse')) ?
                 'Yapay zeka yanıtı düzeltiyor, lütfen bekleyin...' :
-                'Bağlantı sorunu, çözüm tekrar deneniyor...';
+                `API Limiti Aşıldı. ${delay/1000} saniye sonra yeniden denenecek...`;
             onProgress(message);
         }
 
         const payloadParts = [{ text: currentPrompt }];
-        if (imageBase64 && attempt === 1) { // Resmi sadece ilk denemede gönder
+        if (imageBase64 && attempt === 1) {
             payloadParts.push({ inlineData: { mimeType: 'image/png', data: imageBase64 } });
         }
 
@@ -93,54 +91,68 @@ async function callGeminiSmart(initialPrompt, imageBase64, onProgress) {
                 body: JSON.stringify(payload)
             });
 
+            // 429 hatasını burada özel olarak yakala
+            if (response.status === 429) {
+                lastError = `API Rate Limit Aşıldı (429).`;
+                // Eğer son deneme değilse, döngünün bir sonraki adımına geçmeden önce bekle
+                if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; // Bekleme süresini ikiye katla
+                    continue; // Döngünün bir sonraki adımına geç
+                } else {
+                    // Son denemede de 429 hatası alınırsa, hata fırlat
+                    throw new Error(lastError);
+                }
+            }
+
             if (!response.ok) {
                 throw new Error(`API HTTP Hatası: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
-
-            // Güvenli erişim
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!rawText) {
-                throw new Error('API yanıtı boş veya geçersiz formatta.');
-            }
 
-            lastFaultyResponse = rawText; // Düzeltme için son hatalı yanıtı sakla
+            if (!rawText) throw new Error('API yanıtı boş veya geçersiz formatta.');
+
+            lastFaultyResponse = rawText;
             const jsonString = extractJson(rawText);
 
-            if (!jsonString) {
-                throw new Error('Yanıt içinde JSON formatı bulunamadı.');
-            }
+            if (!jsonString) throw new Error('Yanıt içinde JSON formatı bulunamadı.');
 
             const parsedJson = safeJsonParse(jsonString);
 
-            if (!parsedJson) {
-                throw new Error('JSON parse edilemedi.');
-            }
+            if (!parsedJson) throw new Error('JSON parse edilemedi.');
 
             console.log(`Deneme #${attempt} başarılı!`);
-            return parsedJson;
+            return parsedJson; // Başarılı olursa döngüden çık ve sonucu döndür
 
         } catch (error) {
             lastError = error.message;
             console.warn(`Deneme #${attempt} başarısız oldu: ${lastError}`);
 
-            // Eğer hata JSON ile ilgiliyse, bir sonraki denemede düzeltme prompt'u kullan
+            // Eğer hata JSON ile ilgiliyse ve son deneme değilse, düzeltme prompt'u ile tekrar dene
             if (lastError.toLowerCase().includes('json') || lastError.toLowerCase().includes('parse')) {
                 currentPrompt = buildCorrectionPrompt(initialPrompt, lastFaultyResponse, lastError);
             }
-            // Diğer hatalar için (örn: ağ hatası), aynı prompt ile tekrar denenecek.
+            
+            // Eğer son deneme ise, döngüyü sonlandır ve nihai hatayı göster
+            if (attempt >= maxRetries) {
+                 console.error("Tüm API denemeleri başarısız oldu.");
+                 window.dispatchEvent(new CustomEvent('show-error-message', {
+                     detail: { message: `API ile iletişim kurulamadı. Hata: ${lastError}`, isCritical: true }
+                 }));
+                 return null;
+            }
+
+            // Eğer hata 429 değilse ve son deneme değilse, bir sonraki deneme için bekle
+            if (!lastError.includes('429')) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Bekleme süresini ikiye katla
+            }
         }
     }
-
-    console.error("Tüm API denemeleri başarısız oldu.");
-    // Nihai hata durumunda kullanıcıya bilgi verilebilir.
-    window.dispatchEvent(new CustomEvent('show-error-message', {
-        detail: { message: `API ile iletişim kurulamadı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin. Hata: ${lastError}`, isCritical: true }
-    }));
-    return null;
+    return null; // Döngü biterse null döndür
 }
-
 
 // --- YENİ BİRLEŞİK SERVİS FONKSİYONLARI ---
 
@@ -192,45 +204,43 @@ export async function validateMathProblem(problemContext, imageBase64 = null, on
     }
 }
 
-/**
- * Akıllı rehber modunda öğrencinin adımını değerlendirmek için API çağrısı yapar.
- * @param {string} studentInput Öğrencinin girdiği cevap.
- * @param {object} stepData Mevcut adıma ait veriler (beklenen cevap, açıklama vb.).
- * @returns {Promise<object|null>} Değerlendirme sonucu.
- */
+// js/services/apiService.js dosyasındaki mevcut validateStudentStep fonksiyonunu silip bu DÜZELTİLMİŞ versiyonu yapıştırın.
+
 export async function validateStudentStep(studentInput, stepData) {
-    // NOT: Bu fonksiyonun prompt'u artık smartGuide.js içinde dinamik olarak oluşturulacak
-    // çünkü bağlama (önceki adımlar, deneme sayısı vb.) ihtiyaç duyar.
-    // Bu fonksiyon şimdilik bir iskelet olarak kalabilir veya direkt smartGuide içine taşınabilir.
-    // Şimdilik esnek bir prompt ile doğrudan API'yi çağıralım.
+    // Problemin tam çözüm akışını string'e çevirirken 'correctAnswer' kullanılıyor.
+    const allStepsString = JSON.stringify(stepData.allSteps.map(s => s.correctAnswer));
 
     const validationPrompt = `
-        Sen, son derece anlayışlı, esnek ve teşvik edici bir matematik mentorusun. Görevin, öğrencinin cevabını sadece doğru ya da yanlış olarak etiketlemek değil, onun düşünce sürecini anlamak ve onu nazikçe doğru yola yönlendirmektir.
+        Sen, son derece anlayışlı, esnek ve teşvik edici bir matematik öğretmenisin. Görevin, öğrencinin cevabını, çözüm akışının tamamını göz önünde bulundurarak değerlendirmektir.
 
-        **MENTORLUK FELSEFEN:**
-        1.  **Matematiksel Eşdeğerlik Esastır:** Bir denklemin taraflarının yer değiştirmesi (a=b vs b=a) veya bir işlemin farklı bir sırayla ama doğru yapılması sonucu değiştirmez. "2 * (2x - 1) = 4 * 5" ile "20 = 4x - 2" tamamen aynı anlama gelir ve DOĞRU kabul edilmelidir. Katı bir şekilde sadece beklenen cevabı arama.
-        2.  **Geri Bildirim Kişiseldir:** "Yanlış cevap" gibi genel ifadeler kullanma. Geri bildirimin, öğrencinin yazdığı spesifik cevap üzerinden olmalıdır. Örn: "Harika bir başlangıç, içler dışlar çarpımı doğru fikir! Ancak '4 kere 5' işleminin sonucunu tekrar kontrol edebilir misin?" gibi.
-        3.  **Asla Yanıltma:** Görevin öğrenciyi doğruya ulaştırmaktır. Verdiğin ipuçları veya yaptığın yorumlar KESİNLİKLE matematiksel olarak doğru olmalı.
-        4.  **Cevabı Hazır Verme:** İpuçların, öğrencinin hatasını kendisinin bulmasını sağlayacak sorular veya küçük yönlendirmeler içermeli.
-        5.  **Notasyon Anlayışı:** Sayılar arasında kullanılan nokta (.) karakterini (örn: 5.4) bir ondalık ayırıcı olarak değil, bir **çarpma işlemi (5 * 4)** olarak yorumla. Bu, öğrenciler arasında yaygın bir kullanımdır. Sadece 0.5 gibi açıkça ondalık olan durumları ondalık olarak kabul et.
-        6.  **Ara İşlemleri Kabul Et:** Eğer öğrencinin cevabı, beklenen cevaba giden yolda atılmış doğru bir ara işlem ise (örn: beklenen "3x = 18" iken öğrenci "3x + 10 - 10 = 8" yazdıysa), bunu **"dogruMu: true"** olarak kabul et. Geri bildiriminde ise onu tebrik edip "Şimdi bu denklemi sadeleştirerek devam edelim" gibi bir ifadeyle bir sonraki adıma yönlendir.
+        **TEMEL KURAL: MATEMATİKSEL EŞDEĞERLİK VE ADIM ATLAMAYI ANLAMA**
+        Öğrencinin cevabı, beklenen adıma veya **gelecekteki herhangi bir adıma** matematiksel olarak eşdeğerse, cevabı DOĞRU kabul et.
 
+        **DEĞERLENDİRME BİLGİLERİ:**
+        - Problemin Tam Çözüm Akışı: ${allStepsString}
+        - Mevcut Adım Açıklaması: "${stepData.description}"
+        - Mevcut Adımda Beklenen Cevap (LaTeX): "${stepData.correctAnswer}"
+        - Öğrencinin Verdiği Cevap: "${studentInput}"
+        - Mevcut Adım Numarası: ${stepData.currentStepIndex + 1}
 
-        ---
-        **DEĞERLENDİRME BAĞLAMI:**
-        - **Adımın Amacı:** "${stepData.description}"
-        - **Beklenen Cevap (Sadece bir referans, katı bir kural değil):** "${stepData.correctAnswer}"
-        - **ÖĞRENCİNİN CEVABI (Bütün yorumların bu cevap üzerine olmalı):** "${studentInput}"
-        ---
+        **DEĞERLENDİRME KURALLARI:**
+        1.  **Eşdeğerlik Kontrolü:** Öğrencinin cevabının, çözüm akışındaki adımlardan herhangi birine matematiksel olarak eşdeğer olup olmadığını kontrol et. (Örn: "2(x+5)" ile "2x+10" eşdeğerdir).
+        2.  **Adım Tespiti:** Eğer cevap doğruysa, çözüm akışında hangi adıma karşılık geldiğini bul (örneğin, 3. adıma).
+        3.  **Geri Bildirim Stili:** ASLA "Yanlış cevap", "Hatalı" gibi yargılayıcı ifadeler kullanma. Her zaman yapıcı, yol gösterici ve pozitif bir dil kullan. Öğrencinin yazdığı ifadeye doğrudan atıfta bulunarak geri bildirim ver.
+        4.  **Final Cevap Tespiti:** Eğer öğrenci doğrudan final cevabı verdiyse (genellikle son adım), bunu 'isFinalAnswer' olarak işaretle.
 
-        **İSTENEN YANIT FORMATI (SADECE JSON):**
+        **İSTENEN JSON YANIT FORMATI (SADECE JSON):**
         {
-          "dogruMu": boolean,
+          "isCorrect": boolean,
+          "matchedStepIndex": number,
           "isFinalAnswer": boolean,
-          "geriBildirim": "Öğrencinin cevabına yönelik kişisel ve teşvik edici ana mesajın.",
-          "neden": "Eğer cevap yanlışsa, öğrencinin cevabındaki spesifik hatanın ne olduğunun SÖZEL açıklaması. (örn: 'İçler dışlar çarpımını doğru yapmışsın ama parantezi dağıtırken küçük bir işlem hatası olmuş.')",
-          "ipucu": "Öğrencinin, kendi hatasını fark etmesini sağlayacak yönlendirici bir SÖZEL soru veya öneri. (örn: '2 ile (2x-1) ifadesini çarptığımızda her bir terimi 2 ile çarpmamız gerekmiyor mu?')"
+          "feedbackMessage": "Kişiselleştirilmiş, sıcak ve eğitici geri bildirim mesajı. Öğrencinin cevabına atıfta bulunsun.",
+          "hintForNext": "Eğer cevap doğruysa bir sonraki adım için kısa bir ipucu veya yanlışsa mevcut adımı çözmek için bir yönlendirme."
         }
+
+        Lütfen SADECE JSON formatında bir yanıt ver.
     `;
-    return await callGeminiSmart(validationPrompt, null, () => {}); // onProgress şimdilik boş
+
+    const result = await callGeminiSmart(validationPrompt, null, () => {});
+    return result;
 }
