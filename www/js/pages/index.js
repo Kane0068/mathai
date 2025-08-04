@@ -15,13 +15,16 @@ import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
 import { renderStateManager } from '../modules/renderStateManager.js';
-import { globalRenderManager } from '../modules/globalRenderManager.js';
 
 import { getUnifiedSolution, validateMathProblem, validateStudentStep } from '../services/apiService.js';
+
+import { unifiedRenderController } from '../modules/unifiedRenderController.js';
+import { renderPerformanceMonitor } from '../modules/renderPerformanceMonitor.js';
+import { renderErrorRecovery } from '../modules/renderErrorRecovery.js';
+
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
@@ -39,12 +42,9 @@ window.addEventListener('load', () => {
 async function initializeApp(userData) {
     if (userData) {
         showLoading("Matematik render sistemi başlatılıyor...");
-        const renderReady = await initializeRenderSystem();
+        renderPerformanceMonitor.startMonitoring();
         
-        if (!renderReady) {
-            showError("Render sistemi başlatılamadı. Sayfayı yenileyin.", true, () => location.reload());
-            return;
-        }
+        
         
         cacheDOMElements();
         setupEventListeners();
@@ -57,6 +57,11 @@ async function initializeApp(userData) {
         console.log('✅ Uygulama başarıyla başlatıldı');
     } else {
         document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
+        renderErrorRecovery.onAlert((alert) => {
+            if (alert.level === 'critical') {
+                showError(alert.message, true);
+            }
+        });
     }
 }
 
@@ -1137,7 +1142,7 @@ async function renderSmartGuideStep() {
 
     // Advanced Math Renderer ile içeriği render et
     setTimeout(async () => {
-        await renderSmartContent(container);
+        await unifiedRenderController.renderContainer(container);
         // Roadmap içeriğini yükle
         await loadRoadmapContent();
 
@@ -1885,10 +1890,28 @@ async function displayQuestionSummary(problemOzeti) {
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
 
-    // Global render manager kullan
-    await globalRenderManager.renderContainer(elements['question']);
-}
+    // ÖNEMLİ: DOM güncellemesinin tamamlanmasını bekle
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    
+    // Element'in görünür olduğundan emin ol
+    if (!elements['question'].offsetParent) {
+        console.warn('Question element görünür değil, render atlanıyor');
+        return;
+    }
 
+    try {
+        await unifiedRenderController.renderContainer(elements['question'], {
+            batchSize: 3,
+            onProgress: (completed, total) => {
+                console.log(`Question summary render: ${completed}/${total}`);
+            }
+        });
+        console.log('✅ Question summary rendered successfully');
+    } catch (error) {
+        console.error('❌ Question summary render error:', error);
+        // Fallback zaten uygulanmış olacak
+    }
+}
 
 // HTML oluşturma fonksiyonu - Full Solution için
 function generateSolutionHTML(solution) {
@@ -2243,7 +2266,7 @@ async function renderInteractiveStepSafe(stepData) {
 
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
         setupInteractiveEventListeners(stepData);
-        await globalRenderManager.renderContainer(solutionOutput);
+        await unifiedRenderController.renderContainer(solutionOutput);
 
         console.log('✅ İnteraktif adım render tamamlandı');
     } catch (error) {
@@ -3111,7 +3134,7 @@ async function displayInteractiveCompletion(completionStats) {
 
     // Math render
     setTimeout(async () => {
-        await renderMathInContainer(container, false);
+        await unifiedRenderController(container, false);
     }, 50);
 }
 
@@ -3612,8 +3635,9 @@ window.setupInteractiveEventListeners = setupInteractiveEventListeners;
 window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
-window.globalRenderManager = globalRenderManager;
-
+window.unifiedRenderController = unifiedRenderController;
+window.renderPerformanceMonitor = renderPerformanceMonitor;
+window.renderErrorRecovery = renderErrorRecovery;
 // js/pages/index.js dosyasında, "// --- EXPORTS ---" satırının hemen üstüne ekleyin.
 
 /**
@@ -3641,5 +3665,5 @@ function waitForElement(elementId, timeout = 3000) {
 
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
+export { canvasManager, errorHandler, stateManager, smartGuide,  };
 

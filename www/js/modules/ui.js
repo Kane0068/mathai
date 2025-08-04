@@ -1,9 +1,8 @@
 // =================================================================================
 //  MathAi - UI Modülü - Gelişmiş Render ve Hata Yönetimi
 // =================================================================================
+import { unifiedRenderController } from './unifiedRenderController.js';
 
-import { advancedMathRenderer } from './advancedMathRenderer.js';
-import { globalRenderManager } from './globalRenderManager.js';
 
 // js/modules/ui.js içindeki showLoading fonksiyonunu bununla değiştirin
 export function showLoading(message) {
@@ -144,23 +143,14 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
 }
 
 export async function renderMath(content, element, displayMode = false) {
-    if (!content || !element) return false;
-    
-    try {
-        return await globalRenderManager.renderElement(element, content, { displayMode });
-    } catch (error) {
-        console.error('renderMath hatası:', error);
-        element.textContent = content;
-        element.classList.add('render-error');
-        return false;
-    }
+    return await unifiedRenderController.render(element, content, { displayMode });
 }
 // renderMathInContainer fonksiyonunu değiştirin
 export async function renderMathInContainer(container, displayMode = false) {
     if (!container) return;
     
     try {
-        await globalRenderManager.renderContainer(container, {
+        await unifiedRenderController.renderContainer(container, {
             displayMode,
             onProgress: (completed, total) => {
                 console.log(`Render ilerleme: ${completed}/${total}`);
@@ -172,16 +162,7 @@ export async function renderMathInContainer(container, displayMode = false) {
 }
 // Yeni: Render sistemini başlat
 export async function initializeRenderSystem() {
-    console.log('🚀 Render sistemi başlatılıyor...');
-    const initialized = await globalRenderManager.initializeMathJax();
-    
-    if (initialized) {
-        console.log('✅ Render sistemi hazır');
-    } else {
-        console.error('❌ Render sistemi başlatılamadı');
-    }
-    
-    return initialized;
+    return true; // UnifiedController otomatik başlar
 }
 
 /**
@@ -348,6 +329,5 @@ if (typeof window !== 'undefined') {
         getRenderStats, 
         clearRenderCache, 
         waitForRenderSystem,
-        globalRenderManager // Bunu ekleyin
     };
 }
