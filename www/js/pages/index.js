@@ -15,13 +15,13 @@ import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
+import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-import { mathAIRenderSystem } from '../modules/mathAIRenderSystem.js'; // YENİ SATIR
+import { renderStateManager } from '../modules/renderStateManager.js';
+import { globalRenderManager } from '../modules/globalRenderManager.js';
 
 import { getUnifiedSolution, validateMathProblem, validateStudentStep } from '../services/apiService.js';
-
-
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
@@ -36,24 +36,14 @@ window.addEventListener('load', () => {
     AuthManager.initProtectedPage(initializeApp);
 });
 
-// YENİ: Uygulama başlangıcında MathAI'yi başlat
 async function initializeApp(userData) {
     if (userData) {
         showLoading("Matematik render sistemi başlatılıyor...");
+        const renderReady = await initializeRenderSystem();
         
-        // MathAI sistemini başlat
-        const mathAIReady = await ensureMathAIReady();
-        if (!mathAIReady) {
-            console.warn('⚠️ MathAI sistemi başlatılamadı, eski sistem kullanılacak');
-        }
-        
-        // Performans izlemeyi başlat (eğer MathAI hazırsa)
-        if (mathAIReady) {
-            // Performans metriklerini izle
-            setInterval(() => {
-                const performance = mathAIRenderSystem.getSystemPerformance();
-                console.log('📊 MathAI Performans:', performance.performance);
-            }, 30000); // 30 saniyede bir
+        if (!renderReady) {
+            showError("Render sistemi başlatılamadı. Sayfayı yenileyin.", true, () => location.reload());
+            return;
         }
         
         cacheDOMElements();
@@ -65,12 +55,6 @@ async function initializeApp(userData) {
         
         showLoading(false);
         console.log('✅ Uygulama başarıyla başlatıldı');
-        
-        // Sistem durumunu logla
-        if (mathAIReady) {
-            console.log('🎯 MathAI Sistem Durumu:', mathAIRenderSystem.getSystemPerformance());
-        }
-        
     } else {
         document.body.innerHTML = '<p>Uygulama başlatılamadı.</p>';
     }
@@ -880,7 +864,29 @@ async function renderSetupView(inputMode, handwritingInputType) {
     }
 }
 
-
+// RenderStateManager yoksa basit bir fallback
+if (!window.renderStateManager) {
+    window.renderStateManager = {
+        trackRender: async (id, fn) => {
+            console.log(`Rendering: ${id}`);
+            try {
+                return await fn();
+            } catch (error) {
+                console.error(`Render error in ${id}:`, error);
+                throw error;
+            }
+        },
+        cancelAllRenders: () => {
+            console.log('Cancel all renders called');
+        },
+        getStats: () => ({
+            activeCount: 0,
+            totalRenders: 0,
+            errorCount: 0,
+            successRate: 100
+        })
+    };
+}
 
 // Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
 function clearInputAreas() {
@@ -1131,7 +1137,7 @@ async function renderSmartGuideStep() {
 
     // Advanced Math Renderer ile içeriği render et
     setTimeout(async () => {
-        await mathAIRenderSystem.renderContainer(container);
+        await renderSmartContent(container);
         // Roadmap içeriğini yükle
         await loadRoadmapContent();
 
@@ -1856,12 +1862,6 @@ function setQuestionCanvasTool(tool, buttonIds) {
 }
 
 
-// =================================================================================
-//  Güncellenmiş index.js Fonksiyonları - MathAI Render Sistemi ile Entegre
-// =================================================================================
-
-// Bu fonksiyonları mevcut index.js dosyanızda değiştirin
-
 async function displayQuestionSummary(problemOzeti) {
     if (!problemOzeti) return;
 
@@ -1885,285 +1885,8 @@ async function displayQuestionSummary(problemOzeti) {
     summaryHTML += '</div>';
     elements['question'].innerHTML = summaryHTML;
 
-    // ÖNEMLİ: DOM güncellemesinin tamamlanmasını bekle
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    
-    // Element'in görünür olduğundan emin ol
-    if (!elements['question'].offsetParent) {
-        console.warn('Question element görünür değil, render atlanıyor');
-        return;
-    }
-
-    try {
-        // YENİ: MathAI Render Sistemi ile render et
-        console.log('🎯 Problem özeti render ediliyor...');
-        
-        const renderResult = await mathAIRenderSystem.renderContainer(elements['question'], {
-            enableTurkishSupport: true,
-            enableMixedContent: true,
-            enableAnimations: false, // Özet için animasyon kapalı
-            onProgress: (completed, total) => {
-                console.log(`Question summary render: ${completed}/${total}`);
-            }
-        });
-
-        if (renderResult.success) {
-            console.log('✅ Problem özeti başarıyla render edildi:', renderResult);
-        } else {
-            console.warn('⚠️ Problem özeti render edilirken bazı sorunlar oluştu:', renderResult);
-        }
-
-    } catch (error) {
-        console.error('❌ Problem özeti render hatası:', error);
-        
-        // Fallback: Eski sistem ile dene
-        try {
-            await renderSmartContent(elements['question']);
-            console.log('✅ Fallback render başarılı');
-        } catch (fallbackError) {
-            console.error('❌ Fallback render de başarısız:', fallbackError);
-        }
-    }
-}
-
-async function renderFullSolution(solution) {
-    console.log('renderFullSolution called with solution:', solution);
-    
-    const container = elements['solution-output'];
-    if (!container) {
-        console.error('solution-output container bulunamadı');
-        return;
-    }
-
-    if (!solution) {
-        container.innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>Çözüm verisi bulunamadı. Lütfen önce bir soru yükleyin.</p>
-            </div>
-        `;
-        return;
-    }
-
-    try {
-        // 1. Loading state göster
-        container.innerHTML = `
-            <div class="text-center p-8">
-                <div class="inline-block">
-                    <div class="loader w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                    <p class="text-gray-600">Çözüm hazırlanıyor...</p>
-                </div>
-            </div>
-        `;
-
-        console.log('🚀 MathAI ile API yanıtı işleniyor...');
-
-        // 2. YENİ: MathAI Render Sistemi ile API yanıtını işle
-        const result = await mathAIRenderSystem.processApiResponse(
-            solution, 
-            container,
-            {
-                enableAnimations: true,
-                enableTurkishSupport: true,
-                enableMixedContent: true,
-                displayMode: false, // Adım içeriği için inline mode
-                debugMode: false, // Production'da false yapın
-                skipProblemSummary: true, // YENİ: Problem özetini atla
-                skipBackButton: false // YENİ: Back button'ı ekle
-            }
-        );
-
-        if (result.success) {
-            console.log('✅ API yanıtı başarıyla render edildi:', result);
-            
-            // 3. Ek işlemler (event listener'lar vb.)
-            await setupFullSolutionEventListeners();
-            
-            // 4. Container'ı görünür yap
-            container.classList.remove('hidden');
-            container.style.display = 'block';
-            
-            // 5. Smooth scroll (isteğe bağlı)
-            if (mathAIRenderSystem.config.enableSmoothScroll) {
-                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-            
-            console.log('✅ Tam çözüm render işlemi tamamlandı');
-            
-        } else {
-            throw new Error(`MathAI render başarısız: ${result.error}`);
-        }
-
-    } catch (error) {
-        console.error('❌ Tam çözüm render hatası:', error);
-        
-        // Fallback: Eski sistem ile dene
-        try {
-            console.log('🔄 Fallback sistemle deneniyor...');
-            
-            // Eski HTML oluşturma sistemini kullan
-            const html = generateSolutionHTML(solution);
-            container.innerHTML = html;
-            
-            // Eski render sistemini çalıştır
-            await setupFullSolutionEventListeners();
-            await renderSolutionProgressive(container, solution);
-            
-            console.log('✅ Fallback render başarılı');
-            
-        } catch (fallbackError) {
-            console.error('❌ Fallback render de başarısız:', fallbackError);
-            
-            // Son çare: Hata mesajı göster
-            container.innerHTML = `
-                <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                    <p class="font-semibold mb-2">Çözüm Yükleme Hatası</p>
-                    <p class="text-sm mb-2">Ana sistem: ${error.message}</p>
-                    <p class="text-sm mb-3">Fallback sistem: ${fallbackError.message}</p>
-                    <button onclick="location.reload()" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-                        Sayfayı Yenile
-                    </button>
-                </div>
-            `;
-        }
-    }
-}
-
-// YENİ: MathAI sistem durumunu kontrol eden yardımcı fonksiyon
-async function ensureMathAIReady() {
-    if (!window.mathAIRenderSystem || !mathAIRenderSystem.isInitialized) {
-        console.log('🔄 MathAI sistemi başlatılıyor...');
-        
-        try {
-            await mathAIRenderSystem.initialize({
-                enableTurkishSupport: true,
-                enableMixedContent: true,
-                enableCaching: true,
-                debugMode: false, // Production'da false
-                autoProcessApiResponses: true,
-                enableSmoothScroll: true,
-                enableAnalytics: false // İsteğe bağlı
-            });
-            
-            console.log('✅ MathAI sistemi hazır');
-            return true;
-            
-        } catch (error) {
-            console.error('❌ MathAI sistem başlatma hatası:', error);
-            return false;
-        }
-    }
-    return true;
-}
-
-
-
-// YENİ: Hata durumunda sistem temizleme
-function handleSystemError(error, context) {
-    console.error(`❌ Sistem Hatası [${context}]:`, error);
-    
-    // MathAI cache'ini temizle
-    if (window.mathAIRenderSystem) {
-        mathAIRenderSystem.clearSystemCache();
-    }
-    
-    // Hata raporlama (isteğe bağlı)
-    errorHandler.handleError(error, { operation: context });
-}
-
-// YENİ: Ana menüye dön işlevi
-function handleBackToMainMenu() {
-    console.log('🔄 Ana menüye dönülüyor...');
-    
-    // State'i sıfırla
-    stateManager.resetToInitialState();
-    
-    // UI'yi temizle
-    resetForNewProblem();
-    
-    // Ana menüyü göster
-    renderApp(stateManager.getState());
-    
-    console.log('✅ Ana menüye dönüldü');
-}
-
-// Global olarak erişilebilir yap
-window.handleBackToMainMenu = handleBackToMainMenu;
-
-// YENİ: Debug araçları (geliştirme için)
-function enableMathAIDebug() {
-    if (window.mathAIRenderSystem) {
-        mathAIRenderSystem.updateConfig({ debugMode: true });
-        console.log('🔍 MathAI Debug Mode aktif');
-        
-        // Debug panel oluştur
-        const debugPanel = document.createElement('div');
-        debugPanel.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 9999;
-            max-width: 300px;
-            max-height: 200px;
-            overflow-y: auto;
-        `;
-        debugPanel.innerHTML = `
-            <div><strong>MathAI Debug Panel</strong></div>
-            <div id="mathai-debug-content">Sistem yükleniyor...</div>
-            <button onclick="this.parentElement.remove()" style="float: right; margin-top: 5px;">✕</button>
-        `;
-        document.body.appendChild(debugPanel);
-        
-        // Debug bilgilerini güncelle
-        setInterval(() => {
-            const performance = mathAIRenderSystem.getSystemPerformance();
-            document.getElementById('mathai-debug-content').innerHTML = `
-                <div>Başarı: ${performance.performance.overallSuccessRate}</div>
-                <div>Cache: ${performance.performance.cacheHitRate}</div>
-                <div>API: ${performance.systemInfo.totalApiResponses}</div>
-                <div>Render: ${performance.systemInfo.totalRenderOperations}</div>
-            `;
-        }, 1000);
-    }
-}
-
-// YENİ: Test fonksiyonu (geliştirme için)
-async function testMathAISystem() {
-    if (!window.mathAIRenderSystem) {
-        console.error('❌ MathAI sistemi bulunamadı');
-        return;
-    }
-    
-    console.log('🧪 MathAI Test başlıyor...');
-    
-    try {
-        // 1. Sistem durumu testi
-        const performance = mathAIRenderSystem.getSystemPerformance();
-        console.log('📊 Sistem Performansı:', performance);
-        
-        // 2. Örnek API yanıtı testi
-        const testResult = await mathAIRenderSystem.testWithSampleResponse();
-        console.log('🎯 API Test Sonucu:', testResult);
-        
-        // 3. Karışık içerik testi
-        const testContent = "Belirliintegralindeg˘erinibulun: \\(\\int_{1}^{2} (x + 2) \\cdot \\sqrt[3]{x^2} dx\\)";
-        const testElement = document.createElement('div');
-        testElement.style.cssText = 'border: 1px solid red; padding: 10px; margin: 10px;';
-        document.body.appendChild(testElement);
-        
-        const renderResult = await mathAIRenderSystem.renderMathContent(testContent, testElement);
-        console.log('🔬 Karışık İçerik Test:', renderResult);
-        
-        console.log('✅ Tüm testler tamamlandı');
-        
-    } catch (error) {
-        console.error('❌ Test hatası:', error);
-    }
+    // Global render manager kullan
+    await globalRenderManager.renderContainer(elements['question']);
 }
 
 
@@ -2254,6 +1977,63 @@ function generateSolutionHTML(solution) {
     return html;
 }
 
+// Güncellenmiş renderFullSolution fonksiyonu
+async function renderFullSolution(solution) {
+    console.log('renderFullSolution called with solution:', solution);
+    
+    const container = elements['solution-output'];
+    if (!container) {
+        console.error('solution-output container bulunamadı');
+        return;
+    }
+
+    if (!solution) {
+        container.innerHTML = `
+            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                <p>Çözüm verisi bulunamadı. Lütfen önce bir soru yükleyin.</p>
+            </div>
+        `;
+        return;
+    }
+
+    try {
+        // 1. Loading state göster
+        container.innerHTML = `
+            <div class="text-center p-8">
+                <div class="inline-block">
+                    <div class="loader w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-600">Çözüm hazırlanıyor...</p>
+                </div>
+            </div>
+        `;
+
+        // 2. HTML'i oluştur
+        const html = generateSolutionHTML(solution);
+        
+        // 3. Container'a HTML'i yerleştir
+        container.innerHTML = html;
+
+        // 4. Event listener'ları ekle
+        setupFullSolutionEventListeners();
+
+        // 5. Progressive render başlat
+        await renderSolutionProgressive(container, solution);
+
+        console.log('renderFullSolution completed successfully');
+
+    } catch (error) {
+        console.error('renderFullSolution error:', error);
+        container.innerHTML = `
+            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                <p class="font-semibold mb-2">Çözüm Yükleme Hatası</p>
+                <p class="text-sm">${error.message}</p>
+                <button onclick="location.reload()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                    Sayfayı Yenile
+                </button>
+            </div>
+        `;
+    }
+}
 
 // Progressive render fonksiyonu
 async function renderSolutionProgressive(container, solution) {
@@ -2397,34 +2177,34 @@ if (!document.getElementById('solution-animations')) {
 
 
 async function renderInteractiveSolution(solution) {
-    console.log('🔄 İnteraktif çözüm render başlıyor:', solution);
-    
+    console.log('🔄 İnteraktif Çözüm Başlatılıyor');
+    showLoading("İnteraktif çözüm hazırlanıyor...");
+
     try {
-        // YENİ: MathAI sisteminin hazır olduğundan emin ol
-        await ensureMathAIReady();
+        if (!solution || !solution.adimlar || solution.adimlar.length === 0) {
+            displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
+            return;
+        }
         
-        if (!solution || !solution.steps || !Array.isArray(solution.steps)) {
-            throw new Error('Geçersiz çözüm verisi');
+        // 1. InteractiveSolutionManager'ı çözüm verisiyle başlat (Bu senkron bir işlem)
+        interactiveSolutionManager.initializeInteractiveSolution(solution);
+        
+        // 2. İlk adım için seçenekleri SENKRON olarak oluştur
+        const stepOptionsToRender = interactiveSolutionManager.generateStepOptions(0);
+
+        // 3. Gelen sonucun geçerli olduğunu kontrol et (Artık .success kontrolü yok)
+        if (!stepOptionsToRender || !stepOptionsToRender.options) {
+            throw new Error("İlk adım seçenekleri oluşturulamadı. Veri yapısı bozuk olabilir.");
         }
 
-        const currentStep = solution.steps[0];
-        if (!currentStep || !currentStep.options) {
-            throw new Error('İlk adım verisi eksik');
-        }
+        // 4. Adımı ekrana render et (Bu asenkron kalabilir, çünkü içinde render işlemleri var)
+        await renderInteractiveStepSafe(stepOptionsToRender);
 
-        // State'i güncelle
-        stateManager.setInteractiveSolution(solution);
-        stateManager.setCurrentInteractiveStep(0);
-        stateManager.setView('interactive');
-
-        // UI'yi render et
-        renderApp(stateManager.getState());
-
-        console.log('✅ İnteraktif çözüm render tamamlandı');
-        
     } catch (error) {
-        console.error('❌ İnteraktif çözüm render hatası:', error);
-        showError(`İnteraktif çözüm yüklenirken hata oluştu: ${error.message}`, true);
+        console.error('❌ İnteraktif çözüm başlatma hatası:', error);
+        displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
+    } finally {
+        showLoading(false);
     }
 }
 
@@ -2463,71 +2243,12 @@ async function renderInteractiveStepSafe(stepData) {
 
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
         setupInteractiveEventListeners(stepData);
-        
-        // YENİ: MathAI ile container'ı render et
-        await mathAIRenderSystem.renderContainer(solutionOutput);
-        
-        // YENİ: Interactive options'ları özel olarak render et
-        await renderInteractiveOptions();
-        
+        await globalRenderManager.renderContainer(solutionOutput);
+
         console.log('✅ İnteraktif adım render tamamlandı');
     } catch (error) {
         console.error('❌ Adım render hatası:', error);
         displayInteractiveError(`Render hatası: ${error.message}`);
-    }
-}
-
-/**
- * YENİ: Interactive options'ları özel olarak render et
- */
-async function renderInteractiveOptions() {
-    try {
-        console.log('🔄 Interactive options render ediliyor...');
-        
-        const optionsContainer = document.getElementById('interactive-options-container');
-        if (!optionsContainer) {
-            console.warn('⚠️ Interactive options container bulunamadı');
-            return;
-        }
-        
-        // Tüm smart-content elementlerini bul
-        const smartElements = optionsContainer.querySelectorAll('.smart-content');
-        console.log(`🔍 ${smartElements.length} smart-content elementi bulundu`);
-        
-        // Her elementi MathAI ile render et
-        for (const element of smartElements) {
-            try {
-                if (element.dataset.latex) {
-                    await mathAIRenderSystem.renderMathContent(
-                        element.dataset.latex,
-                        element,
-                        {
-                            displayMode: false,
-                            enableTurkishSupport: true,
-                            enableFallback: true
-                        }
-                    );
-                } else if (element.dataset.content) {
-                    await mathAIRenderSystem.renderMathContent(
-                        element.dataset.content,
-                        element,
-                        {
-                            displayMode: false,
-                            enableTurkishSupport: true,
-                            enableFallback: true
-                        }
-                    );
-                }
-            } catch (renderError) {
-                console.warn('⚠️ Option render hatası:', renderError);
-                // Hata durumunda element'i olduğu gibi bırak
-            }
-        }
-        
-        console.log('✅ Interactive options render tamamlandı');
-        
-    } catch (error) {
-        console.error('❌ Interactive options render hatası:', error);
     }
 }
 
@@ -2668,17 +2389,13 @@ function generateInteractiveOptions(options) {
                 </div>
                 <div class="option-content flex-1">
                     
-                    <div class="text-gray-800 font-medium option-text smart-content" 
-                         id="option-text-${displayId}"
-                         data-content="${escapeHtml(option.text || 'Seçenek metni eksik')}">
-                        ${escapeHtml(option.text || 'Seçenek metni eksik')}
+                    <div class="text-gray-800 font-medium option-text smart-content" id="option-text-${displayId}">
+                        ${option.text || 'Seçenek metni eksik'}
                     </div>
 
                     ${option.latex && option.latex !== option.text ? `
-                        <div class="text-sm text-gray-600 mt-1 option-latex smart-content" 
-                             id="option-latex-${displayId}"
-                             data-latex="${escapeHtml(option.latex)}">
-                            ${escapeHtml(option.latex)}
+                        <div class="text-sm text-gray-600 mt-1 option-latex smart-content" id="option-latex-${displayId}">
+                            ${option.latex}
                         </div>
                     ` : ''}
                 </div>
@@ -3394,7 +3111,7 @@ async function displayInteractiveCompletion(completionStats) {
 
     // Math render
     setTimeout(async () => {
-        await mathAIRenderSystem(container, false);
+        await renderMathInContainer(container, false);
     }, 50);
 }
 
@@ -3895,7 +3612,8 @@ window.setupInteractiveEventListeners = setupInteractiveEventListeners;
 window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
-window.mathAIRenderSystem = mathAIRenderSystem;
+window.globalRenderManager = globalRenderManager;
+
 // js/pages/index.js dosyasında, "// --- EXPORTS ---" satırının hemen üstüne ekleyin.
 
 /**
@@ -3923,11 +3641,5 @@ function waitForElement(elementId, timeout = 3000) {
 
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide,  };
+export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
 
-// Global erişim için debug fonksiyonlarını window'a ekle
-if (typeof window !== 'undefined') {
-    window.enableMathAIDebug = enableMathAIDebug;
-    window.testMathAISystem = testMathAISystem;
-    window.handleSystemError = handleSystemError;
-}

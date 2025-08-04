@@ -200,390 +200,27 @@ body {
     overflow-x: auto; /* Uzun ifadeler için kaydırma çubuğu */
 }
 
-/* YENİ: Gelişmiş matematik render stilleri */
+/* Render hatası durumunda gösterilecek stil */
+.katex-error {
+    color: #dc2626 !important;
+    background: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    padding: 0.5rem !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace !important;
+}
+
+/* Çeşitli render konteynerleri için genel stil */
 .math-content, .latex-content, .smart-content {
-    position: relative;
-    transition: all 0.3s ease;
+    line-height: 1.7; /* Okunabilirliği artır */
 }
 
+/* Uzun ifadelerin taşmasını önlemek için genel konteyner */
 .math-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 2rem;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 1px solid #e2e8f0;
-    margin: 0.5rem 0;
-}
-
-/* YENİ: Fallback render stilleri */
-.render-fallback {
-    background-color: #fef3c7 !important; /* amber-100 */
-    border: 1px solid #f59e0b !important; /* amber-500 */
-    border-radius: 4px !important;
-    padding: 4px 8px !important;
-    font-family: 'Courier New', monospace !important;
-    font-size: 0.9em !important;
-    color: #92400e !important; /* amber-800 */
-}
-
-.render-error {
-    background-color: #fef2f2 !important; /* red-50 */
-    border: 1px solid #ef4444 !important; /* red-500 */
-    border-radius: 4px !important;
-    padding: 8px !important;
-    color: #dc2626 !important; /* red-700 */
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-}
-
-.render-error .error-icon {
-    font-size: 1.2em;
-    color: #ef4444;
-}
-
-.render-error .retry-render {
-    background: none;
-    border: none;
-    color: #ef4444;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.8em;
-    transition: background-color 0.2s;
-}
-
-.render-error .retry-render:hover {
-    background-color: rgba(239, 68, 68, 0.1);
-}
-
-/* Math Fallback Styles - Enhanced */
-.math-fallback {
-    font-family: 'Times New Roman', serif;
-    line-height: 1.4;
-    display: inline-block;
-    vertical-align: middle;
-}
-
-.math-fallback .fraction {
-    display: inline-block;
-    text-align: center;
-    vertical-align: middle;
-    margin: 0 2px;
-}
-
-.math-fallback .fraction .numerator {
-    display: block;
-    border-bottom: 1px solid #333;
-    padding: 0 2px;
-    font-size: 0.9em;
-}
-
-.math-fallback .fraction .denominator {
-    display: block;
-    padding: 0 2px;
-    font-size: 0.9em;
-}
-
-.math-fallback .superscript {
-    position: relative;
-}
-
-.math-fallback .superscript sup {
-    font-size: 0.7em;
-    vertical-align: super;
-    line-height: 1;
-}
-
-.math-fallback .subscript {
-    position: relative;
-}
-
-.math-fallback .subscript sub {
-    font-size: 0.7em;
-    vertical-align: sub;
-    line-height: 1;
-}
-
-.math-fallback .sqrt {
-    position: relative;
-    display: inline-block;
-    vertical-align: middle;
-}
-
-.math-fallback .sqrt::before {
-    content: '√';
-    font-size: 1.2em;
-    font-weight: bold;
-    margin-right: 2px;
-}
-
-.math-fallback .radicand {
-    border-top: 1px solid #333;
-    padding: 0 2px;
-    margin-left: 2px;
-}
-
-.math-fallback .integral {
-    font-size: 1.5em;
-    font-weight: bold;
-    color: #059669;
-    margin: 0 2px;
-}
-
-.math-fallback .logarithm {
-    font-family: 'Times New Roman', serif;
-    font-weight: bold;
-    color: #059669;
-}
-
-.math-fallback .derivative {
-    font-family: 'Times New Roman', serif;
-    font-style: italic;
-    color: #dc2626;
-}
-
-.math-fallback .partial {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #dc2626;
-}
-
-.math-fallback .limit {
-    font-family: 'Times New Roman', serif;
-    font-weight: bold;
-    color: #7c3aed;
-}
-
-.math-fallback .sum {
-    font-size: 1.3em;
-    font-weight: bold;
-    color: #7c3aed;
-}
-
-.math-fallback .trig {
-    font-family: 'Times New Roman', serif;
-    font-style: italic;
-    color: #ea580c;
-}
-
-.math-fallback .exponential {
-    font-family: 'Times New Roman', serif;
-    font-weight: bold;
-    color: #ea580c;
-}
-
-.math-fallback .operator {
-    font-size: 1.1em;
-    font-weight: bold;
-    color: #374151;
-    margin: 0 1px;
-}
-
-.math-fallback .comparison {
-    font-size: 1.1em;
-    font-weight: bold;
-    color: #374151;
-    margin: 0 1px;
-}
-
-.math-fallback .greek {
-    font-family: 'Times New Roman', serif;
-    font-style: italic;
-    color: #059669;
-}
-
-.math-fallback .constant {
-    font-family: 'Times New Roman', serif;
-    font-weight: bold;
-    color: #7c3aed;
-}
-
-.math-fallback .set {
-    font-family: 'Times New Roman', serif;
-    font-weight: bold;
-    color: #dc2626;
-}
-
-/* YENİ: Karışık içerik stilleri */
-.mixed-content-container {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px;
-}
-
-.mixed-content-container .latex-part {
-    background-color: rgba(79, 70, 229, 0.05);
-    border-radius: 3px;
-    padding: 2px 4px;
-}
-
-.mixed-content-container .text-part {
-    color: #374151;
-}
-
-/* YENİ: Progressive rendering stilleri */
-.render-pending {
-    opacity: 0.6;
-    position: relative;
-}
-
-.render-pending::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 16px;
-    height: 16px;
-    margin: -8px 0 0 -8px;
-    border: 2px solid #e5e7eb;
-    border-top: 2px solid #4f46e5;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-/* YENİ: Cache render stilleri */
-.cache-rendered {
-    position: relative;
-}
-
-.cache-rendered::before {
-    content: '⚡';
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    font-size: 0.7em;
-    color: #10b981;
-    background: white;
-    border-radius: 50%;
-    width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #10b981;
-}
-
-/* YENİ: LaTeX fallback stilleri */
-.latex-fallback {
-    font-family: 'Courier New', monospace;
-    background-color: #f3f4f6;
-    border: 1px solid #d1d5db;
-    border-radius: 3px;
-    padding: 2px 6px;
-    font-size: 0.9em;
-    color: #6b7280;
-}
-
-/* YENİ: Optimized render stilleri */
-[data-optimized="true"] {
-    position: relative;
-}
-
-[data-optimized="true"]::after {
-    content: '🔧';
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    font-size: 0.6em;
-    color: #8b5cf6;
-    background: white;
-    border-radius: 50%;
-    width: 12px;
-    height: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #8b5cf6;
-}
-
-/* YENİ: Türkçe karakter desteği */
-.turkish-content {
-    font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-
-.turkish-content .katex {
-    font-family: 'KaTeX_Main', 'Times New Roman', serif;
-}
-
-/* Math Error Styles */
-.math-error {
-    background-color: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #dc2626;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
-.render-fallback {
-    background-color: #f3f4f6;
-    border: 1px solid #d1d5db;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: monospace;
-    font-size: 0.9em;
-    color: #6b7280;
-}
-
-/* Enhanced Math Content Styles */
-.latex-content, .math-content, .smart-content {
-    transition: all 0.3s ease;
-}
-
-.latex-content.rendering {
-    opacity: 0.7;
-    background-color: #f9fafb;
-}
-
-.latex-content.rendered {
-    opacity: 1;
-    background-color: transparent;
-}
-
-.latex-content.error {
-    background-color: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #dc2626;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-size: 0.9em;
-}
-
-/* Loading States */
-.math-loading {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #e5e7eb;
-    border-top: 2px solid #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 8px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* YENİ: Performans göstergeleri */
-.render-performance {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    font-size: 0.6em;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: monospace;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0.5rem 0 !important;
 }
 
 /* =================================================================== */
@@ -817,66 +454,83 @@ body {
         padding: 0.375rem 0.5rem;
         font-size: 0.75rem;
     }
-
-    .katex-display {
-        font-size: 0.9em !important;
-        padding: 0.75rem !important;
-        margin: 0.75rem auto !important;
-    }
-    
-    .math-fallback {
-        font-size: 0.9em;
-    }
-    
-    .math-fallback .integral {
-        font-size: 1.3em;
-    }
-    
-    .math-fallback .sum {
-        font-size: 1.1em;
-    }
-    
-    .math-fallback .fraction .numerator,
-    .math-fallback .fraction .denominator {
-        font-size: 0.8em;
-    }
-    
-    .render-error {
-        font-size: 0.8em;
-        padding: 6px;
-    }
 }
 
-/* YENİ: Dark mode desteği */
-@media (prefers-color-scheme: dark) {
-    .katex {
-        color: #f1f5f9 !important;
-    }
-    
-    .katex-display {
-        background-color: #1e293b !important;
-        border-color: #334155 !important;
-    }
-    
-    .render-fallback {
-        background-color: #451a03 !important;
-        border-color: #f59e0b !important;
-        color: #fbbf24 !important;
-    }
-    
-    .render-error {
-        background-color: #450a0a !important;
-        border-color: #ef4444 !important;
-        color: #fca5a5 !important;
-    }
-    
-    .math-fallback {
-        color: #e2e8f0;
-    }
-    
-    .latex-fallback {
-        background-color: #374151;
-        border-color: #4b5563;
-        color: #9ca3af;
-    }
+
+/* styles.css'e ekleyin */
+
+/* Render edilmiş matematik için */
+.math-rendered {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1.2;
+}
+
+.math-rendered.mathjax-rendered {
+    margin: 0 0.2em;
+}
+
+/* Karışık içerik */
+.mixed-content-container {
+    line-height: 1.6;
+}
+
+.mixed-content-container .latex-part {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 0.1em;
+}
+
+.mixed-content-container .text-part {
+    display: inline;
+}
+
+/* İnteraktif seçenekler */
+.option-text {
+    min-height: 1.5em;
+    display: block;
+    position: relative;
+}
+
+.option-text.math-rendered {
+    text-align: left;
+}
+
+/* Render durumları */
+.render-pending {
+    opacity: 0.5;
+    background: #f0f0f0;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.render-error {
+    color: #d32f2f;
+    background: #ffebee;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+/* MathJax SVG ayarlamaları */
+.MathJax_SVG {
+    display: inline-block !important;
+    vertical-align: middle !important;
+}
+
+.MathJax_SVG_Display {
+    display: block !important;
+    text-align: center !important;
+    margin: 1em 0 !important;
+}
+
+/* Animasyonlar */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.math-rendered {
+    animation: fadeIn 0.3s ease-out;
 }
