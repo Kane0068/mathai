@@ -1,7 +1,7 @@
 // =================================================================================
 //  MathAi - UI Modülü - Gelişmiş Render ve Hata Yönetimi
 // =================================================================================
-import { unifiedRenderController } from './unifiedRenderController.js';
+import { mathAIRenderSystem } from './mathAIRenderSystem.js';
 
 
 // js/modules/ui.js içindeki showLoading fonksiyonunu bununla değiştirin
@@ -142,27 +142,28 @@ export function showAnimatedLoading(steps, stepDelay = 1500) {
     showStep();
 }
 
+// YENİ: Bunlarla değiştirin
 export async function renderMath(content, element, displayMode = false) {
-    return await unifiedRenderController.render(element, content, { displayMode });
+    return await mathAIRenderSystem.renderMathContent(content, element, { displayMode });
 }
-// renderMathInContainer fonksiyonunu değiştirin
+
 export async function renderMathInContainer(container, displayMode = false) {
     if (!container) return;
-    
     try {
-        await unifiedRenderController.renderContainer(container, {
-            displayMode,
-            onProgress: (completed, total) => {
-                console.log(`Render ilerleme: ${completed}/${total}`);
-            }
-        });
+        return await mathAIRenderSystem.renderContainer(container, { displayMode });
     } catch (error) {
         console.error('Container render hatası:', error);
+        return { success: false, error: error.message };
     }
 }
-// Yeni: Render sistemini başlat
+
 export async function initializeRenderSystem() {
-    return true; // UnifiedController otomatik başlar
+    return await mathAIRenderSystem.initialize({
+        enableTurkishSupport: true,
+        enableMixedContent: true,
+        enableCaching: true,
+        debugMode: false
+    });
 }
 
 /**

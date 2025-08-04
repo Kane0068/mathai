@@ -10,16 +10,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 
     <script>
-        // MathJax erken yapılandırma
+        // MathJax 3 için önerilen konfigürasyon
+        // Bu blok, MathJax'in nasıl çalışacağını tanımlar.
         window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']], // Satır içi matematik için $...$ ve \(...\)
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], // Blok matematik için $$...$$ ve \[...\]
+                processEscapes: true // LaTeX kaçış karakterlerini işle
+            },
+            svg: {
+                fontCache: 'global' // Performans artışı için
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'], // Bu etiketlerin içini işlemez
+                ignoreHtmlClass: 'tex2jax_ignore', // Bu sınıfa sahip elementleri yoksayar
+            },
             startup: {
-                typeset: false // Otomatik render'ı kapat
+                // Otomatik render'ı kapatıyoruz çünkü render işlemini
+                // mathAIRenderSystem.js modülümüz yönetecek.
+                typeset: false 
             }
         };
     </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">

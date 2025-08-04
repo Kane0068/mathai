@@ -183,3 +183,43 @@ function cleanLatexContent(content) {
         // Başındaki ve sonundaki boşlukları temizle
         .trim();
 }
+
+// apiResponseHandler.js dosyanıza ekleyin
+
+/**
+ * API'den gelen metinleri render edilmeden önce agresif bir şekilde temizler.
+ * Birleşik kelimeleri ayırır ve LaTeX formatını normalize eder.
+ * @param {string} text - Temizlenecek ham metin.
+ * @returns {string} Temizlenmiş ve render'a hazır metin.
+ */
+function robustTextClean(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    let cleaned = text;
+
+    // 1. Genel temizlik (mevcut cleanLatexContent'ten)
+    cleaned = cleaned
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Markdown bold
+        .replace(/\$\$\$/g, '$$')        // Üçlü dolar
+        .replace(/\$\s+\$/g, '$$')         // Arası boşluklu dolar
+        .trim();
+
+    // 2. Birleşik Türkçe kelimeleri ve bozuk karakterleri ayırmaya çalış
+    // Örnek: "integralindeg˘erinibulun" -> "integralinde değerini bulun"
+    // Bu regex, küçük harften sonra büyük harf veya özel karakterden sonra harf geldiğinde araya boşluk ekler.
+    cleaned = cleaned.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2');
+    cleaned = cleaned.replace(/([A-Za-zğüşıöç])([\\$])/g, '$1 $2');
+    cleaned = cleaned.replace(/([\\$])([A-Za-zğüşıöç])/g, '$1 $2');
+    cleaned = cleaned.replace(/[˘`]/g, ''); // Hatalı karakterleri temizle
+
+    // 3. Çoklu boşlukları tek boşluğa indir
+    cleaned = cleaned.replace(/\s+/g, ' ');
+    
+    // 4. LaTeX komutlarından önce ve sonra unutulan boşlukları ekle
+    // Örnek: "Önce\sqrt{x}..." -> "Önce \sqrt{x}..."
+    cleaned = cleaned.replace(/([a-zA-Zğüşıöç0-9])(\\)/g, '$1 $2');
+    cleaned = cleaned.replace(/(\})(\w)/g, '$1 $2');
+
+
+    return cleaned;
+}

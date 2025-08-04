@@ -12,33 +12,33 @@ const GEMINI_API_KEY = "AIzaSyDbjH9TXIFLxWH2HuYJlqIFO7Alhk1iQQs";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 const MAX_RETRIES = 2; // Başarısız istek en fazla 2 kez daha denenecek (toplamda 3 deneme).
 
-/**
- * API'den gelen metin içinde gömülü olan JSON verisini güvenli bir şekilde çıkarır.
- * Kod bloklarını (```json ... ```) ve diğer metinleri temizler.
- * @param {string} text API'den gelen ham metin.
- * @returns {string|null} Ayıklanmış JSON dizesi veya bulunamazsa null.
- */
+
 function extractJson(text) {
     if (!text) return null;
 
-    // ```json veya ``` ile başlayıp ``` ile biten kod bloklarını ara
-    const jsonRegex = /```(json)?\s*(\{[\s\S]*\})\s*```/;
-    const match = text.match(jsonRegex);
-
-    if (match && match[2]) {
-        return match[2];
+    // 1. Öncelik: ```json ... ``` kod bloğunu ara
+    const jsonBlockRegex = /```(?:json)?\s*(\{[\s\S]*\})\s*```/;
+    const blockMatch = text.match(jsonBlockRegex);
+    if (blockMatch && blockMatch[1]) {
+        console.log("JSON, kod bloğu içinden ayıklandı.");
+        return blockMatch[1];
     }
 
-    // Eğer kod bloğu yoksa, metnin içindeki ilk { ve son } arasındaki kısmı almayı dene
+    // 2. Öncelik: Eğer kod bloğu yoksa, metnin içindeki ilk { ve son } arasındaki en büyük bloğu al
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
-        return text.substring(firstBrace, lastBrace + 1);
+        const potentialJson = text.substring(firstBrace, lastBrace + 1);
+        // Basit bir validasyon: JSON'a benziyor mu?
+        if (potentialJson.includes(':') && potentialJson.includes('"')) {
+            console.log("JSON, metin içerisinden ayıklandı.");
+            return potentialJson;
+        }
     }
-
+    
+    console.warn("Metin içinde geçerli bir JSON yapısı bulunamadı.");
     return null; // JSON bulunamadı
 }
-
 
 /**
  * Bir JSON dizesini güvenli bir şekilde parse eder. Hata durumunda null döner.
