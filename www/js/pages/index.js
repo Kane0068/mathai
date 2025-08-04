@@ -7,21 +7,17 @@ import {
     showSuccess,
     renderMath,
     renderMathInContainer,
-    renderSmartContent,
-    waitForRenderSystem,
     initializeRenderSystem,
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
 import { AdvancedErrorHandler } from '../modules/errorHandler.js';
 import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
-import { advancedMathRenderer } from '../modules/advancedMathRenderer.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-import { renderStateManager } from '../modules/renderStateManager.js';
-import { globalRenderManager } from '../modules/globalRenderManager.js';
+import { mathRenderer } from '../core/mathRenderer.js';
+import { mathApi } from '../core/mathApi.js';
 
-import { getUnifiedSolution, validateMathProblem, validateStudentStep } from '../services/apiService.js';
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
@@ -811,6 +807,34 @@ function hideSolutionContainers() {
         elements['solution-output'].classList.add('hidden');
     }
 }
+function clearInputAreas() {
+    console.log('🧹 Clearing input areas...');
+    
+    // Klavye input'unu temizle
+    const keyboardInput = document.getElementById('keyboard-input');
+    if (keyboardInput) {
+        keyboardInput.value = '';
+    }
+    
+    // Fotoğraf preview'ını temizle
+    const imagePreview = document.getElementById('imagePreview');
+    const previewContainer = document.getElementById('preview-container');
+    const uploadSelection = document.getElementById('upload-selection');
+    const startFromPhotoBtn = document.getElementById('startFromPhotoBtn');
+    
+    if (imagePreview) imagePreview.src = '';
+    if (previewContainer) previewContainer.classList.add('hidden');
+    if (uploadSelection) uploadSelection.classList.remove('hidden');
+    if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
+    
+    // File input'ları temizle
+    const imageUploader = document.getElementById('imageUploader');
+    const cameraUploader = document.getElementById('cameraUploader');
+    if (imageUploader) imageUploader.value = '';
+    if (cameraUploader) cameraUploader.value = '';
+    
+    console.log('✅ All input areas cleared');
+}
 
 async function renderSetupView(inputMode, handwritingInputType) {
     const isPhoto = inputMode === 'photo';
@@ -888,35 +912,7 @@ if (!window.renderStateManager) {
     };
 }
 
-// Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
-function clearInputAreas() {
-    console.log('🧹 Clearing input areas...');
-    
-    // Klavye input'unu temizle
-    const keyboardInput = document.getElementById('keyboard-input');
-    if (keyboardInput) {
-        keyboardInput.value = '';
-    }
-    
-    // Fotoğraf preview'ını temizle
-    const imagePreview = document.getElementById('imagePreview');
-    const previewContainer = document.getElementById('preview-container');
-    const uploadSelection = document.getElementById('upload-selection');
-    const startFromPhotoBtn = document.getElementById('startFromPhotoBtn');
-    
-    if (imagePreview) imagePreview.src = '';
-    if (previewContainer) previewContainer.classList.add('hidden');
-    if (uploadSelection) uploadSelection.classList.remove('hidden');
-    if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
-    
-    // File input'ları temizle
-    const imageUploader = document.getElementById('imageUploader');
-    const cameraUploader = document.getElementById('cameraUploader');
-    if (imageUploader) imageUploader.value = '';
-    if (cameraUploader) cameraUploader.value = '';
-    
-    console.log('✅ All input areas cleared');
-}
+
 
 
 
@@ -1761,7 +1757,7 @@ async function handleNewProblem(sourceType) {
 
         // 2. Matematik sorusu olup olmadığını doğrula
         stateManager.setLoading(true, "İçerik analiz ediliyor...");
-        const validationResult = await validateMathProblem(problemContextForPrompt, imageBase64, (msg) => stateManager.setLoading(true, msg));
+        const validationResult = await mathApi.validateProblem(problemContextForPrompt, imageBase64);
 
         if (!validationResult || !validationResult.isMathProblem) {
             stateManager.setLoading(false);
@@ -1781,7 +1777,7 @@ async function handleNewProblem(sourceType) {
 
         // 4. TEK API ÇAĞRISI: Tüm çözüm verisini al
         stateManager.setLoading(true, "Yapay zeka çözümü hazırlıyor...");
-        const unifiedSolution = await getUnifiedSolution(problemContextForPrompt, imageBase64, (msg) => stateManager.setLoading(true, msg));
+        const unifiedSolution = await mathApi.getSolution(problemContextForPrompt, imageBase64);
         
         if (unifiedSolution && unifiedSolution.problemOzeti && unifiedSolution.adimlar) {
             // Başarılı: Tüm veriyi state'e kaydet ve özete geç
@@ -1886,7 +1882,7 @@ async function displayQuestionSummary(problemOzeti) {
     elements['question'].innerHTML = summaryHTML;
 
     // Global render manager kullan
-    await globalRenderManager.renderContainer(elements['question']);
+    await mathRenderer.render(elements['question']);
 }
 
 
@@ -2208,33 +2204,8 @@ async function renderInteractiveSolution(solution) {
     }
 }
 
-function forceShowContainers() {
-    const containers = [
-        'result-container',
-        'solution-output'
-    ];
-    
-    containers.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.classList.remove('hidden');
-            element.style.display = 'block';
-            element.style.visibility = 'visible';
-            element.style.opacity = '1';
-            console.log(`✅ Force shown: ${id}`);
-        }
-    });
-}
-// Güvenli DOM hazırlık bekleme
-function waitForDOMReady() {
-    return new Promise(resolve => {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', resolve);
-        } else {
-            setTimeout(resolve, 50); // Kısa gecikme
-        }
-    });
-}
+
+
 async function renderInteractiveStepSafe(stepData) {
     console.log('🔄 İnteraktif adım render başlıyor:', stepData);
     try {
@@ -2243,7 +2214,7 @@ async function renderInteractiveStepSafe(stepData) {
 
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
         setupInteractiveEventListeners(stepData);
-        await globalRenderManager.renderContainer(solutionOutput);
+        await mathRenderer.render(solutionOutput);
 
         console.log('✅ İnteraktif adım render tamamlandı');
     } catch (error) {
@@ -3609,37 +3580,12 @@ window.renderMath = renderMath;
 window.renderInteractiveSolution = renderInteractiveSolution;
 window.handleInteractiveSubmissionSafe = handleInteractiveSubmissionSafe;
 window.setupInteractiveEventListeners = setupInteractiveEventListeners;
-window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
-window.globalRenderManager = globalRenderManager;
 
-// js/pages/index.js dosyasında, "// --- EXPORTS ---" satırının hemen üstüne ekleyin.
 
-/**
- * Belirtilen ID'ye sahip bir elemanın DOM'da var olmasını ve görünür olmasını bekler.
- * @param {string} elementId Beklenecek elemanın ID'si.
- * @param {number} timeout Maksimum bekleme süresi (milisaniye).
- * @returns {Promise<HTMLElement>} Eleman bulunduğunda resolve olan bir Promise.
- */
-function waitForElement(elementId, timeout = 3000) {
-    return new Promise((resolve, reject) => {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-            const element = document.getElementById(elementId);
-            // Eleman hem var hem de görünür mü kontrol et (display: none değil)
-            if (element && element.offsetParent !== null) {
-                clearInterval(interval);
-                resolve(element);
-            } else if (Date.now() - startTime > timeout) {
-                clearInterval(interval);
-                reject(new Error(`waitForElement: '${elementId}' elemanı ${timeout}ms içinde bulunamadı veya görünür olmadı.`));
-            }
-        }, 50); // Her 50ms'de bir kontrol et
-    });
-}
 
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide, advancedMathRenderer };
+export { canvasManager, errorHandler, stateManager, smartGuide,mathRenderer };
 

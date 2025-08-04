@@ -58,17 +58,34 @@ export class StateManager {
         this.subscribers.forEach(cb => cb(newState));
     }
 
+        // TEK BİR REDUCER İLE DEĞİŞTİR:
     reducer(state, action) {
-        const newUser = this.userReducer(state.user, action);
-        const newProblem = this.problemReducer(state.problem, action);
-        const newUi = this.uiReducer(state.ui, action);
-
-        if (state.user === newUser && state.problem === newProblem && state.ui === newUi) {
-            return state; // Hiçbir alt state değişmedi, mevcut objeyi döndür.
+        switch (action.type) {
+            case 'SET_USER':
+                return { ...state, user: action.payload };
+            case 'SET_SOLUTION':
+                return { ...state, problem: { solution: action.payload } };
+            case 'SET_VIEW':
+                return { ...state, ui: { ...state.ui, view: action.payload } };
+            case 'SET_LOADING':
+                return { 
+                    ...state, 
+                    ui: { 
+                        ...state.ui, 
+                        isLoading: action.payload.status,
+                        loadingMessage: action.payload.message || ''
+                    }
+                };
+            case 'RESET':
+                return {
+                    ...state,
+                    problem: { solution: null },
+                    ui: { ...this.initialState.ui }
+                };
+            default:
+                return state;
         }
-        return { user: newUser, problem: newProblem, ui: newUi };
     }
-
     // Alt Reducer'lar: Her biri kendi state parçasından sorumludur.
     userReducer(state, action) {
         switch (action.type) {

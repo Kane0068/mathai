@@ -388,58 +388,6 @@ export class OptimizedCanvasManager {
         }
     }
 
-    /**
-     * Belirtilen canvas'a ait tüm yöneticileri (observer vb.) temizler.
-     * @param {string} canvasId - Temizlenecek canvas'ın ID'si.
-     */
-    cleanup(canvasId) {
-        const observer = this.observers.get(canvasId);
-        if (observer) {
-            observer.disconnect();
-            this.observers.delete(canvasId);
-        }
-        
-        const data = this.canvasPool.get(canvasId);
-        if (data) {
-            clearTimeout(data.saveTimeout);
-            this.canvasPool.delete(canvasId);
-        }
-        
-        this.pendingUpdates.delete(canvasId);
-    }
+    
 
-    /**
-     * Canvas'ın çizim durumunu kontrol et
-     * @param {string} canvasId - Kontrol edilecek canvas'ın ID'si.
-     * @returns {boolean} - Canvas çizim için hazır mı?
-     */
-    isCanvasReady(canvasId) {
-        const data = this.canvasPool.get(canvasId);
-        return data && data.canvas.width > 0 && data.canvas.height > 0;
-    }
-
-    /**
-     * Debug bilgisi al
-     * @param {string} canvasId - Debug bilgisi alınacak canvas'ın ID'si.
-     */
-    getDebugInfo(canvasId) {
-        const data = this.canvasPool.get(canvasId);
-        if (!data) return null;
-        
-        return {
-            canvasId,
-            dimensions: {
-                width: data.canvas.width,
-                height: data.canvas.height,
-                styleWidth: data.canvas.style.width,
-                styleHeight: data.canvas.style.height
-            },
-            dpr: data.dpr,
-            tool: data.tool,
-            isDrawing: data.isDrawing,
-            historyLength: data.history.length
-        };
-    }
 }
-
-// export const canvasManager = new OptimizedCanvasManager();
