@@ -65,99 +65,72 @@ export class EnhancedMathRenderer {
     }
 
     /**
-     * Ana render fonksiyonu - content tipini analiz eder ve uygun renderer'ı seçer
+     * Ana render fonksiyonu - GELİŞTİRİLDİ
      * @param {HTMLElement} element - Render edilecek element
      * @param {string} content - Render edilecek içerik
      * @param {Object} options - Render seçenekleri
-     * @returns {Promise<boolean>} - Render başarı durumu
+     * @returns {Promise<Object>} - Render sonucu
      */
     async renderContent(element, content, options = {}) {
         if (!element || !content) {
-            console.warn('❌ Geçersiz render parametreleri');
-            return false;
-        }
-
-        // Türkçe karakter düzeltmesi
-        if (options.enableTurkishSupport !== false) {
-            content = this.fixTurkishCharacters(content);
+            throw new Error('Element ve içerik gerekli');
         }
 
         const startTime = performance.now();
-        const elementId = this.getElementId(element);
         
-        // Render kilidi kontrolü
-        if (this.renderLocks.has(elementId)) {
-            console.log(`⏳ Element zaten render ediliyor: ${elementId}`);
-            return false;
-        }
-
-        this.renderLocks.add(elementId);
-        this.metrics.totalRenders++;
-
         try {
             // Cache kontrolü
             const cacheKey = this.generateCacheKey(content, options);
             if (this.renderCache.has(cacheKey)) {
-                element.innerHTML = this.renderCache.get(cacheKey);
-                element.classList.add('cache-rendered');
-                this.metrics.cacheHits++;
-                console.log(`✨ Cache hit: ${elementId}`);
-                return true;
+                const cachedResult = this.renderCache.get(cacheKey);
+                element.innerHTML = cachedResult.html;
+                element.className = cachedResult.className;
+                return cachedResult;
             }
 
             // İçerik analizi
             const analysis = await this.analyzeContent(content);
-            console.log(`🔍 İçerik analizi (${elementId}):`, analysis);
-
-            // Uygun renderer'ı seç ve çalıştır
-            const renderResult = await this.selectAndRender(element, content, analysis, options);
             
-            if (renderResult.success) {
+            // Renderer seçimi ve render
+            const result = await this.selectAndRender(element, content, analysis, options);
+            
+            if (result.success) {
                 // Cache'e kaydet
-                this.renderCache.set(cacheKey, element.innerHTML);
-                
-                // Metrics güncelle
-                this.metrics.successfulRenders++;
-                if (analysis.contentType === 'mixed') {
-                    this.metrics.mixedContentRenders++;
-                }
-                
                 const renderTime = performance.now() - startTime;
                 this.updateAverageRenderTime(renderTime);
                 
-                // Success class ekle
-                element.classList.add('render-success', `render-${analysis.contentType}`);
-                element.setAttribute('data-render-strategy', renderResult.strategy);
-                element.setAttribute('data-render-time', renderTime.toFixed(2));
+                const cacheData = {
+                    html: element.innerHTML,
+                    className: element.className,
+                    strategy: result.strategy,
+                    renderTime: renderTime
+                };
+                this.renderCache.set(cacheKey, cacheData);
                 
-                console.log(`✅ Render başarılı (${elementId}): ${renderResult.strategy} - ${renderTime.toFixed(2)}ms`);
-                return true;
-                
+                return {
+                    success: true,
+                    strategy: result.strategy,
+                    renderTime: renderTime,
+                    analysis: analysis
+                };
             } else {
-                throw new Error(`Render başarısız: ${renderResult.error}`);
+                // Render başarısız, fallback dene
+                if (options.enableFallback !== false) {
+                    return await this.performFallbackRender(element, content, options);
+                } else {
+                    throw new Error(`Render başarısız: ${result.error}`);
+                }
             }
-
+            
         } catch (error) {
-            console.error(`❌ Render hatası (${elementId}):`, error);
+            console.error('Render hatası:', error);
             
-            // Error tipini kaydet
-            const errorType = error.constructor.name;
-            const currentCount = this.metrics.errorTypes.get(errorType) || 0;
-            this.metrics.errorTypes.set(errorType, currentCount + 1);
-            
-            // Fallback render
-            const fallbackResult = await this.performFallbackRender(element, content, options);
-            
-            if (fallbackResult) {
-                this.metrics.fallbackRenders++;
-                console.log(`✅ Fallback render başarılı (${elementId})`);
-                return true;
+            // Fallback render dene
+            if (options.enableFallback !== false) {
+                return await this.performFallbackRender(element, content, options);
+            } else {
+                throw error;
             }
-            
-            return false;
-            
-        } finally {
-            this.renderLocks.delete(elementId);
         }
     }
 
@@ -172,7 +145,8 @@ export class EnhancedMathRenderer {
             patterns: {},
             length: content.length,
             hasLatex: false,
-            hasTurkish: false
+            hasTurkish: false,
+            latexAnalysis: null // YENİ
         };
 
         // Türkçe karakter kontrolü
@@ -194,87 +168,214 @@ export class EnhancedMathRenderer {
             environments: /\\begin\{[^}]+\}/g,
             fractions: /\\frac\s*\{[^}]*\}\s*\{[^}]*\}/g,
             superSubscript: /_\{[^}]+\}|\^\{[^}]+\}|_[a-zA-Z0-9]|\^[a-zA-Z0-9]/g,
-            greekLetters: /\\(?:alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)/g
+            greekLetters: /\\(?:alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)/g,
+            // YENİ: Karmaşık LaTeX pattern'leri
+            complexIntegrals: /\\\[[^\]]+\\\]/g,
+            complexFractions: /\\frac\s*\{[^}]*\}\s*\{[^}]*\}/g,
+            complexRoots: /\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g,
+            complexSuperscripts: /[a-zA-Z]\^\{[^}]+\}/g,
+            complexSubscripts: /[a-zA-Z]_\{[^}]+\}/g,
+            turkishLatex: /\\[cCgGiIoOsSuU]/g
         };
 
         // Her pattern için kontrol
-        let latexMatchCount = 0;
-        let mathComplexity = 0;
+        let totalLatexMatches = 0;
+        let latexContentRatio = 0;
 
-        for (const [patternName, pattern] of Object.entries(latexPatterns)) {
+        Object.entries(latexPatterns).forEach(([patternName, pattern]) => {
             const matches = content.match(pattern);
             if (matches) {
                 analysis.patterns[patternName] = matches.length;
-                latexMatchCount += matches.length;
-                
-                // Karmaşıklık hesaplama
-                switch(patternName) {
-                    case 'fractions':
-                    case 'environments':
-                        mathComplexity += matches.length * 3;
-                        break;
-                    case 'commands':
-                    case 'superSubscript':
-                        mathComplexity += matches.length * 2;
-                        break;
-                    default:
-                        mathComplexity += matches.length;
-                }
+                totalLatexMatches += matches.length;
+                analysis.hasLatex = true;
+            }
+        });
+
+        // LaTeX içerik oranını hesapla
+        if (analysis.hasLatex) {
+            const latexContent = content.match(/\$[^\$]+\$|\$\$[^\$]+\$\$|\\\[[^\]]+\\\]|\\[a-zA-Z]+/g);
+            if (latexContent) {
+                const totalLatexLength = latexContent.join('').length;
+                latexContentRatio = totalLatexLength / content.length;
             }
         }
 
-        analysis.hasLatex = latexMatchCount > 0;
-        analysis.complexity = mathComplexity / 10; // Normalize et
-
-        // İçerik tipi belirleme
-        if (latexMatchCount === 0 && !content.includes('$')) {
-            // Saf metin
-            analysis.contentType = 'pure_text';
-            analysis.confidence = 0.7;
-        } else if (latexMatchCount > 5 || content.includes('\\begin{')) {
-            // Saf LaTeX
-            analysis.contentType = 'pure_latex';
-            analysis.confidence = 0.85;
-        } else if (content.match(/^[0-9\+\-\*\/\=\.\,\s\(\)]+$/)) {
-            // Basit matematiksel ifade
-            analysis.contentType = 'mathematical_expression';
-            analysis.confidence = 0.8;
-        } else {
-            // Karışık içerik
-            analysis.contentType = 'mixed';
-            analysis.confidence = 0.95;
+        // YENİ: LaTeX analizi
+        if (analysis.hasLatex) {
+            analysis.latexAnalysis = this.analyzeLatexContent(content);
         }
+
+        // İçerik tipini belirle
+        if (analysis.hasLatex && latexContentRatio > 0.3) {
+            analysis.contentType = 'pure_latex';
+            analysis.confidence = Math.min(0.9, latexContentRatio);
+        } else if (analysis.hasLatex && latexContentRatio > 0.1) {
+            analysis.contentType = 'mixed';
+            analysis.confidence = 0.7;
+        } else if (analysis.hasTurkish && !analysis.hasLatex) {
+            analysis.contentType = 'pure_text';
+            analysis.confidence = 0.8;
+        } else if (content.length < 50 && /[a-zA-Z]/.test(content)) {
+            analysis.contentType = 'mathematical_expression';
+            analysis.confidence = 0.6;
+        } else {
+            analysis.contentType = 'pure_text';
+            analysis.confidence = 0.5;
+        }
+
+        // Karmaşıklık hesaplama - GELİŞTİRİLDİ
+        analysis.complexity = this.calculateComplexity(analysis);
 
         return analysis;
     }
 
     /**
-     * Türkçe karakterleri düzelt
+     * YENİ: LaTeX içerik analizi - GELİŞTİRİLDİ
+     */
+    analyzeLatexContent(content) {
+        const analysis = {
+            complexity: 0,
+            hasFractions: false,
+            hasIntegrals: false,
+            hasSuperscripts: false,
+            hasSubscripts: false,
+            hasRoots: false,
+            hasTurkish: false,
+            hasComplexStructures: false,
+            hasLogarithms: false,
+            hasDerivatives: false,
+            hasLimits: false,
+            hasSums: false,
+            isValid: true,
+            issues: []
+        };
+
+        // Temel yapıları kontrol et
+        analysis.hasFractions = /\\frac/.test(content);
+        analysis.hasIntegrals = /\\int/.test(content);
+        analysis.hasSuperscripts = /\^/.test(content);
+        analysis.hasSubscripts = /_/.test(content);
+        analysis.hasRoots = /\\sqrt/.test(content);
+        analysis.hasTurkish = /[ğĞıİöÖşŞüÜçÇ]/.test(content);
+        analysis.hasLogarithms = /\\log/.test(content);
+        analysis.hasDerivatives = /\\frac\s*d/.test(content) || /\\partial/.test(content);
+        analysis.hasLimits = /\\lim/.test(content);
+        analysis.hasSums = /\\sum/.test(content);
+        
+        // Karmaşık yapıları kontrol et
+        analysis.hasComplexStructures = /\\\[[^\]]+\\\]/.test(content) || 
+                                       /\\frac\s*\{[^}]*\}\s*\{[^}]*\}/.test(content) ||
+                                       /\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/.test(content) ||
+                                       /\\left[\(\)\[\]\{\}][^\\]*\\right[\(\)\[\]\{\}]/.test(content);
+
+        // Sorunları tespit et
+        if (content.includes('\\[') && !content.includes('\\]')) {
+            analysis.issues.push('Unclosed display math');
+            analysis.isValid = false;
+        }
+        
+        if (content.includes('\\frac{') && !content.includes('}')) {
+            analysis.issues.push('Unclosed fraction');
+            analysis.isValid = false;
+        }
+
+        if (content.includes('\\sqrt{') && !content.includes('}')) {
+            analysis.issues.push('Unclosed root');
+            analysis.isValid = false;
+        }
+
+        if (content.includes('\\int_') && !content.includes('^') && !content.includes('d')) {
+            analysis.issues.push('Incomplete integral');
+            analysis.isValid = false;
+        }
+
+        // Karmaşıklık skoru - GELİŞTİRİLDİ
+        const complexityFactors = [
+            analysis.hasFractions,
+            analysis.hasIntegrals,
+            analysis.hasSuperscripts,
+            analysis.hasSubscripts,
+            analysis.hasRoots,
+            analysis.hasComplexStructures,
+            analysis.hasLogarithms,
+            analysis.hasDerivatives,
+            analysis.hasLimits,
+            analysis.hasSums
+        ];
+        
+        analysis.complexity = complexityFactors.filter(Boolean).length;
+
+        return analysis;
+    }
+
+    /**
+     * YENİ: Karmaşıklık hesaplama
+     */
+    calculateComplexity(analysis) {
+        let complexity = 0;
+        
+        // LaTeX karmaşıklığı
+        if (analysis.hasLatex) {
+            complexity += 2;
+            if (analysis.latexAnalysis) {
+                complexity += analysis.latexAnalysis.complexity;
+            }
+        }
+        
+        // Türkçe karakter karmaşıklığı
+        if (analysis.hasTurkish) {
+            complexity += 1;
+        }
+        
+        // İçerik uzunluğu karmaşıklığı
+        if (analysis.length > 100) {
+            complexity += 1;
+        }
+        
+        // Pattern karmaşıklığı
+        const patternCount = Object.keys(analysis.patterns).length;
+        complexity += Math.min(patternCount, 3);
+        
+        return Math.min(complexity, 10); // Maksimum 10
+    }
+
+    /**
+     * Türkçe karakter düzeltmeleri - GELİŞTİRİLDİ
      */
     fixTurkishCharacters(content) {
-        // Escape karakterleri düzelt
+        if (!content || typeof content !== 'string') return content;
+        
+        let fixed = content;
+        
+        // 1. Escape karakterleri düzelt
         const turkishCharMap = {
             '\\c': 'ç', '\\C': 'Ç',
-            '\\g': 'ğ', '\\G': 'Ğ',
+            '\\g': 'ğ', '\\G': 'Ğ', 
             '\\i': 'ı', '\\I': 'İ',
             '\\o': 'ö', '\\O': 'Ö',
             '\\s': 'ş', '\\S': 'Ş',
             '\\u': 'ü', '\\U': 'Ü'
         };
-
-        let fixed = content;
         
-        // LaTeX komutlarını koruyarak Türkçe karakterleri düzelt
         Object.entries(turkishCharMap).forEach(([escaped, correct]) => {
-            // Sadece kelime sınırında olan escape karakterleri düzelt
             const regex = new RegExp(escaped.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
             fixed = fixed.replace(regex, correct);
         });
         
-        // Unicode birleşik karakterleri düzelt
+        // 2. Unicode birleşik karakterleri düzelt
         fixed = fixed.replace(/g\u02d8/g, 'ğ');
         fixed = fixed.replace(/s\u0327/g, 'ş');
         fixed = fixed.replace(/c\u0327/g, 'ç');
+        
+        // 3. Zero-width space karakterlerini temizle
+        fixed = fixed.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+        
+        // 4. Birleşik kelimeleri akıllıca ayır
+        fixed = fixed.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2');
+        
+        // 5. LaTeX komutlarından sonra gelen metni ayır
+        fixed = fixed.replace(/(\})([a-zA-ZğüşıöçĞÜŞİÖÇ])/g, '$1 $2');
+        fixed = fixed.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ])(\$)/g, '$1 $2');
         
         return fixed;
     }
@@ -341,20 +442,71 @@ export class EnhancedMathRenderer {
 
         const displayMode = options.displayMode || false;
         
-        katex.render(content, element, {
-            displayMode: displayMode,
-            throwOnError: false,
-            output: 'html',
-            trust: true,
-            strict: false,
-            macros: {
-                '\\R': '\\mathbb{R}',
-                '\\C': '\\mathbb{C}',
-                '\\N': '\\mathbb{N}',
-                '\\Z': '\\mathbb{Z}',
-                '\\Q': '\\mathbb{Q}'
-            }
-        });
+        try {
+            katex.render(content, element, {
+                displayMode: displayMode,
+                throwOnError: false,
+                output: 'html',
+                trust: true,
+                strict: false,
+                macros: {
+                    '\\R': '\\mathbb{R}',
+                    '\\C': '\\mathbb{C}',
+                    '\\N': '\\mathbb{N}',
+                    '\\Z': '\\mathbb{Z}',
+                    '\\Q': '\\mathbb{Q}',
+                    '\\lim': '\\lim',
+                    '\\log': '\\log',
+                    '\\ln': '\\ln',
+                    '\\sin': '\\sin',
+                    '\\cos': '\\cos',
+                    '\\tan': '\\tan',
+                    '\\cot': '\\cot',
+                    '\\sec': '\\sec',
+                    '\\csc': '\\csc',
+                    '\\exp': '\\exp',
+                    '\\int': '\\int',
+                    '\\sum': '\\sum',
+                    '\\prod': '\\prod',
+                    '\\partial': '\\partial',
+                    '\\infty': '\\infty',
+                    '\\alpha': '\\alpha',
+                    '\\beta': '\\beta',
+                    '\\gamma': '\\gamma',
+                    '\\delta': '\\delta',
+                    '\\epsilon': '\\epsilon',
+                    '\\zeta': '\\zeta',
+                    '\\eta': '\\eta',
+                    '\\theta': '\\theta',
+                    '\\iota': '\\iota',
+                    '\\kappa': '\\kappa',
+                    '\\lambda': '\\lambda',
+                    '\\mu': '\\mu',
+                    '\\nu': '\\nu',
+                    '\\xi': '\\xi',
+                    '\\pi': '\\pi',
+                    '\\rho': '\\rho',
+                    '\\sigma': '\\sigma',
+                    '\\tau': '\\tau',
+                    '\\upsilon': '\\upsilon',
+                    '\\phi': '\\phi',
+                    '\\chi': '\\chi',
+                    '\\psi': '\\psi',
+                    '\\omega': '\\omega'
+                },
+                errorColor: '#cc0000',
+                minRuleThickness: 0.05,
+                colorIsTextColor: false,
+                maxSize: Infinity,
+                maxExpand: 1000,
+                strict: false
+            });
+        } catch (error) {
+            console.warn('KaTeX render hatası:', error);
+            // Fallback: HTML olarak göster
+            element.innerHTML = `<span class="math-error" title="Render hatası: ${error.message}">${this.escapeHtml(content)}</span>`;
+            element.classList.add('render-fallback');
+        }
     }
 
     /**
@@ -392,29 +544,54 @@ export class EnhancedMathRenderer {
     }
 
     /**
-     * Fallback render stratejisi
+     * Fallback render - GELİŞTİRİLDİ
      */
     async performFallbackRender(element, content, options) {
-        for (const strategy of this.fallbackStrategies) {
-            try {
-                console.log(`🔄 Fallback deneniyor: ${strategy}`);
-                
-                const renderStrategy = this.renderStrategies.get(strategy);
-                if (renderStrategy) {
-                    await renderStrategy(element, content, options);
-                    console.log(`✅ Fallback başarılı: ${strategy}`);
-                    return true;
-                }
-                
-            } catch (error) {
-                console.warn(`⚠️ Fallback başarısız (${strategy}):`, error);
-                continue;
-            }
+        try {
+            console.log('🔄 Fallback render deneniyor...');
+            
+            // MixedContentRenderer'ı kullan
+            const mixedRenderer = await this.getMixedContentRenderer();
+            
+            // İçeriği optimize et
+            const optimizedContent = mixedRenderer.optimizeLatex(content);
+            
+            // Fallback HTML oluştur
+            const fallbackHtml = mixedRenderer.createSimpleMathFallback(
+                optimizedContent,
+                'math-fallback-enhanced',
+                content
+            );
+            
+            element.innerHTML = fallbackHtml;
+            element.classList.add('render-fallback');
+            element.classList.add('enhanced-fallback');
+            
+            console.log('✅ Fallback render başarılı');
+            
+            return {
+                success: true,
+                strategy: 'fallback',
+                renderTime: 0,
+                analysis: { contentType: 'fallback' }
+            };
+            
+        } catch (fallbackError) {
+            console.error('❌ Fallback render hatası:', fallbackError);
+            
+            // En son çare: plain text göster
+            element.textContent = content;
+            element.classList.add('render-fallback');
+            element.classList.add('plain-text-fallback');
+            
+            return {
+                success: false,
+                strategy: 'plain-text',
+                error: fallbackError.message,
+                renderTime: 0,
+                analysis: { contentType: 'plain-text' }
+            };
         }
-        
-        // Son çare: düz metin
-        element.textContent = content;
-        return true;
     }
 
     /**

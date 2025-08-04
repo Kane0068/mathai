@@ -1966,7 +1966,9 @@ async function renderFullSolution(solution) {
                 enableTurkishSupport: true,
                 enableMixedContent: true,
                 displayMode: false, // Adım içeriği için inline mode
-                debugMode: false // Production'da false yapın
+                debugMode: false, // Production'da false yapın
+                skipProblemSummary: true, // YENİ: Problem özetini atla
+                skipBackButton: false // YENİ: Back button'ı ekle
             }
         );
 
@@ -2067,6 +2069,25 @@ function handleSystemError(error, context) {
     // Hata raporlama (isteğe bağlı)
     errorHandler.handleError(error, { operation: context });
 }
+
+// YENİ: Ana menüye dön işlevi
+function handleBackToMainMenu() {
+    console.log('🔄 Ana menüye dönülüyor...');
+    
+    // State'i sıfırla
+    stateManager.resetToInitialState();
+    
+    // UI'yi temizle
+    resetForNewProblem();
+    
+    // Ana menüyü göster
+    renderApp(stateManager.getState());
+    
+    console.log('✅ Ana menüye dönüldü');
+}
+
+// Global olarak erişilebilir yap
+window.handleBackToMainMenu = handleBackToMainMenu;
 
 // YENİ: Debug araçları (geliştirme için)
 function enableMathAIDebug() {
@@ -2376,34 +2397,34 @@ if (!document.getElementById('solution-animations')) {
 
 
 async function renderInteractiveSolution(solution) {
-    console.log('🔄 İnteraktif Çözüm Başlatılıyor');
-    showLoading("İnteraktif çözüm hazırlanıyor...");
-
+    console.log('🔄 İnteraktif çözüm render başlıyor:', solution);
+    
     try {
-        if (!solution || !solution.adimlar || solution.adimlar.length === 0) {
-            displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
-            return;
-        }
+        // YENİ: MathAI sisteminin hazır olduğundan emin ol
+        await ensureMathAIReady();
         
-        // 1. InteractiveSolutionManager'ı çözüm verisiyle başlat (Bu senkron bir işlem)
-        interactiveSolutionManager.initializeInteractiveSolution(solution);
-        
-        // 2. İlk adım için seçenekleri SENKRON olarak oluştur
-        const stepOptionsToRender = interactiveSolutionManager.generateStepOptions(0);
-
-        // 3. Gelen sonucun geçerli olduğunu kontrol et (Artık .success kontrolü yok)
-        if (!stepOptionsToRender || !stepOptionsToRender.options) {
-            throw new Error("İlk adım seçenekleri oluşturulamadı. Veri yapısı bozuk olabilir.");
+        if (!solution || !solution.steps || !Array.isArray(solution.steps)) {
+            throw new Error('Geçersiz çözüm verisi');
         }
 
-        // 4. Adımı ekrana render et (Bu asenkron kalabilir, çünkü içinde render işlemleri var)
-        await renderInteractiveStepSafe(stepOptionsToRender);
+        const currentStep = solution.steps[0];
+        if (!currentStep || !currentStep.options) {
+            throw new Error('İlk adım verisi eksik');
+        }
 
+        // State'i güncelle
+        stateManager.setInteractiveSolution(solution);
+        stateManager.setCurrentInteractiveStep(0);
+        stateManager.setView('interactive');
+
+        // UI'yi render et
+        renderApp(stateManager.getState());
+
+        console.log('✅ İnteraktif çözüm render tamamlandı');
+        
     } catch (error) {
-        console.error('❌ İnteraktif çözüm başlatma hatası:', error);
-        displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
-    } finally {
-        showLoading(false);
+        console.error('❌ İnteraktif çözüm render hatası:', error);
+        showError(`İnteraktif çözüm yüklenirken hata oluştu: ${error.message}`, true);
     }
 }
 
@@ -2442,12 +2463,71 @@ async function renderInteractiveStepSafe(stepData) {
 
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
         setupInteractiveEventListeners(stepData);
+        
+        // YENİ: MathAI ile container'ı render et
         await mathAIRenderSystem.renderContainer(solutionOutput);
-
+        
+        // YENİ: Interactive options'ları özel olarak render et
+        await renderInteractiveOptions();
+        
         console.log('✅ İnteraktif adım render tamamlandı');
     } catch (error) {
         console.error('❌ Adım render hatası:', error);
         displayInteractiveError(`Render hatası: ${error.message}`);
+    }
+}
+
+/**
+ * YENİ: Interactive options'ları özel olarak render et
+ */
+async function renderInteractiveOptions() {
+    try {
+        console.log('🔄 Interactive options render ediliyor...');
+        
+        const optionsContainer = document.getElementById('interactive-options-container');
+        if (!optionsContainer) {
+            console.warn('⚠️ Interactive options container bulunamadı');
+            return;
+        }
+        
+        // Tüm smart-content elementlerini bul
+        const smartElements = optionsContainer.querySelectorAll('.smart-content');
+        console.log(`🔍 ${smartElements.length} smart-content elementi bulundu`);
+        
+        // Her elementi MathAI ile render et
+        for (const element of smartElements) {
+            try {
+                if (element.dataset.latex) {
+                    await mathAIRenderSystem.renderMathContent(
+                        element.dataset.latex,
+                        element,
+                        {
+                            displayMode: false,
+                            enableTurkishSupport: true,
+                            enableFallback: true
+                        }
+                    );
+                } else if (element.dataset.content) {
+                    await mathAIRenderSystem.renderMathContent(
+                        element.dataset.content,
+                        element,
+                        {
+                            displayMode: false,
+                            enableTurkishSupport: true,
+                            enableFallback: true
+                        }
+                    );
+                }
+            } catch (renderError) {
+                console.warn('⚠️ Option render hatası:', renderError);
+                // Hata durumunda element'i olduğu gibi bırak
+            }
+        }
+        
+        console.log('✅ Interactive options render tamamlandı');
+        
+    } catch (error) {
+        console.error('❌ Interactive options render hatası:', error);
     }
 }
 
@@ -2588,13 +2668,17 @@ function generateInteractiveOptions(options) {
                 </div>
                 <div class="option-content flex-1">
                     
-                    <div class="text-gray-800 font-medium option-text smart-content" id="option-text-${displayId}">
-                        ${option.text || 'Seçenek metni eksik'}
+                    <div class="text-gray-800 font-medium option-text smart-content" 
+                         id="option-text-${displayId}"
+                         data-content="${escapeHtml(option.text || 'Seçenek metni eksik')}">
+                        ${escapeHtml(option.text || 'Seçenek metni eksik')}
                     </div>
 
                     ${option.latex && option.latex !== option.text ? `
-                        <div class="text-sm text-gray-600 mt-1 option-latex smart-content" id="option-latex-${displayId}">
-                            ${option.latex}
+                        <div class="text-sm text-gray-600 mt-1 option-latex smart-content" 
+                             id="option-latex-${displayId}"
+                             data-latex="${escapeHtml(option.latex)}">
+                            ${escapeHtml(option.latex)}
                         </div>
                     ` : ''}
                 </div>

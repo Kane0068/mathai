@@ -26,6 +26,160 @@ class MathAIRenderSystem {
             performanceScore: 0
         };
         
+        // YENİ: Gelişmiş LaTeX işleme için özel parser
+        this.latexProcessor = {
+            // Karmaşık LaTeX ifadelerini düzelt - GELİŞTİRİLDİ
+            fixComplexLatex: (latex) => {
+                if (!latex || typeof latex !== 'string') return latex;
+                
+                let fixed = latex;
+                
+                // 1. Türkçe karakter düzeltmeleri
+                const turkishCharMap = {
+                    '\\c': 'ç', '\\C': 'Ç',
+                    '\\g': 'ğ', '\\G': 'Ğ', 
+                    '\\i': 'ı', '\\I': 'İ',
+                    '\\o': 'ö', '\\O': 'Ö',
+                    '\\s': 'ş', '\\S': 'Ş',
+                    '\\u': 'ü', '\\U': 'Ü'
+                };
+                
+                Object.entries(turkishCharMap).forEach(([escaped, correct]) => {
+                    const regex = new RegExp(escaped.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
+                    fixed = fixed.replace(regex, correct);
+                });
+                
+                // 2. Karmaşık integral ifadelerini düzelt
+                // Örnek: \([\frac{3}{8}x^{\frac{8}{3}} + \frac{6}{5}x^{\frac{5}{3}}]_{1}^{2}\)
+                fixed = fixed.replace(/\\\[([^\]]+)\\\]/g, '\\left[$1\\right]');
+                
+                // 3. Üslü ifadelerdeki parantezleri düzelt
+                fixed = fixed.replace(/([a-zA-Z])\^\{([^}]+)\}/g, '$1^{$2}');
+                fixed = fixed.replace(/([a-zA-Z])_\{([^}]+)\}/g, '$1_{$2}');
+                
+                // 4. Kesir ifadelerini düzelt
+                fixed = fixed.replace(/\\frac\s*\{([^}]*)\}\s*\{([^}]*)\}/g, '\\frac{$1}{$2}');
+                
+                // 5. Kök ifadelerini düzelt
+                fixed = fixed.replace(/\\sqrt\[([^\]]*)\]\{([^}]*)\}/g, '\\sqrt[$1]{$2}');
+                
+                // 6. Logaritma ifadelerini düzelt - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\log_(\d+)\s*\(([^)]+)\)/g, '\\log_{$1}($2)');
+                fixed = fixed.replace(/\\ln\s*\(([^)]+)\)/g, '\\ln($1)');
+                fixed = fixed.replace(/\\log\s*\(([^)]+)\)/g, '\\log($1)');
+                fixed = fixed.replace(/\\log_\{([^}]+)\}\s*\(([^)]+)\)/g, '\\log_{$1}($2)');
+                
+                // 7. Türev ifadelerini düzelt - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\frac\s*d\s*\{([^}]*)\}\s*d\s*\{([^}]*)\}/g, '\\frac{d$1}{d$2}');
+                fixed = fixed.replace(/\\frac\s*\\partial\s*\{([^}]*)\}\s*\\partial\s*\{([^}]*)\}/g, '\\frac{\\partial $1}{\\partial $2}');
+                fixed = fixed.replace(/\\frac\{d([^}]+)\}\{d([^}]+)\}/g, '\\frac{d$1}{d$2}');
+                fixed = fixed.replace(/\\frac\{([^}]+)\}\{d([^}]+)\}/g, '\\frac{$1}{d$2}');
+                
+                // 8. Limit ifadelerini düzelt - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\lim_\{([^}]+)\}\s*([^\\]+)/g, '\\lim_{$1} $2');
+                fixed = fixed.replace(/\\lim\s*([^\\]+)/g, '\\lim $1');
+                fixed = fixed.replace(/\\lim_\{([^}]+)\}/g, '\\lim_{$1}');
+                
+                // 9. Toplam ifadelerini düzelt - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\sum_\{([^}]+)\}\^\{([^}]+)\}/g, '\\sum_{$1}^{$2}');
+                fixed = fixed.replace(/\\sum_\{([^}]+)\}/g, '\\sum_{$1}');
+                fixed = fixed.replace(/\\sum\^\{([^}]+)\}/g, '\\sum^{$1}');
+                
+                // 10. İntegral ifadelerini düzelt - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\int_\{([^}]+)\}\^\{([^}]+)\}/g, '\\int_{$1}^{$2}');
+                fixed = fixed.replace(/\\int_\{([^}]+)\}/g, '\\int_{$1}');
+                fixed = fixed.replace(/\\int\^\{([^}]+)\}/g, '\\int^{$1}');
+                
+                // 11. Parantez düzeltmeleri - GELİŞTİRİLDİ
+                fixed = fixed.replace(/\\left\(([^)]+)\\right\)/g, '\\left($1\\right)');
+                fixed = fixed.replace(/\\left\[([^\]]+)\\right\]/g, '\\left[$1\\right]');
+                fixed = fixed.replace(/\\left\{([^}]+)\\right\}/g, '\\left\\{$1\\right\\}');
+                
+                // 12. Trigonometrik fonksiyonları düzelt
+                fixed = fixed.replace(/\\sin\s*\(([^)]+)\)/g, '\\sin($1)');
+                fixed = fixed.replace(/\\cos\s*\(([^)]+)\)/g, '\\cos($1)');
+                fixed = fixed.replace(/\\tan\s*\(([^)]+)\)/g, '\\tan($1)');
+                fixed = fixed.replace(/\\cot\s*\(([^)]+)\)/g, '\\cot($1)');
+                fixed = fixed.replace(/\\sec\s*\(([^)]+)\)/g, '\\sec($1)');
+                fixed = fixed.replace(/\\csc\s*\(([^)]+)\)/g, '\\csc($1)');
+                
+                // 13. Üstel ve logaritmik fonksiyonları düzelt
+                fixed = fixed.replace(/\\exp\s*\(([^)]+)\)/g, '\\exp($1)');
+                fixed = fixed.replace(/\\ln\s*\(([^)]+)\)/g, '\\ln($1)');
+                
+                // 14. Matematiksel operatörleri düzelt
+                fixed = fixed.replace(/\\cdot\s*/g, '\\cdot ');
+                fixed = fixed.replace(/\\times\s*/g, '\\times ');
+                fixed = fixed.replace(/\\div\s*/g, '\\div ');
+                fixed = fixed.replace(/\\pm\s*/g, '\\pm ');
+                fixed = fixed.replace(/\\mp\s*/g, '\\mp ');
+                
+                // 15. Karşılaştırma operatörleri
+                fixed = fixed.replace(/\\leq\s*/g, '\\leq ');
+                fixed = fixed.replace(/\\geq\s*/g, '\\geq ');
+                fixed = fixed.replace(/\\neq\s*/g, '\\neq ');
+                fixed = fixed.replace(/\\approx\s*/g, '\\approx ');
+                fixed = fixed.replace(/\\equiv\s*/g, '\\equiv ');
+                
+                // 16. Birleşik kelimeleri ayır
+                fixed = fixed.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2');
+                
+                // 17. Fazla boşlukları temizle
+                fixed = fixed.replace(/\s+/g, ' ').trim();
+                
+                // 18. Eksik parantezleri kontrol et ve düzelt
+                const openParens = (fixed.match(/\\left\(/g) || []).length;
+                const closeParens = (fixed.match(/\\right\)/g) || []).length;
+                if (openParens > closeParens) {
+                    fixed += '\\right)'.repeat(openParens - closeParens);
+                }
+                
+                // 19. Eksik köşeli parantezleri kontrol et ve düzelt
+                const openBrackets = (fixed.match(/\\left\[/g) || []).length;
+                const closeBrackets = (fixed.match(/\\right\]/g) || []).length;
+                if (openBrackets > closeBrackets) {
+                    fixed += '\\right]'.repeat(openBrackets - closeBrackets);
+                }
+                
+                return fixed;
+            },
+            
+            // LaTeX içeriğini analiz et
+            analyzeLatex: (latex) => {
+                const analysis = {
+                    complexity: 0,
+                    hasFractions: false,
+                    hasIntegrals: false,
+                    hasSuperscripts: false,
+                    hasSubscripts: false,
+                    hasRoots: false,
+                    hasTurkish: false,
+                    isValid: true
+                };
+                
+                if (!latex) return analysis;
+                
+                // Karmaşıklık hesaplama
+                analysis.hasFractions = /\\frac/.test(latex);
+                analysis.hasIntegrals = /\\int/.test(latex);
+                analysis.hasSuperscripts = /\^/.test(latex);
+                analysis.hasSubscripts = /_/.test(latex);
+                analysis.hasRoots = /\\sqrt/.test(latex);
+                analysis.hasTurkish = /[ğĞıİöÖşŞüÜçÇ]/.test(latex);
+                
+                // Karmaşıklık skoru
+                analysis.complexity = [
+                    analysis.hasFractions,
+                    analysis.hasIntegrals,
+                    analysis.hasSuperscripts,
+                    analysis.hasSubscripts,
+                    analysis.hasRoots
+                ].filter(Boolean).length;
+                
+                return analysis;
+            }
+        };
+        
         console.log('🚀 MathAI Render System başlatılıyor...');
     }
 
@@ -65,7 +219,10 @@ class MathAIRenderSystem {
                 enableMixedContent: true,
                 enableCaching: true,
                 debugMode: false,
-                autoProcessApiResponses: true
+                autoProcessApiResponses: true,
+                enableLatexOptimization: true, // YENİ
+                enableProgressiveRendering: true, // YENİ
+                maxRetryAttempts: 3 // YENİ
             };
             
             this.config = { ...defaultConfig, ...config };
@@ -94,7 +251,7 @@ class MathAIRenderSystem {
     }
 
     /**
-     * API yanıtını işler ve render eder
+     * API yanıtını işler ve render eder - GELİŞTİRİLDİ
      * @param {Object} apiResponse - API'den gelen yanıt
      * @param {HTMLElement|string} targetContainer - Hedef container (element veya selector)
      * @param {Object} options - Render seçenekleri
@@ -126,12 +283,15 @@ class MathAIRenderSystem {
             // Loading state göster
             this.showLoadingState(container);
             
+            // YENİ: API yanıtını ön işleme
+            const preprocessedResponse = this.preprocessApiResponse(apiResponse);
+            
             // API Response Processor'ı yükle
             const processor = await this.getApiResponseProcessor();
             
             // API yanıtını işle
             const result = await processor.processApiResponse(
-                apiResponse, 
+                preprocessedResponse, 
                 container, 
                 { ...this.config, ...options }
             );
@@ -139,6 +299,11 @@ class MathAIRenderSystem {
             // Başarı durumunda additional processing yap
             if (result.success) {
                 await this.performAdditionalProcessing(container, result);
+                
+                // YENİ: Progressive rendering
+                if (this.config.enableProgressiveRendering) {
+                    await this.performProgressiveRendering(container);
+                }
             }
             
             // Loading state'i kaldır
@@ -154,6 +319,15 @@ class MathAIRenderSystem {
             this.hideLoadingState(container);
             console.error('❌ API yanıt işleme hatası:', error);
             
+            // YENİ: Retry mekanizması
+            if (options.retryCount < this.config.maxRetryAttempts) {
+                console.log(`🔄 Retry attempt ${options.retryCount + 1}/${this.config.maxRetryAttempts}`);
+                return await this.processApiResponse(apiResponse, targetContainer, {
+                    ...options,
+                    retryCount: (options.retryCount || 0) + 1
+                });
+            }
+            
             // Error state göster
             this.showErrorState(container, error);
             
@@ -167,15 +341,156 @@ class MathAIRenderSystem {
             // YENİ: Manuel render işlemi bittiğinde bayrağı indir
             this.isProcessingManualRender = false;
         }
-    
     }
 
     /**
-     * Tekil matematik içeriği render eder
+     * YENİ: API yanıtını ön işleme
+     */
+    preprocessApiResponse(response) {
+        const processed = JSON.parse(JSON.stringify(response));
+        
+        const processValue = (value) => {
+            if (typeof value === 'string') {
+                // LaTeX optimizasyonu
+                if (this.config.enableLatexOptimization) {
+                    value = this.latexProcessor.fixComplexLatex(value);
+                }
+                return value;
+            } else if (Array.isArray(value)) {
+                return value.map(item => processValue(item));
+            } else if (typeof value === 'object' && value !== null) {
+                const result = {};
+                for (const key in value) {
+                    result[key] = processValue(value[key]);
+                }
+                return result;
+            }
+            return value;
+        };
+
+        return processValue(processed);
+    }
+
+    /**
+     * YENİ: Progressive rendering
+     */
+    async performProgressiveRendering(container) {
+        const mathElements = container.querySelectorAll('.latex-content, .math-content, .smart-content');
+        
+        // İlk 3 elementi hemen render et
+        const immediateElements = Array.from(mathElements).slice(0, 3);
+        for (const element of immediateElements) {
+            await this.renderElementWithRetry(element);
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // Geri kalan elementleri lazy load et
+        const remainingElements = Array.from(mathElements).slice(3);
+        if (remainingElements.length > 0) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        this.renderElementWithRetry(entry.target);
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { 
+                rootMargin: '100px',
+                threshold: 0.1 
+            });
+
+            remainingElements.forEach(element => observer.observe(element));
+        }
+    }
+
+    /**
+     * YENİ: Element render with retry - GELİŞTİRİLDİ
+     */
+    async renderElementWithRetry(element, maxRetries = 2) {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                // Loading state göster
+                element.classList.add('rendering');
+                
+                if (element.dataset.latex) {
+                    // LaTeX içeriğini ön işleme
+                    const processedLatex = this.latexProcessor.fixComplexLatex(element.dataset.latex);
+                    
+                    await enhancedMathRenderer.renderContent(element, processedLatex, {
+                        displayMode: true,
+                        enableTurkishSupport: true,
+                        enableFallback: true,
+                        maxRetries: 1
+                    });
+                } else if (element.dataset.content) {
+                    await enhancedMathRenderer.renderContent(element, element.dataset.content, {
+                        displayMode: false,
+                        enableTurkishSupport: true,
+                        enableFallback: true,
+                        maxRetries: 1
+                    });
+                }
+                
+                // Başarılı render
+                element.classList.remove('rendering');
+                element.classList.add('rendered');
+                break;
+                
+            } catch (error) {
+                console.warn(`Render attempt ${attempt + 1} failed:`, error);
+                element.classList.remove('rendering');
+                
+                if (attempt === maxRetries) {
+                    // Son çare: gelişmiş fallback göster
+                    await this.performAdvancedFallback(element);
+                } else {
+                    // Kısa bekleme sonra tekrar dene
+                    await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+                }
+            }
+        }
+    }
+
+    /**
+     * YENİ: Gelişmiş fallback render
+     */
+    async performAdvancedFallback(element) {
+        try {
+            const content = element.dataset.latex || element.dataset.content || '';
+            
+            // MixedContentRenderer'ı kullanarak fallback render
+            const { mixedContentRenderer } = await import('./mixedContentRenderer.js');
+            const renderer = new mixedContentRenderer();
+            
+            const optimizedContent = renderer.optimizeLatex(content);
+            const fallbackHtml = renderer.createSimpleMathFallback(
+                optimizedContent, 
+                'math-fallback-advanced', 
+                content
+            );
+            
+            element.innerHTML = fallbackHtml;
+            element.classList.add('render-fallback');
+            element.classList.add('advanced-fallback');
+            
+            console.log('✅ Gelişmiş fallback render başarılı');
+            
+        } catch (fallbackError) {
+            console.error('❌ Fallback render hatası:', fallbackError);
+            
+            // En son çare: plain text göster
+            element.textContent = element.dataset.latex || element.dataset.content || '';
+            element.classList.add('render-fallback');
+            element.classList.add('plain-text-fallback');
+        }
+    }
+
+    /**
+     * Tekil matematik içeriği render eder - GELİŞTİRİLDİ
      * @param {string} content - Render edilecek içerik
      * @param {HTMLElement|string} targetElement - Hedef element
      * @param {Object} options - Render seçenekleri
-     * @returns {Promise<boolean>} - Render başarı durumu
+     * @returns {Promise<Object>} - Render sonucu
      */
     async renderMathContent(content, targetElement, options = {}) {
         if (!this.isInitialized) {
@@ -188,10 +503,15 @@ class MathAIRenderSystem {
 
         if (!element) {
             console.error('❌ Hedef element bulunamadı');
-            return false;
+            return { success: false, error: 'Hedef element bulunamadı' };
         }
 
         try {
+            // YENİ: LaTeX optimizasyonu
+            if (this.config.enableLatexOptimization) {
+                content = this.latexProcessor.fixComplexLatex(content);
+            }
+            
             const result = await enhancedMathRenderer.renderContent(
                 element, 
                 content, 
@@ -203,7 +523,122 @@ class MathAIRenderSystem {
             
         } catch (error) {
             console.error('❌ Matematik render hatası:', error);
+            
+            // YENİ: Gelişmiş hata yönetimi kullan
+            return await this.handleRenderError(error, element, content, options);
+        }
+    }
+
+    /**
+     * YENİ: Fallback render sistemi
+     */
+    async performFallbackRender(element, content, options) {
+        console.log('🔄 Fallback render deneniyor...');
+        
+        try {
+            // 1. Basit LaTeX render
+            if (content.includes('\\')) {
+                element.innerHTML = `<span class="latex-fallback">${this.escapeHtml(content)}</span>`;
+                element.classList.add('render-fallback');
+                return true;
+            }
+            
+            // 2. Plain text render
+            element.textContent = content;
+            element.classList.add('render-fallback');
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Fallback render da başarısız:', error);
+            element.textContent = content || 'Render hatası';
+            element.classList.add('render-error');
             return false;
+        }
+    }
+
+    /**
+     * YENİ: Gelişmiş hata yönetimi ve retry mekanizması
+     */
+    async handleRenderError(error, element, content, options, attempt = 0) {
+        const maxRetries = options.maxRetries || this.config.maxRetryAttempts || 3;
+        
+        console.warn(`⚠️ Render hatası (attempt ${attempt + 1}/${maxRetries + 1}):`, error);
+        
+        if (attempt < maxRetries) {
+            // Kısa bekleme sonra tekrar dene
+            const delay = Math.pow(2, attempt) * 100; // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, delay));
+            
+            try {
+                // İçeriği tekrar optimize et
+                const reoptimizedContent = this.latexProcessor.fixComplexLatex(content);
+                
+                // Farklı render stratejisi dene
+                const fallbackOptions = {
+                    ...options,
+                    forceRenderer: attempt === 0 ? 'katex' : (attempt === 1 ? 'mathjax' : 'html'),
+                    enableFallback: true
+                };
+                
+                return await this.renderMathContent(reoptimizedContent, element, fallbackOptions);
+                
+            } catch (retryError) {
+                return await this.handleRenderError(retryError, element, content, options, attempt + 1);
+            }
+        } else {
+            // Maksimum deneme sayısına ulaşıldı, gelişmiş fallback kullan
+            console.error('❌ Maksimum retry sayısına ulaşıldı, gelişmiş fallback kullanılıyor');
+            return await this.performAdvancedFallback(element);
+        }
+    }
+
+    /**
+     * YENİ: Sistem stabilite kontrolü
+     */
+    async checkSystemStability() {
+        const stabilityReport = {
+            isStable: true,
+            issues: [],
+            recommendations: []
+        };
+        
+        try {
+            // KaTeX kontrolü
+            if (!window.katex) {
+                stabilityReport.isStable = false;
+                stabilityReport.issues.push('KaTeX yüklenmemiş');
+                stabilityReport.recommendations.push('KaTeX kütüphanesini yükleyin');
+            }
+            
+            // MathJax kontrolü
+            if (!window.MathJax) {
+                stabilityReport.issues.push('MathJax yüklenmemiş (fallback için)');
+                stabilityReport.recommendations.push('MathJax kütüphanesini yükleyin');
+            }
+            
+            // Cache performansı kontrolü
+            if (this.renderCache.size > 1000) {
+                stabilityReport.issues.push('Cache boyutu çok büyük');
+                stabilityReport.recommendations.push('Cache temizliği yapın');
+            }
+            
+            // Sistem metrikleri kontrolü
+            const avgRenderTime = this.systemMetrics.averageRenderTime || 0;
+            if (avgRenderTime > 1000) {
+                stabilityReport.issues.push('Ortalama render süresi çok yüksek');
+                stabilityReport.recommendations.push('Render optimizasyonu yapın');
+            }
+            
+            console.log('📊 Sistem stabilite raporu:', stabilityReport);
+            return stabilityReport;
+            
+        } catch (error) {
+            console.error('❌ Sistem stabilite kontrolü hatası:', error);
+            return {
+                isStable: false,
+                issues: ['Sistem kontrolü başarısız'],
+                recommendations: ['Sistemi yeniden başlatın']
+            };
         }
     }
 

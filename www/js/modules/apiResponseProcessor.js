@@ -149,12 +149,12 @@ class APIResponseProcessor {
     /**
      * HTML yapısı oluşturma - GELİŞTİRİLDİ
      */
-    createHTMLStructure(response) {
+    createHTMLStructure(response, options = {}) {
         const container = document.createElement('div');
         container.className = 'api-response-structure';
 
-        // Problem özeti
-        if (response.problemOzeti) {
+        // YENİ: Problem özeti zaten varsa atla
+        if (response.problemOzeti && !options.skipProblemSummary) {
             const summarySection = this.createSection('problem-summary', 'Problem Özeti', response.problemOzeti);
             container.appendChild(summarySection);
         }
@@ -194,6 +194,29 @@ class APIResponseProcessor {
                 { aciklama: response.sonucKontrolu }
             );
             container.appendChild(verificationSection);
+        }
+
+        // YENİ: "Ana Menüye Dön" butonu ekle
+        if (!options.skipBackButton) {
+            const backButtonSection = document.createElement('div');
+            backButtonSection.className = 'back-button-section mt-6 text-center';
+            
+            const backButton = document.createElement('button');
+            backButton.id = 'back-to-main-menu-btn';
+            backButton.className = 'btn btn-secondary px-6 py-2';
+            backButton.textContent = 'Ana Menüye Dön';
+            backButton.onclick = () => {
+                // Ana menüye dön işlevi
+                if (window.handleBackToMainMenu) {
+                    window.handleBackToMainMenu();
+                } else {
+                    // Fallback: sayfayı yenile
+                    location.reload();
+                }
+            };
+            
+            backButtonSection.appendChild(backButton);
+            container.appendChild(backButtonSection);
         }
 
         return container;
@@ -367,7 +390,7 @@ class APIResponseProcessor {
             const preprocessedResponse = this.preprocessResponse(apiResponse);
             
             // HTML yapısı oluştur
-            const htmlStructure = this.createHTMLStructure(preprocessedResponse);
+            const htmlStructure = this.createHTMLStructure(preprocessedResponse, options);
             
             // Container'a ekle
             targetContainer.innerHTML = '';
