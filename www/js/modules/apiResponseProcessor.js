@@ -4,6 +4,8 @@
 // =================================================================================
 
 import { enhancedMathRenderer } from './enhancedMathRenderer.js';
+
+
 // YENİ: "Kurşun Geçirmez" Metin Temizleme Fonksiyonu
 // Bu fonksiyon, tüm karakter ve boşluk sorunlarını tek seferde çözer.
 function robustTextClean(text) {
@@ -13,21 +15,24 @@ function robustTextClean(text) {
 
     // 1. ADIM: En Önemli Düzeltme - Karakter Bozulmalarını Gider
     // Ters eğik çizgi ile bozulmuş Türkçe karakterleri düzelt
-    cleaned = cleaned.replace(/\\c/g, 'ç').replace(/\\C/g, 'Ç')
-                     .replace(/\\g/g, 'ğ').replace(/\\G/g, 'Ğ')
-                     .replace(/\\i/g, 'ı').replace(/\\I/g, 'İ')
-                     .replace(/\\o/g, 'ö').replace(/\\O/g, 'Ö')
-                     .replace(/\\s/g, 'ş').replace(/\\S/g, 'Ş')
-                     .replace(/\\u/g, 'ü').replace(/\\U/g, 'Ü');
+    // ÖNEMLİ: Bu düzeltme, bilinen LaTeX komutlarını etkilememek için kelime sınırlarına bakar (\b).
+    cleaned = cleaned.replace(/\\c\b/g, 'ç').replace(/\\C\b/g, 'Ç')
+                     .replace(/\\g\b/g, 'ğ').replace(/\\G\b/g, 'Ğ')
+                     .replace(/\\i\b/g, 'ı').replace(/\\I\b/g, 'İ')
+                     .replace(/\\o\b/g, 'ö').replace(/\\O\b/g, 'Ö')
+                     .replace(/\\s\b/g, 'ş').replace(/\\S\b/g, 'Ş')
+                     .replace(/\\u\b/g, 'ü').replace(/\\U\b/g, 'Ü');
     
     // "g˘unu" gibi özel birleşik karakterleri düzelt
     cleaned = cleaned.replace(/g\u02d8/g, 'ğ');
 
-    // 2. ADIM: Birleşik kelimeleri ayır
-    // Örnek: "Sonucukontroletmek" -> "Sonucu kontrol etmek"
-    cleaned = cleaned.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2')
-                     .replace(/([a-zA-Zğüşıöç])([\\$])/g, '$1 $2')
-                     .replace(/(\})([a-zA-Zğüşıöç0-9])/g, '$1 $2');
+    // 2. ADIM: Birleşik kelimeleri ayır (Daha güvenli hale getirildi)
+    // Örnek: "is​lemininsonucunubulunuz" -> "isleminin sonucunu bulunuz"
+    // Sadece küçük harften sonra büyük harf gelirse veya bir harften sonra $ işareti gelirse ayır.
+    cleaned = cleaned.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2');
+    cleaned = cleaned.replace(/([a-zA-Zğüşıöç])([\\$])/g, '$1 $2');
+    cleaned = cleaned.replace(/(\})(\w)/g, '$1 $2'); // LaTeX parantezinden sonra gelen metni ayır.
+
 
     // 3. ADIM: Genel Temizlik
     cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '$1') // Markdown bold
@@ -36,6 +41,8 @@ function robustTextClean(text) {
 
     return cleaned;
 }
+
+
 export class ApiResponseProcessor {
     constructor() {
         this.processingQueue = [];
@@ -173,7 +180,7 @@ export class ApiResponseProcessor {
     }
 
 
-    
+
     /**
      * API yanıtını ön işlemden geçirir (GÜNCELLENDİ)
      * @param {Object} apiResponse - İşlenecek yanıt
@@ -185,8 +192,10 @@ export class ApiResponseProcessor {
         // YENİ: Tüm metin alanlarını tek bir güçlü fonksiyonla temizle
         this.recursiveObjectWalk(processed, (value, key, obj) => {
             if (typeof value === 'string') {
-                // Sadece sözel içerikleri temizle, LaTeX'e dokunma
-                if (key !== 'cozum_lateks' && key !== 'metin_lateks') {
+                // Sadece sözel içerikleri (LaTeX olmayanları) temizle.
+                // 'cozum_lateks', 'metin_lateks' ve 'tamCozumLateks' gibi anahtarları atla.
+                const latexKeys = ['cozum_lateks', 'metin_lateks', 'tamCozumLateks'];
+                if (!latexKeys.includes(key)) {
                     obj[key] = robustTextClean(value);
                 }
             }

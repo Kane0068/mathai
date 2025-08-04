@@ -150,16 +150,12 @@ export class EnhancedMathRenderer {
         }
     }
 
-    /**
-     * İçerik tipini analiz eder (YENİ ve DAHA AKILLI VERSİYON)
-     * @param {string} content - Analiz edilecek içerik
-     * @returns {Promise<Object>} - Analiz sonucu
-     */
     async analyzeContent(content) {
         const trimmed = content.trim();
         
         const patterns = {
-            hasLatexCommands: /\\(frac|sqrt|sum|int|lim|sin|cos|tan|log|ln|exp|alpha|beta|gamma|delta|theta|pi|sigma|infty|text|left|right|begin|end)\b/.test(trimmed),
+            // log, sin gibi komutları ve alt tireli ifadeleri (log_4) yakalamak için regex güncellendi
+            hasLatexCommands: /\\(frac|sqrt|sum|int|lim|sin|cos|tan|log|ln|exp|alpha|beta|gamma|delta|theta|pi|sigma|infty|text|left|right|begin|end)\b|([a-zA-Z]+_\d+)/.test(trimmed),
             hasDisplayMath: /\$\$[^$]+\$\$/.test(trimmed),
             hasInlineMath: /\$[^$]+\$/.test(trimmed) || /\\\([^)]+\\\)/.test(trimmed),
             hasBraces: /[{}]/.test(trimmed),
@@ -174,7 +170,9 @@ export class EnhancedMathRenderer {
 
         // Karar Ağacı
         if (patterns.hasLatexCommands || patterns.hasDisplayMath || patterns.hasInlineMath) {
-            contentType = patterns.hasText ? 'mixed' : 'pure_latex';
+            // Eğer metin içeriyorsa 'mixed', değilse 'pure_latex' olarak sınıflandır.
+            const textOutsideMath = trimmed.replace(/\$[^$]+\$/g, '').replace(/\$\$[^$]+\$\$/g, '');
+            contentType = /[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(textOutsideMath) ? 'mixed' : 'pure_latex';
             confidence = 0.95;
         } else if (patterns.hasMathFunctions && (patterns.hasPowerOrIndex || patterns.hasBraces)) {
             contentType = patterns.hasText ? 'mixed' : 'pure_latex';
