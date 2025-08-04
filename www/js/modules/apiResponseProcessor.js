@@ -5,87 +5,369 @@
 
 import { enhancedMathRenderer } from './enhancedMathRenderer.js';
 
-
-// YENİ: "Kurşun Geçirmez" Metin Temizleme Fonksiyonu
-// Bu fonksiyon, tüm karakter ve boşluk sorunlarını tek seferde çözer.
+// GELİŞTİRİLMİŞ: Daha güçlü Türkçe karakter ve metin temizleme
 function robustTextClean(text) {
     if (!text || typeof text !== 'string') return '';
 
     let cleaned = text;
 
-    // 1. ADIM: En Önemli Düzeltme - Karakter Bozulmalarını Gider
-    // Ters eğik çizgi ile bozulmuş Türkçe karakterleri düzelt
-    // ÖNEMLİ: Bu düzeltme, bilinen LaTeX komutlarını etkilememek için kelime sınırlarına bakar (\b).
-    cleaned = cleaned.replace(/\\c\b/g, 'ç').replace(/\\C\b/g, 'Ç')
-                     .replace(/\\g\b/g, 'ğ').replace(/\\G\b/g, 'Ğ')
-                     .replace(/\\i\b/g, 'ı').replace(/\\I\b/g, 'İ')
-                     .replace(/\\o\b/g, 'ö').replace(/\\O\b/g, 'Ö')
-                     .replace(/\\s\b/g, 'ş').replace(/\\S\b/g, 'Ş')
-                     .replace(/\\u\b/g, 'ü').replace(/\\U\b/g, 'Ü');
+    // 1. ADIM: Türkçe karakter düzeltmeleri - GENİŞLETİLDİ
+    // Escape karakterleri düzelt (kelime sınırı kontrolü ile)
+    const turkishCharMap = {
+        '\\c': 'ç', '\\C': 'Ç',
+        '\\g': 'ğ', '\\G': 'Ğ', 
+        '\\i': 'ı', '\\I': 'İ',
+        '\\o': 'ö', '\\O': 'Ö',
+        '\\s': 'ş', '\\S': 'Ş',
+        '\\u': 'ü', '\\U': 'Ü'
+    };
+
+    // LaTeX komutlarını koruyarak Türkçe karakterleri düzelt
+    Object.entries(turkishCharMap).forEach(([escaped, correct]) => {
+        // Kelime sınırında olan escape karakterleri düzelt
+        const regex = new RegExp(escaped.replace(/\\/g, '\\\\') + '(?![a-zA-Z])', 'g');
+        cleaned = cleaned.replace(regex, correct);
+    });
     
-    // "g˘unu" gibi özel birleşik karakterleri düzelt
+    // Unicode birleşik karakterleri düzelt
     cleaned = cleaned.replace(/g\u02d8/g, 'ğ');
-
-    // 2. ADIM: Birleşik kelimeleri ayır (Daha güvenli hale getirildi)
-    // Örnek: "is​lemininsonucunubulunuz" -> "isleminin sonucunu bulunuz"
-    // Sadece küçük harften sonra büyük harf gelirse veya bir harften sonra $ işareti gelirse ayır.
+    cleaned = cleaned.replace(/s\u0327/g, 'ş');
+    cleaned = cleaned.replace(/c\u0327/g, 'ç');
+    
+    // 2. ADIM: Zero-width space karakterlerini temizle
+    cleaned = cleaned.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+    
+    // 3. ADIM: Birleşik kelimeleri akıllıca ayır
+    // Küçük harften büyük harfe geçişlerde boşluk ekle
     cleaned = cleaned.replace(/([a-zğüşıöç])([A-ZĞÜŞİÖÇ])/g, '$1 $2');
-    cleaned = cleaned.replace(/([a-zA-Zğüşıöç])([\\$])/g, '$1 $2');
-    cleaned = cleaned.replace(/(\})(\w)/g, '$1 $2'); // LaTeX parantezinden sonra gelen metni ayır.
-
-
-    // 3. ADIM: Genel Temizlik
-    cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '$1') // Markdown bold
-                     .replace(/\s+/g, ' ')             // Çoklu boşlukları tek boşluğa indir
-                     .trim();
-
+    
+    // Özel kalıpları düzelt
+    cleaned = cleaned.replace(/is\s*leminin/g, 'işleminin');
+    cleaned = cleaned.replace(/bulunuz/g, 'bulunuz');
+    cleaned = cleaned.replace(/sonucunu/g, 'sonucunu');
+    
+    // LaTeX komutlarından sonra gelen metni ayır
+    cleaned = cleaned.replace(/(\})([a-zA-ZğüşıöçĞÜŞİÖÇ])/g, '$1 $2');
+    cleaned = cleaned.replace(/([a-zA-ZğüşıöçĞÜŞİÖÇ])(\$)/g, '$1 $2');
+    
+    // 4. ADIM: Markdown düzeltmeleri
+    cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    cleaned = cleaned.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
+    // 5. ADIM: Fazla boşlukları temizle
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
     return cleaned;
 }
 
+// YENİ: LaTeX ifadelerini doğru parse etme
+function correctLatexParsing(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    // log_base value formatını düzelt
+    // Örnek: log_4 32 kalmalı, log_4 (4^{5/2}) olmamalı
+    text = text.replace(/\\log_(\d+)\s*\(?\s*\d+\s*\)?/g, (match) => {
+        // Orijinal formatı koru
+        return match;
+    });
+    
+    // Yanlış parse edilmiş üslü ifadeleri düzelt
+    text = text.replace(/\\log_(\d+)\s*\([^)]+\^\{[^}]+\}\)/g, (match) => {
+        // Sadece sayıyı çıkar
+        const baseMatch = match.match(/\\log_(\d+)/);
+        const valueMatch = match.match(/\((\d+)/);
+        if (baseMatch && valueMatch) {
+            return `\\log_{${baseMatch[1]}} ${valueMatch[1]}`;
+        }
+        return match;
+    });
+    
+    return text;
+}
 
-export class ApiResponseProcessor {
+class APIResponseProcessor {
     constructor() {
-        this.processingQueue = [];
-        this.isProcessing = false;
         this.turkishCharacterFix = true;
         this.spacePreservation = true;
+        this.debugMode = false;
         
-        // İşleme metrikleri
+        // Performans metrikleri
         this.metrics = {
-            totalResponses: 0,
+            totalProcessed: 0,
             successfullyProcessed: 0,
-            mixedContentResponses: 0,
-            turkishContentResponses: 0,
             averageProcessingTime: 0,
-            commonIssues: new Map()
+            commonIssues: new Map(),
+            turkishContentCount: 0
         };
     }
 
     /**
-     * Ana API yanıt işleme fonksiyonu
-     * @param {Object} apiResponse - API'den gelen yanıt
-     * @param {HTMLElement} targetContainer - Yanıtın render edileceği container
-     * @param {Object} options - İşleme seçenekleri
-     * @returns {Promise<Object>} - İşleme sonucu
+     * API yanıtını ön işleme - GELİŞTİRİLDİ
+     */
+    preprocessResponse(response) {
+        console.log('🔄 Ön işlenmiş yanıt:', response);
+        
+        const processed = JSON.parse(JSON.stringify(response));
+        
+        // Tüm string değerleri temizle
+        const processValue = (value) => {
+            if (typeof value === 'string') {
+                // Önce LaTeX düzeltmelerini yap
+                value = correctLatexParsing(value);
+                // Sonra genel temizlik
+                return robustTextClean(value);
+            } else if (Array.isArray(value)) {
+                return value.map(item => processValue(item));
+            } else if (typeof value === 'object' && value !== null) {
+                const result = {};
+                for (const key in value) {
+                    result[key] = processValue(value[key]);
+                }
+                return result;
+            }
+            return value;
+        };
+
+        const result = processValue(processed);
+        
+        // Türkçe içerik tespiti
+        if (this.hasTurkishContent(JSON.stringify(result))) {
+            this.metrics.turkishContentCount++;
+        }
+        
+        return result;
+    }
+
+    /**
+     * Türkçe içerik kontrolü
+     */
+    hasTurkishContent(text) {
+        const turkishChars = /[ğĞıİöÖşŞüÜçÇ]/;
+        return turkishChars.test(text);
+    }
+
+    /**
+     * HTML yapısı oluşturma - GELİŞTİRİLDİ
+     */
+    createHTMLStructure(response) {
+        const container = document.createElement('div');
+        container.className = 'api-response-structure';
+
+        // Problem özeti
+        if (response.problemOzeti) {
+            const summarySection = this.createSection('problem-summary', 'Problem Özeti', response.problemOzeti);
+            container.appendChild(summarySection);
+        }
+
+        // Adımlar
+        if (response.adimlar && Array.isArray(response.adimlar)) {
+            const stepsSection = document.createElement('div');
+            stepsSection.className = 'steps-section';
+            
+            const stepsTitle = document.createElement('h3');
+            stepsTitle.textContent = 'Çözüm Adımları';
+            stepsSection.appendChild(stepsTitle);
+
+            response.adimlar.forEach((adim, index) => {
+                const stepElement = this.createStep(adim, index + 1);
+                stepsSection.appendChild(stepElement);
+            });
+
+            container.appendChild(stepsSection);
+        }
+
+        // Tam çözüm
+        if (response.tamCozumLateks && Array.isArray(response.tamCozumLateks)) {
+            const fullSolutionSection = this.createLatexSection(
+                'full-solution',
+                'Tam Çözüm',
+                response.tamCozumLateks
+            );
+            container.appendChild(fullSolutionSection);
+        }
+
+        // Sonuç kontrolü
+        if (response.sonucKontrolu) {
+            const verificationSection = this.createSection(
+                'result-verification',
+                'Sonuç Kontrolü',
+                { aciklama: response.sonucKontrolu }
+            );
+            container.appendChild(verificationSection);
+        }
+
+        return container;
+    }
+
+    /**
+     * Bölüm oluşturma - GELİŞTİRİLDİ
+     */
+    createSection(className, title, content) {
+        const section = document.createElement('div');
+        section.className = `response-section ${className}`;
+
+        if (title) {
+            const titleElement = document.createElement('h3');
+            titleElement.textContent = title;
+            section.appendChild(titleElement);
+        }
+
+        if (typeof content === 'string') {
+            const contentElement = document.createElement('div');
+            contentElement.className = 'section-content';
+            contentElement.setAttribute('data-math-content', 'true');
+            contentElement.textContent = content;
+            section.appendChild(contentElement);
+        } else if (typeof content === 'object') {
+            Object.entries(content).forEach(([key, value]) => {
+                const itemElement = document.createElement('div');
+                itemElement.className = `content-item ${key}`;
+                
+                if (key !== 'latex' && key !== 'formul') {
+                    const label = document.createElement('span');
+                    label.className = 'item-label';
+                    label.textContent = this.formatLabel(key) + ': ';
+                    itemElement.appendChild(label);
+                }
+                
+                const valueElement = document.createElement('span');
+                valueElement.className = 'item-value';
+                valueElement.setAttribute('data-math-content', 'true');
+                valueElement.textContent = value;
+                itemElement.appendChild(valueElement);
+                
+                section.appendChild(itemElement);
+            });
+        }
+
+        return section;
+    }
+
+    /**
+     * LaTeX bölümü oluşturma
+     */
+    createLatexSection(className, title, latexArray) {
+        const section = document.createElement('div');
+        section.className = `response-section ${className}`;
+
+        if (title) {
+            const titleElement = document.createElement('h3');
+            titleElement.textContent = title;
+            section.appendChild(titleElement);
+        }
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'latex-content-wrapper';
+
+        latexArray.forEach((latex, index) => {
+            const latexElement = document.createElement('div');
+            latexElement.className = 'latex-line';
+            latexElement.setAttribute('data-math-content', 'true');
+            latexElement.setAttribute('data-line-index', index);
+            latexElement.textContent = latex;
+            contentWrapper.appendChild(latexElement);
+        });
+
+        section.appendChild(contentWrapper);
+        return section;
+    }
+
+    /**
+     * Adım elementi oluşturma
+     */
+    createStep(step, stepNumber) {
+        const stepElement = document.createElement('div');
+        stepElement.className = 'solution-step';
+        stepElement.setAttribute('data-step-number', stepNumber);
+
+        const stepHeader = document.createElement('div');
+        stepHeader.className = 'step-header';
+        
+        const stepTitle = document.createElement('h4');
+        stepTitle.textContent = `Adım ${stepNumber}: ${step.baslik || ''}`;
+        stepHeader.appendChild(stepTitle);
+        
+        stepElement.appendChild(stepHeader);
+
+        const stepContent = document.createElement('div');
+        stepContent.className = 'step-content';
+
+        // Açıklama
+        if (step.aciklama) {
+            const explanation = document.createElement('div');
+            explanation.className = 'step-explanation';
+            explanation.setAttribute('data-math-content', 'true');
+            explanation.textContent = step.aciklama;
+            stepContent.appendChild(explanation);
+        }
+
+        // İşlemler
+        if (step.islemler && Array.isArray(step.islemler)) {
+            const operationsContainer = document.createElement('div');
+            operationsContainer.className = 'step-operations';
+            
+            step.islemler.forEach((islem, index) => {
+                const operationElement = document.createElement('div');
+                operationElement.className = 'operation-item';
+                operationElement.setAttribute('data-math-content', 'true');
+                operationElement.setAttribute('data-operation-index', index);
+                
+                // İşlem türüne göre format
+                if (typeof islem === 'string') {
+                    operationElement.textContent = islem;
+                } else if (islem.tur && islem.deger) {
+                    operationElement.setAttribute('data-operation-type', islem.tur);
+                    operationElement.textContent = islem.deger;
+                }
+                
+                operationsContainer.appendChild(operationElement);
+            });
+            
+            stepContent.appendChild(operationsContainer);
+        }
+
+        stepElement.appendChild(stepContent);
+        return stepElement;
+    }
+
+    /**
+     * Label formatlama
+     */
+    formatLabel(key) {
+        const labelMap = {
+            'tur': 'Tür',
+            'seviye': 'Seviye',
+            'verilenler': 'Verilenler',
+            'istenen': 'İstenen',
+            'aciklama': 'Açıklama',
+            'formul': 'Formül',
+            'hesaplama': 'Hesaplama',
+            'sonuc': 'Sonuç'
+        };
+        
+        return labelMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
+    }
+
+    /**
+     * Ana işleme fonksiyonu
      */
     async processApiResponse(apiResponse, targetContainer, options = {}) {
         const startTime = performance.now();
-        this.metrics.totalResponses++;
-
+        this.metrics.totalProcessed++;
+        
+        console.log('🚀 API yanıtı işleniyor:', apiResponse);
+        
         try {
-            console.log('🚀 API yanıtı işleniyor:', apiResponse);
-
-            // Yanıt validasyonu
-            const validation = this.validateApiResponse(apiResponse);
-            if (!validation.isValid) {
-                throw new Error(`Geçersiz API yanıtı: ${validation.errors.join(', ')}`);
+            // Container kontrolü
+            if (!targetContainer || !(targetContainer instanceof HTMLElement)) {
+                throw new Error('Geçerli bir target container gerekli');
             }
 
-            // Yanıt ön işleme
+            // Ön işleme
             const preprocessedResponse = this.preprocessResponse(apiResponse);
-            console.log('🔄 Ön işlenmiş yanıt:', preprocessedResponse);
-
-            const htmlStructure = await this.buildHtmlStructure(preprocessedResponse, options);
+            
+            // HTML yapısı oluştur
+            const htmlStructure = this.createHTMLStructure(preprocessedResponse);
             
             // Container'a ekle
             targetContainer.innerHTML = '';
@@ -138,610 +420,195 @@ export class ApiResponseProcessor {
     }
 
     /**
-     * API yanıtını validate eder
-     * @param {Object} apiResponse - Validate edilecek yanıt
-     * @returns {Object} - Validation sonucu
-     */
-    validateApiResponse(apiResponse) {
-        const errors = [];
-        
-        if (!apiResponse) {
-            errors.push('API yanıtı boş');
-        }
-        
-        if (typeof apiResponse !== 'object') {
-            errors.push('API yanıtı object değil');
-        }
-        
-        // Gerekli alanları kontrol et
-        const requiredFields = ['problemOzeti', 'adimlar'];
-        requiredFields.forEach(field => {
-            if (!apiResponse[field]) {
-                errors.push(`Gerekli alan eksik: ${field}`);
-            }
-        });
-        
-        // Adımları kontrol et
-        if (apiResponse.adimlar && Array.isArray(apiResponse.adimlar)) {
-            apiResponse.adimlar.forEach((adim, index) => {
-                if (!adim.adimBasligi) {
-                    errors.push(`Adım ${index + 1}: başlık eksik`);
-                }
-                if (!adim.cozum_lateks) {
-                    errors.push(`Adım ${index + 1}: çözüm LaTeX eksik`);
-                }
-            });
-        }
-        
-        return {
-            isValid: errors.length === 0,
-            errors: errors
-        };
-    }
-
-
-
-    /**
-     * API yanıtını ön işlemden geçirir (GÜNCELLENDİ)
-     * @param {Object} apiResponse - İşlenecek yanıt
-     * @returns {Object} - İşlenmiş yanıt
-     */
-    preprocessResponse(apiResponse) {
-        const processed = JSON.parse(JSON.stringify(apiResponse));
-
-        // YENİ: Tüm metin alanlarını tek bir güçlü fonksiyonla temizle
-        this.recursiveObjectWalk(processed, (value, key, obj) => {
-            if (typeof value === 'string') {
-                // Sadece sözel içerikleri (LaTeX olmayanları) temizle.
-                // 'cozum_lateks', 'metin_lateks' ve 'tamCozumLateks' gibi anahtarları atla.
-                const latexKeys = ['cozum_lateks', 'metin_lateks', 'tamCozumLateks'];
-                if (!latexKeys.includes(key)) {
-                    obj[key] = robustTextClean(value);
-                }
-            }
-        });
-
-        this.cleanLatexExpressions(processed);
-        this.detectMixedContent(processed);
-
-        // Türkçe içeriği burada tespit et
-        if (this.hasTurkishContent(processed)) {
-            this.metrics.turkishContentResponses++;
-        }
-        
-        return processed;
-    }
-
-    
-
-    /**
-     * LaTeX ifadelerini temizler ve düzeltir
-     * @param {Object} response - Düzeltilecek yanıt
-     */
-    cleanLatexExpressions(response) {
-        const latexFixes = {
-            // Çift backslash sorunları
-            '\\\\\\\\': '\\\\',
-            '\\\\cdot': '\\cdot',
-            '\\\\times': '\\times',
-            '\\\\frac': '\\frac',
-            
-            // Eksik parantezleri tamamla
-            '\\frac{': '\\frac{',
-            
-            // Yaygın LaTeX hataları
-            '\\sqrt{}': '\\sqrt{x}',
-            '\\frac{}{}': '\\frac{a}{b}',
-            
-            // Türkçe LaTeX komutları
-            '\\text{değer}': '\\text{değer}',
-            '\\text{sonuç}': '\\text{sonuç}'
-        };
-
-        this.recursiveStringReplace(response, latexFixes);
-    }
-
-    /**
-     * Karışık içerik tespiti yapar
-     * @param {Object} response - Analiz edilecek yanıt
-     */
-    detectMixedContent(response) {
-        let hasMixedContent = false;
-        
-        this.recursiveObjectWalk(response, (value) => {
-            if (typeof value === 'string') {
-                // Metin + LaTeX karışımı var mı?
-                const hasText = /[a-zA-ZğüşıöçĞÜŞİÖÇ\s]+/.test(value);
-                const hasLatex = /\$|\\\w+/.test(value);
-                
-                if (hasText && hasLatex) {
-                    hasMixedContent = true;
-                }
-            }
-        });
-        
-        if (hasMixedContent) {
-            this.metrics.mixedContentResponses++;
-            response._hasMixedContent = true;
-        }
-    }
-
-    /**
-     * HTML yapısını oluşturur
-     * @param {Object} response - İşlenmiş yanıt
-     * @param {Object} options - Yapı seçenekleri
-     * @returns {Promise<HTMLElement>} - Oluşturulan HTML yapısı
-     */
-    async buildHtmlStructure(response, options) {
-        const container = document.createElement('div');
-        container.className = 'api-response-container';
-        
-        if (response.problemOzeti) {
-            container.appendChild(this.createProblemSection(response.problemOzeti));
-        }
-        if (response.adimlar && Array.isArray(response.adimlar)) {
-            container.appendChild(this.createStepsSection(response.adimlar));
-        }
-        if (response.tamCozumLateks) {
-            container.appendChild(this.createSolutionSection(response.tamCozumLateks));
-        }
-        if (response.sonucKontrolu) {
-            container.appendChild(this.createVerificationSection(response.sonucKontrolu));
-        }
-        return container;
-    }
-
-
-    /**
-     * Problem özeti bölümünü oluşturur
-     * @param {Object} problemOzeti - Problem özeti verileri
-     * @returns {HTMLElement} - Problem özeti HTML elementi
-     */
-    createProblemSection(problemOzeti) {
-        const section = document.createElement('div');
-        section.className = 'problem-summary-section';
-        
-        const title = document.createElement('h3');
-        title.textContent = 'Problem Özeti';
-        title.className = 'section-title';
-        section.appendChild(title);
-        
-        if (problemOzeti.verilenler && Array.isArray(problemOzeti.verilenler)) {
-            const givenDiv = document.createElement('div');
-            givenDiv.className = 'given-data';
-            const givenTitle = document.createElement('h4');
-            givenTitle.textContent = 'Verilenler:';
-            givenDiv.appendChild(givenTitle);
-            const givenList = document.createElement('ul');
-            problemOzeti.verilenler.forEach(veri => {
-                const li = document.createElement('li');
-                li.className = 'problem-text smart-content';
-                // GÜNCELLENDİ: Metin içeriği temizlenerek attribute'a yazılıyor
-                const cleanedVeri = robustTextClean(veri);
-                li.setAttribute('data-content', cleanedVeri);
-                li.textContent = cleanedVeri; // Fallback
-                givenList.appendChild(li);
-            });
-            givenDiv.appendChild(givenList);
-            section.appendChild(givenDiv);
-        }
-        
-        if (problemOzeti.istenen) {
-            const requestedDiv = document.createElement('div');
-            requestedDiv.className = 'requested-data';
-            const requestedTitle = document.createElement('h4');
-            requestedTitle.textContent = 'İstenen:';
-            requestedDiv.appendChild(requestedTitle);
-            const requestedContent = document.createElement('p');
-            requestedContent.className = 'problem-text smart-content';
-            // GÜNCELLENDİ: Metin içeriği temizlenerek attribute'a yazılıyor
-            const cleanedIstenen = robustTextClean(problemOzeti.istenen);
-            requestedContent.setAttribute('data-content', cleanedIstenen);
-            requestedContent.textContent = cleanedIstenen; // Fallback
-            requestedDiv.appendChild(requestedContent);
-            section.appendChild(requestedDiv);
-        }
-        return section;
-    }
-
-    /**
-     * Çözüm adımları bölümünü oluşturur
-     * @param {Array} adimlar - Çözüm adımları
-     * @returns {HTMLElement} - Adımlar HTML elementi
-     */
-    createStepsSection(adimlar) {
-        const section = document.createElement('div');
-        section.className = 'solution-steps-section';
-        const title = document.createElement('h3');
-        title.textContent = 'Çözüm Adımları';
-        title.className = 'section-title';
-        section.appendChild(title);
-        
-        adimlar.forEach((adim, index) => {
-            const stepDiv = document.createElement('div');
-            stepDiv.className = 'solution-step';
-            stepDiv.setAttribute('data-step', index + 1);
-            
-            const stepTitle = document.createElement('h4');
-            stepTitle.className = 'step-title';
-            stepTitle.textContent = `${adim.adimNo || index + 1}. ${adim.adimBasligi}`;
-            stepDiv.appendChild(stepTitle);
-            
-            if (adim.adimAciklamasi) {
-                const explanation = document.createElement('p');
-                explanation.className = 'step-explanation smart-content';
-                // GÜNCELLENDİ: Açıklama metni temizleniyor
-                const cleanedAciklama = robustTextClean(adim.adimAciklamasi);
-                explanation.setAttribute('data-content', cleanedAciklama);
-                explanation.textContent = cleanedAciklama;
-                stepDiv.appendChild(explanation);
-            }
-            
-            if (adim.cozum_lateks) {
-                const solution = document.createElement('div');
-                solution.className = 'step-solution latex-content';
-                // LaTeX içeriği temizlenMEZ, olduğu gibi kalır.
-                solution.setAttribute('data-latex', adim.cozum_lateks);
-                solution.textContent = adim.cozum_lateks;
-                stepDiv.appendChild(solution);
-            }
-            
-            if (adim.ipucu) {
-                const hintDiv = document.createElement('div');
-                hintDiv.className = 'step-hint collapsed';
-                const hintButton = document.createElement('button');
-                hintButton.className = 'hint-toggle-btn';
-                hintButton.textContent = '💡 İpucu Göster';
-                hintButton.onclick = () => this.toggleHint(hintDiv);
-                const hintContent = document.createElement('p');
-                hintContent.className = 'hint-content smart-content';
-                // GÜNCELLENDİ: İpucu metni temizleniyor
-                const cleanedIpucu = robustTextClean(adim.ipucu);
-                hintContent.setAttribute('data-content', cleanedIpucu);
-                hintContent.textContent = cleanedIpucu;
-                hintDiv.appendChild(hintButton);
-                hintDiv.appendChild(hintContent);
-                stepDiv.appendChild(hintDiv);
-            }
-            
-            if (adim.yanlisSecenekler && Array.isArray(adim.yanlisSecenekler)) {
-                const wrongOptionsDiv = document.createElement('div');
-                wrongOptionsDiv.className = 'wrong-options collapsed';
-                const wrongButton = document.createElement('button');
-                wrongButton.className = 'wrong-options-toggle-btn';
-                wrongButton.textContent = '⚠️ Yaygın Hatalar';
-                wrongButton.onclick = () => this.toggleWrongOptions(wrongOptionsDiv);
-                wrongOptionsDiv.appendChild(wrongButton);
-                const wrongList = document.createElement('ul');
-                wrongList.className = 'wrong-options-list';
-                adim.yanlisSecenekler.forEach(yanlis => {
-                    const li = document.createElement('li');
-                    li.className = 'wrong-option';
-                    const wrongMath = document.createElement('div');
-                    wrongMath.className = 'wrong-math latex-content';
-                    wrongMath.setAttribute('data-latex', yanlis.metin_lateks);
-                    wrongMath.textContent = yanlis.metin_lateks;
-                    const wrongExplanation = document.createElement('p');
-                    wrongExplanation.className = 'wrong-explanation smart-content';
-                    // GÜNCELLENDİ: Hata açıklaması metni temizleniyor
-                    const cleanedHata = robustTextClean(yanlis.hataAciklamasi);
-                    wrongExplanation.setAttribute('data-content', cleanedHata);
-                    wrongExplanation.textContent = cleanedHata;
-                    li.appendChild(wrongMath);
-                    li.appendChild(wrongExplanation);
-                    wrongList.appendChild(li);
-                });
-                wrongOptionsDiv.appendChild(wrongList);
-                stepDiv.appendChild(wrongOptionsDiv);
-            }
-            
-            section.appendChild(stepDiv);
-        });
-        return section;
-    }
-
-    /**
-     * Tam çözüm bölümünü oluşturur
-     * @param {Array} tamCozumLateks - Tam çözüm LaTeX listesi
-     * @returns {HTMLElement} - Tam çözüm HTML elementi
-     */
-    createSolutionSection(tamCozumLateks) {
-        const section = document.createElement('div');
-        section.className = 'complete-solution-section';
-        
-        const title = document.createElement('h3');
-        title.textContent = 'Tam Çözüm';
-        title.className = 'section-title';
-        section.appendChild(title);
-        
-        if (Array.isArray(tamCozumLateks)) {
-            tamCozumLateks.forEach((latex, index) => {
-                const solutionStep = document.createElement('div');
-                solutionStep.className = 'complete-solution-step latex-content';
-                solutionStep.setAttribute('data-latex', latex);
-                solutionStep.setAttribute('data-step', index + 1);
-                solutionStep.textContent = latex; // Fallback
-                section.appendChild(solutionStep);
-            });
-        }
-        
-        return section;
-    }
-
-    /**
-     * Sonuç kontrolü bölümünü oluşturur
-     * @param {string} sonucKontrolu - Sonuç kontrol açıklaması
-     * @returns {HTMLElement} - Sonuç kontrol HTML elementi
-     */
-    createVerificationSection(sonucKontrolu) {
-        const section = document.createElement('div');
-        section.className = 'verification-section';
-        
-        const title = document.createElement('h3');
-        title.textContent = 'Sonuç Kontrolü';
-        title.className = 'section-title';
-        section.appendChild(title);
-        
-        const content = document.createElement('p');
-        content.className = 'verification-content smart-content';
-        // GÜNCELLENDİ: Metin içeriği temizlenerek attribute'a yazılıyor
-        const cleanedKontrol = robustTextClean(sonucKontrolu);
-        content.setAttribute('data-content', cleanedKontrol);
-        content.textContent = cleanedKontrol; // Fallback
-        section.appendChild(content);
-        
-        return section;
-    }
-
-
-    /**
-     * Post-processing işlemlerini gerçekleştirir
-     * @param {HTMLElement} container - İşlenecek container
-     * @param {Object} response - İşlenmiş yanıt
+     * Post-processing işlemleri
      */
     async performPostProcessing(container, response) {
-        // Türkçe metin stillerini uygula
-        this.applyTurkishTextStyles(container);
+        // Responsive ayarlar
+        this.makeResponsive(container);
         
-        // Erişilebilirlik özelliklerini ekle
-        this.addAccessibilityFeatures(container);
+        // Accessibility
+        this.enhanceAccessibility(container);
         
-        // Responsive sınıflarını ekle
-        this.addResponsiveClasses(container);
-        
-        // Animasyonları ekle
-        this.addAnimations(container);
-        
-        // Event listener'ları ekle
+        // Event listener'lar
         this.attachEventListeners(container);
+        
+        console.log('✅ Post-processing tamamlandı');
     }
 
     /**
-     * Fallback içeriği gösterir
-     * @param {HTMLElement} container - Container
-     * @param {Object} originalResponse - Orijinal API yanıtı
-     * @param {Error} error - Oluşan hata
+     * Responsive düzenlemeler
+     */
+    makeResponsive(container) {
+        // Tüm matematik elementlerine responsive class ekle
+        const mathElements = container.querySelectorAll('[data-math-content="true"]');
+        mathElements.forEach(element => {
+            element.classList.add('responsive-math');
+        });
+        
+        // Overflow kontrolü
+        const sections = container.querySelectorAll('.response-section');
+        sections.forEach(section => {
+            if (section.scrollWidth > section.clientWidth) {
+                section.classList.add('has-overflow');
+                section.style.overflowX = 'auto';
+            }
+        });
+    }
+
+    /**
+     * Erişilebilirlik iyileştirmeleri
+     */
+    enhanceAccessibility(container) {
+        // ARIA etiketleri
+        container.setAttribute('role', 'article');
+        container.setAttribute('aria-label', 'Matematik çözümü');
+        
+        // Başlıklar için ARIA
+        const headings = container.querySelectorAll('h3, h4');
+        headings.forEach((heading, index) => {
+            heading.setAttribute('id', `heading-${index}`);
+        });
+        
+        // Matematik içerikler için ARIA
+        const mathContents = container.querySelectorAll('[data-math-content="true"]');
+        mathContents.forEach(element => {
+            element.setAttribute('role', 'math');
+        });
+    }
+
+    /**
+     * Event listener'ları ekle
+     */
+    attachEventListeners(container) {
+        // Kopyalama fonksiyonu
+        const mathElements = container.querySelectorAll('[data-math-content="true"]');
+        mathElements.forEach(element => {
+            element.addEventListener('dblclick', (e) => {
+                this.copyToClipboard(element.textContent);
+                this.showCopyFeedback(element);
+            });
+        });
+        
+        // Genişletme/daraltma
+        const sections = container.querySelectorAll('.response-section');
+        sections.forEach(section => {
+            const title = section.querySelector('h3');
+            if (title) {
+                title.style.cursor = 'pointer';
+                title.addEventListener('click', () => {
+                    section.classList.toggle('collapsed');
+                });
+            }
+        });
+    }
+
+    /**
+     * Panoya kopyalama
+     */
+    async copyToClipboard(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            console.log('📋 Panoya kopyalandı');
+        } catch (err) {
+            console.error('Kopyalama hatası:', err);
+        }
+    }
+
+    /**
+     * Kopyalama geri bildirimi
+     */
+    showCopyFeedback(element) {
+        const feedback = document.createElement('div');
+        feedback.className = 'copy-feedback';
+        feedback.textContent = 'Kopyalandı!';
+        
+        element.appendChild(feedback);
+        
+        setTimeout(() => {
+            feedback.remove();
+        }, 2000);
+    }
+
+    /**
+     * Fallback içerik gösterimi
      */
     async showFallbackContent(container, originalResponse, error) {
-        container.innerHTML = '';
-        container.className = 'api-response-fallback';
-        
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.innerHTML = `
-            <h3>⚠️ İçerik Render Hatası</h3>
-            <p>API yanıtı işlenirken bir sorun oluştu. Ham içerik aşağıda gösterilmektedir:</p>
-            <details>
-                <summary>Hata Detayları</summary>
-                <code>${error.message}</code>
-            </details>
+        container.innerHTML = `
+            <div class="error-fallback">
+                <h3>⚠️ İçerik işlenirken bir hata oluştu</h3>
+                <p>Hata detayı: ${error.message}</p>
+                <details>
+                    <summary>Ham veri</summary>
+                    <pre>${JSON.stringify(originalResponse, null, 2)}</pre>
+                </details>
+            </div>
         `;
         
-        const rawContent = document.createElement('pre');
-        rawContent.className = 'raw-api-response';
-        rawContent.textContent = JSON.stringify(originalResponse, null, 2);
-        
-        container.appendChild(errorDiv);
-        container.appendChild(rawContent);
+        // Basit render denemesi
+        try {
+            const fallbackElements = container.querySelectorAll('pre');
+            for (const element of fallbackElements) {
+                await enhancedMathRenderer.renderContent(element, element.textContent, {
+                    fallbackOnly: true
+                });
+            }
+        } catch (fallbackError) {
+            console.error('Fallback render hatası:', fallbackError);
+        }
     }
 
     /**
-     * Yardımcı fonksiyonlar
+     * Ortalama işleme süresini güncelle
      */
-    
-    recursiveStringReplace(obj, replacements) {
-        for (const key in obj) {
-            if (typeof obj[key] === 'string') {
-                for (const [find, replace] of Object.entries(replacements)) {
-                    obj[key] = obj[key].replace(new RegExp(find, 'g'), replace);
-                }
-            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                this.recursiveStringReplace(obj[key], replacements);
-            }
-        }
-    }
-    
-    recursivePatternReplace(obj, pattern, replacement) {
-        for (const key in obj) {
-            if (typeof obj[key] === 'string') {
-                obj[key] = obj[key].replace(pattern, replacement);
-            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                this.recursivePatternReplace(obj[key], pattern, replacement);
-            }
-        }
-    }
-    
-    recursiveObjectWalk(obj, callback) {
-        for (const key in obj) {
-            if (typeof obj[key] === 'object' && obj[key] !== null) {
-                this.recursiveObjectWalk(obj[key], callback);
-            } else {
-                callback(obj[key], key, obj);
-            }
-        }
-    }
-    
-    hasTurkishContent(obj) {
-        let hasTurkish = false;
-        this.recursiveObjectWalk(obj, (value) => {
-            if (typeof value === 'string' && /[ğüşıöçĞÜŞİÖÇ]/.test(value)) {
-                hasTurkish = true;
-            }
-        });
-        return hasTurkish;
-    }
-    
-    toggleHint(hintDiv) {
-        hintDiv.classList.toggle('collapsed');
-        const button = hintDiv.querySelector('.hint-toggle-btn');
-        button.textContent = hintDiv.classList.contains('collapsed') ? 
-            '💡 İpucu Göster' : '💡 İpucu Gizle';
-    }
-    
-    toggleWrongOptions(wrongDiv) {
-        wrongDiv.classList.toggle('collapsed');
-        const button = wrongDiv.querySelector('.wrong-options-toggle-btn');
-        button.textContent = wrongDiv.classList.contains('collapsed') ? 
-            '⚠️ Yaygın Hatalar' : '⚠️ Gizle';
-    }
-    
-    applyTurkishTextStyles(container) {
-        const turkishElements = container.querySelectorAll('.turkish-text');
-        turkishElements.forEach(el => {
-            el.style.fontFamily = 'Arial, sans-serif';
-            el.style.fontFeatureSettings = '"locl" 1';
-        });
-    }
-    
-    addAccessibilityFeatures(container) {
-        // Matematik içerikleri için aria-label ekle
-        const mathElements = container.querySelectorAll('.latex-content, .smart-content');
-        mathElements.forEach((el, index) => {
-            el.setAttribute('role', 'math');
-            el.setAttribute('aria-label', `Matematik ifadesi ${index + 1}`);
-        });
-        
-        // Adımlar için navigation
-        const steps = container.querySelectorAll('.solution-step');
-        steps.forEach((step, index) => {
-            step.setAttribute('tabindex', '0');
-            step.setAttribute('aria-label', `Çözüm adımı ${index + 1}`);
-        });
-    }
-    
-    addResponsiveClasses(container) {
-        container.classList.add('responsive-math-content');
-        
-        // Mobil cihazlar için özel sınıflar
-        if (window.innerWidth < 768) {
-            container.classList.add('mobile-math-content');
-        }
-    }
-    
-    addAnimations(container) {
-        // Adımları sırayla animasyonla göster
-        const steps = container.querySelectorAll('.solution-step');
-        steps.forEach((step, index) => {
-            step.style.opacity = '0';
-            step.style.transform = 'translateY(20px)';
-            step.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-            
-            setTimeout(() => {
-                step.style.opacity = '1';
-                step.style.transform = 'translateY(0)';
-            }, index * 100);
-        });
-    }
-    
-    attachEventListeners(container) {
-        // Matematik ifadelerine tıklama ile büyütme
-        const mathElements = container.querySelectorAll('.latex-content');
-        mathElements.forEach(el => {
-            el.style.cursor = 'pointer';
-            el.addEventListener('click', () => {
-                el.classList.toggle('math-zoomed');
-            });
-        });
-        
-        // Adımlarda keyboard navigation
-        const steps = container.querySelectorAll('.solution-step');
-        steps.forEach((step, index) => {
-            step.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowDown' && steps[index + 1]) {
-                    steps[index + 1].focus();
-                }
-                if (e.key === 'ArrowUp' && steps[index - 1]) {
-                    steps[index - 1].focus();
-                }
-            });
-        });
-    }
-    
     updateAverageProcessingTime(newTime) {
-        this.metrics.averageProcessingTime = 
-            (this.metrics.averageProcessingTime * (this.metrics.totalResponses - 1) + newTime) / 
-            this.metrics.totalResponses;
-    }
-    
-    /**
-     * Debug ve istatistik fonksiyonları
-     */
-    
-    getMetrics() {
-        const issuesSummary = {};
-        this.metrics.commonIssues.forEach((count, issue) => {
-            issuesSummary[issue] = count;
-        });
+        const currentAvg = this.metrics.averageProcessingTime;
+        const totalProcessed = this.metrics.successfullyProcessed;
         
+        this.metrics.averageProcessingTime = 
+            (currentAvg * (totalProcessed - 1) + newTime) / totalProcessed;
+    }
+
+    /**
+     * Metrikleri getir
+     */
+    getMetrics() {
+        const successRate = this.metrics.totalProcessed > 0
+            ? ((this.metrics.successfullyProcessed / this.metrics.totalProcessed) * 100).toFixed(2)
+            : '0.00';
+            
+        const turkishContentRate = this.metrics.totalProcessed > 0
+            ? ((this.metrics.turkishContentCount / this.metrics.totalProcessed) * 100).toFixed(2)
+            : '0.00';
+
         return {
-            ...this.metrics,
-            commonIssues: issuesSummary,
-            successRate: (this.metrics.successfullyProcessed / this.metrics.totalResponses * 100).toFixed(2) + '%',
-            mixedContentRate: (this.metrics.mixedContentResponses / this.metrics.totalResponses * 100).toFixed(2) + '%',
-            turkishContentRate: (this.metrics.turkishContentResponses / this.metrics.totalResponses * 100).toFixed(2) + '%'
+            totalProcessed: this.metrics.totalProcessed,
+            successfullyProcessed: this.metrics.successfullyProcessed,
+            successRate: successRate + '%',
+            averageProcessingTime: this.metrics.averageProcessingTime.toFixed(2) + 'ms',
+            turkishContentRate: turkishContentRate + '%',
+            commonIssues: Array.from(this.metrics.commonIssues.entries())
         };
     }
-    
-    async debugApiResponse(apiResponse, options = {}) {
-        console.group('🔍 API Yanıt Debug');
-        
-        // Validation
-        const validation = this.validateApiResponse(apiResponse);
-        console.log('✅ Validation:', validation);
-        
-        // Preprocessing
-        const preprocessed = this.preprocessResponse(apiResponse);
-        console.log('🔄 Preprocessed:', preprocessed);
-        
-        // Test container
-        const testContainer = document.createElement('div');
-        testContainer.style.position = 'absolute';
-        testContainer.style.left = '-9999px';
-        document.body.appendChild(testContainer);
-        
-        try {
-            const result = await this.processApiResponse(apiResponse, testContainer, options);
-            console.log('🎨 Processing Result:', result);
-            console.log('📱 Generated HTML:', testContainer.innerHTML.substring(0, 500) + '...');
-            
-            return {
-                validation,
-                preprocessed,
-                processingResult: result,
-                generatedHtml: testContainer.innerHTML
-            };
-        } finally {
-            document.body.removeChild(testContainer);
-            console.groupEnd();
-        }
+
+    /**
+     * Metrikleri sıfırla
+     */
+    resetMetrics() {
+        this.metrics = {
+            totalProcessed: 0,
+            successfullyProcessed: 0,
+            averageProcessingTime: 0,
+            commonIssues: new Map(),
+            turkishContentCount: 0
+        };
+        console.log('📊 API Response Processor metrikleri sıfırlandı');
     }
 }
 
-// Global instance oluştur
-export const apiResponseProcessor = new ApiResponseProcessor();
+// Singleton instance
+export const apiResponseProcessor = new APIResponseProcessor();
 
-// Auto-init
+// Debug modu için global erişim
 if (typeof window !== 'undefined') {
-    window.apiResponseProcessor = apiResponseProcessor;
-    console.log('✅ API Response Processor hazır');
+    window._apiResponseProcessor = apiResponseProcessor;
 }

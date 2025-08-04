@@ -534,3 +534,15 @@ body {
 .math-rendered {
     animation: fadeIn 0.3s ease-out;
 }
+
+/* Türkçe karakterler için font desteği */
+.math-content, .katex {
+    font-family: 'KaTeX_Main', 'Times New Roman', serif;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+011E-011F, U+0130-0131, U+015E-015F;
+}
+
+/* Responsive düzenlemeler */
+.math-display {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
