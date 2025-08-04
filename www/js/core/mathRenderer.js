@@ -1,4 +1,4 @@
-// www/js/core/mathRenderer.js - BİRLEŞTİRİLMİŞ RENDER SİSTEMİ
+// www/js/core/mathRenderer.js - DÜZELTILMIŞ RENDER SISTEMI
 
 class MathRenderer {
     constructor() {
@@ -62,6 +62,18 @@ class MathRenderer {
     }
 
     async render(content, element, options = {}) {
+        // ELEMENT VALİDASYONU EKLENDİ
+        if (!element) {
+            console.error('❌ MathRenderer.render: element parametresi undefined veya null');
+            return { success: false, error: 'Element bulunamadı' };
+        }
+
+        // Element'in DOM elementı olduğunu kontrol et
+        if (!(element instanceof Element)) {
+            console.error('❌ MathRenderer.render: element geçerli bir DOM elementı değil', element);
+            return { success: false, error: 'Geçersiz element' };
+        }
+
         if (!this.isInitialized) {
             await this.initialize();
         }

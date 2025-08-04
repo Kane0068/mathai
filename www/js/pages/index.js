@@ -1859,7 +1859,17 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 async function displayQuestionSummary(problemOzeti) {
-    if (!problemOzeti) return;
+    if (!problemOzeti) {
+        console.warn('displayQuestionSummary: problemOzeti bulunamadı');
+        return;
+    }
+
+    // Element kontrolü
+    const questionElement = elements['question'];
+    if (!questionElement) {
+        console.error('displayQuestionSummary: question elementi bulunamadı');
+        return;
+    }
 
     const { verilenler, istenen } = problemOzeti;
 
@@ -1879,12 +1889,16 @@ async function displayQuestionSummary(problemOzeti) {
     }
 
     summaryHTML += '</div>';
-    elements['question'].innerHTML = summaryHTML;
+    questionElement.innerHTML = summaryHTML;
 
-    // Global render manager kullan
-    await mathRenderer.render(elements['question']);
+    // MathRenderer ile render et - GÜVENLI ŞEKILDE
+    try {
+        await mathRenderer.render(questionElement);
+    } catch (error) {
+        console.error('displayQuestionSummary render hatası:', error);
+        // Hata durumunda da içerik görünsün
+    }
 }
-
 
 // HTML oluşturma fonksiyonu - Full Solution için
 function generateSolutionHTML(solution) {
