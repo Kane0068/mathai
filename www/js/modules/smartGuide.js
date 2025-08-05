@@ -4,9 +4,11 @@
 // =================================================================================
 
 // makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
+import { showError, showSuccess, renderMath } from './ui.js';
 import { AdvancedErrorHandler } from './errorHandler.js';
 import { StateManager } from './stateManager.js';
-import { mathApi } from '../core/mathApi.js';
+import { validateStudentStep } from '../services/apiService.js';
+
 export class SmartGuideSystem {
     constructor() {
         this.errorHandler = new AdvancedErrorHandler();
@@ -581,7 +583,7 @@ resetEnforcement() {
             const currentStepData = this.guidanceData.steps[this.currentStep];
             
             // API'ye daha zengin bir prompt göndereceğiz
-            const validationResult = await mathApi.validateStudentStep(studentInput, {
+            const validationResult = await validateStudentStep(studentInput, {
                 description: currentStepData.adimAciklamasi,
                 correctAnswer: currentStepData.cozum_lateks,
             });
@@ -721,7 +723,7 @@ resetEnforcement() {
         `;
         
         try {
-            const response = await mathApi.validateStudentStep(flexiblePrompt, {
+            const response = await validateStudentStep(flexiblePrompt, {
                 correctAnswer: stepData.correctAnswer,
                 description: stepData.description
             });

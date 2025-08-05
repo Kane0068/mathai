@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathAi - Debug Sayfası</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX Kütüphaneleri -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+
+    <!-- Merkezi Stil Dosyası -->
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.11.2/lib/browser/math.js"></script>
+</head>
+
+<body class="p-4 bg-slate-100">
+    <div class="w-full max-w-7xl mx-auto my-8 bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-6 md:p-8 border border-gray-200">
+        <!-- HEADER -->
+        <header class="relative text-center mb-6">
+            <a href="index.html" class="absolute top-0 left-0 btn btn-tertiary !p-2" title="Ana Sayfaya Dön">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </a>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600 pb-2">MathAi Debug</h1>
+            <p class="text-gray-500 mt-1">API Yanıtları ve Render İşlemleri Debug Merkezi</p>
+        </header>
+
+        <!-- DEBUG KONTROL PANELİ -->
+        <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-6 mb-6 border border-red-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Debug Kontrol Paneli</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test İfadesi:</label>
+                    <textarea id="debug-input" class="w-full h-32 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-shadow" placeholder="Test etmek istediğiniz ifadeyi buraya yazın...">Bir kenar uzunluğu: $\sqrt{8}$ cm</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Render Sonucu:</label>
+                    <div id="debug-result" class="w-full h-32 p-3 border border-gray-300 rounded-lg bg-white shadow-sm overflow-auto">
+                        <p class="text-gray-500 text-sm">Sonuç burada görünecek...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 flex gap-2">
+                <button id="debug-test" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+                    Test Et
+                </button>
+                <button id="debug-analyze" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    Analiz Et
+                </button>
+                <button id="debug-clear" class="btn btn-tertiary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Temizle
+                </button>
+            </div>
+        </div>
+
+        <!-- ANALİZ SONUÇLARI -->
+        <div id="debug-analysis" class="bg-white rounded-xl p-6 mb-6 border border-gray-200 hidden">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">İçerik Analizi</h3>
+            <div id="analysis-content" class="space-y-2 text-sm">
+                <!-- Analiz sonuçları buraya eklenecek -->
+            </div>
+        </div>
+
+        <!-- API YANIT ÖRNEKLERİ -->
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">API Yanıt Örnekleri</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="font-semibold text-gray-800 mb-2">Doğru LaTeX Formatı:</h3>
+                    <div class="bg-white p-3 rounded border text-sm font-mono">
+                        "cozum_lateks": "\\frac{1}{2} + \\frac{1}{3} = \\frac{5}{6}"
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-800 mb-2">Yanlış Format (Düz Metin):</h3>
+                    <div class="bg-white p-3 rounded border text-sm font-mono text-red-600">
+                        "cozum_lateks": "1/2 + 1/3 = 5/6"
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RENDER TEST ÖRNEKLERİ -->
+        <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Render Test Örnekleri</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded border">
+                    <h3 class="font-semibold text-gray-800 mb-2">Basit İşlem:</h3>
+                    <div id="test-simple" class="p-2 bg-gray-50 rounded text-center">2 + 3 = 5</div>
+                </div>
+                <div class="bg-white p-4 rounded border">
+                    <h3 class="font-semibold text-gray-800 mb-2">Kesir:</h3>
+                    <div id="test-fraction" class="p-2 bg-gray-50 rounded text-center">1/2</div>
+                </div>
+                <div class="bg-white p-4 rounded border">
+                    <h3 class="font-semibold text-gray-800 mb-2">LaTeX:</h3>
+                    <div id="test-latex" class="p-2 bg-gray-50 rounded text-center">\frac{1}{2}</div>
+                </div>
+                <div class="bg-white p-4 rounded border">
+                    <h3 class="font-semibold text-gray-800 mb-2">Karışık İçerik:</h3>
+                    <div id="test-mixed" class="p-2 bg-gray-50 rounded text-center">Bir kenar uzunluğu: $\sqrt{8}$ cm</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Debug JavaScript Dosyası -->
+    <script type="module" src="js/pages/debug.js"></script>
+</body>
+</html> 

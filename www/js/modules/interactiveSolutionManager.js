@@ -34,23 +34,29 @@ export class InteractiveSolutionManager {
         this.startTime = Date.now();
     }
 
+    /**
+     * Belirli bir adım için seçenekleri, mevcut çözüm verisinden hazırlar. API ÇAĞRISI YAPMAZ.
+     * @param {number} stepIndex - Seçenekleri hazırlanacak olan adımın indeksi.
+     * @returns {object} Arayüzde gösterilecek adım verisi.
+     */
     generateStepOptions(stepIndex) {
-        if (!this.solutionData || stepIndex >= this.totalSteps) {
-            throw new Error("Geçersiz adım");
+        if (!this.solutionData || stepIndex >= this.totalSteps || stepIndex < 0) {
+            throw new Error("Geçersiz adım indeksi.");
         }
 
-        const stepData = this.solutionData.adimlar[stepIndex];
-        const options = [
-            {
-                latex: stepData.cozum_lateks,
-                isCorrect: true,
-                explanation: stepData.adimAciklamasi
-            }
-        ];
+        const currentStepData = this.solutionData.adimlar[stepIndex];
+        const options = [];
 
-        // Yanlış seçenekler ekle
-        if (stepData.yanlisSecenekler) {
-            stepData.yanlisSecenekler.forEach(opt => {
+        // 1. Doğru seçeneği ekle
+        options.push({
+            latex: currentStepData.cozum_lateks,
+            isCorrect: true,
+            explanation: currentStepData.adimAciklamasi || "Bu adım, çözüm için doğru yaklaşımdır."
+        });
+
+        // 2. Önceden alınmış yanlış seçenekleri ekle
+        if (currentStepData.yanlisSecenekler && currentStepData.yanlisSecenekler.length > 0) {
+            currentStepData.yanlisSecenekler.slice(0, 2).forEach(opt => {
                 options.push({
                     latex: opt.metin_lateks,
                     isCorrect: false,
@@ -59,15 +65,35 @@ export class InteractiveSolutionManager {
             });
         }
 
-        // Karıştır
+        // 3. Eğer yeterli yanlış seçenek yoksa, genel bir tane ekle
+        while (options.length < 3) {
+            options.push({
+                latex: `\\text{Hatalı Yaklaşım ${options.length}}`,
+                isCorrect: false,
+                explanation: "Bu yöntem veya hesaplama bu adım için doğru değil."
+            });
+        }
+
+        this.currentOptions = this.shuffleAndAssignIds(options);
+
         return {
             stepNumber: stepIndex + 1,
             totalSteps: this.totalSteps,
-            stepDescription: stepData.adimAciklamasi,
-            options: options.sort(() => Math.random() - 0.5).map((opt, i) => ({...opt, id: i}))
+            stepDescription: currentStepData.adimAciklamasi || `Adım ${stepIndex + 1} için doğru işlemi seçin.`,
+            options: this.currentOptions,
+            remainingAttempts: this.maxAttempts - this.totalAttempts
         };
     }
-    
+
+    /**
+     * Seçenekleri karıştırır ve arayüzde kullanılmak üzere geçici ID'ler atar.
+     * @param {Array<object>} options Karıştırılacak seçenekler dizisi.
+     * @returns {Array<object>} Karıştırılmış ve ID atanmış seçenekler.
+     */
+    shuffleAndAssignIds(options) {
+        const shuffled = [...options].sort(() => Math.random() - 0.5);
+        return shuffled.map((option, index) => ({ ...option, displayId: index }));
+    }
 
     evaluateSelection(selectedDisplayId) {
         if (this.isCompleted || this.totalAttempts >= this.maxAttempts) {
@@ -113,7 +139,30 @@ export class InteractiveSolutionManager {
         return result;
     }
 
-   
+    getCompletionStats() {
+        const endTime = Date.now();
+        const totalTime = this.startTime ? endTime - this.startTime : 0;
+        const successRate = this.totalSteps > 0 ? ((this.totalSteps) / (this.totalSteps + this.totalAttempts)) * 100 : 0;
+        
+        let performance = 'needs_improvement';
+        if(successRate > 85) performance = 'excellent';
+        else if(successRate > 60) performance = 'good';
+
+        const formatTime = (ms) => {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            return `${minutes}dk ${seconds % 60}sn`;
+        };
+
+        return {
+            totalTimeFormatted: formatTime(totalTime),
+            totalAttempts: this.totalAttempts,
+            totalSteps: this.totalSteps,
+            successRate: Math.round(successRate),
+            performance: performance
+        };
+    }
+    
     getHint() {
         if (!this.solutionData || this.currentStep >= this.totalSteps) return null;
         const stepData = this.solutionData.adimlar[this.currentStep];

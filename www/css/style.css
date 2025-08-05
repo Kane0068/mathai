@@ -210,9 +210,10 @@ body {
     font-family: monospace !important;
 }
 
-/* Çeşitli render konteynerleri için genel stil */
 .math-content, .latex-content, .smart-content {
-    line-height: 1.7; /* Okunabilirliği artır */
+    line-height: 1.7;
+    overflow-x: auto; /* EKLENECEK SATIR: Yatay kaydırmaya izin ver */
+    padding-bottom: 8px; /* Kaydırma çubuğu için boşluk bırak */
 }
 
 /* Uzun ifadelerin taşmasını önlemek için genel konteyner */
@@ -534,3 +535,4 @@ body {
 .math-rendered {
     animation: fadeIn 0.3s ease-out;
 }
+

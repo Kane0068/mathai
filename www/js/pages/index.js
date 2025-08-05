@@ -7,6 +7,7 @@ import {
     showSuccess,
     renderMath,
     renderMathInContainer,
+    renderSmartContent,
     initializeRenderSystem,
 } from '../modules/ui.js';
 import { OptimizedCanvasManager } from '../modules/canvasManager.js';
@@ -15,9 +16,9 @@ import { StateManager } from '../modules/stateManager.js';
 import { smartGuide } from '../modules/smartGuide.js';
 import { mathSymbolPanel } from '../modules/mathSymbolPanel.js';
 import { interactiveSolutionManager } from '../modules/interactiveSolutionManager.js';
-import { mathRenderer } from '../core/mathRenderer.js';
-import { mathApi } from '../core/mathApi.js';
+import { globalRenderManager } from '../modules/globalRenderManager.js';
 
+import { getUnifiedSolution, validateMathProblem, validateStudentStep } from '../services/apiService.js';
 
 // Global instances - Singleton pattern
 const canvasManager = new OptimizedCanvasManager();
@@ -76,35 +77,46 @@ function cacheDOMElements() {
     canvasManager.initCanvas('handwritingCanvas');
 }
 
-// js/pages/index.js dosyasındaki mevcut resetUI fonksiyonunu silip,
-// yerine bu yeni ve kapsamlı resetAppState fonksiyonunu yapıştırın.
+// js/pages/index.js dosyasındaki mevcut resetForNewProblem fonksiyonunu silip,
+// yerine bu yeni ve daha güvenli versiyonu yapıştırın.
 
 function resetForNewProblem() {
+    preRenderedCache.clear();
     console.log('🧹 YENİ PROBLEM İÇİN TAM SIFIRLAMA...');
 
     // 1. Modül Yöneticilerini Sıfırla
-    // Bu, en kritik adımdır. Modüllerin iç durumlarını temizler.
     interactiveSolutionManager.reset();
     smartGuide.reset();
     console.log('✅ İnteraktif ve Mentor modülleri sıfırlandı.');
 
-    // 2. Ana Konteynerların İçeriğini Temizle ve Gizle
-    const containerIds = [
-        'question-summary-container',
-        'top-action-buttons',
-        'solving-workspace',
-        'result-container',
-        'solution-output',
-        'goBackBtn'
+    // 2. SADECE DİNAMİK İÇERİK ALANLARINI TEMİZLE
+    const dynamicContentIds = [
+        'question', // Soru özetinin yüklendiği alan
+        'solution-output', // Tam çözümün yüklendiği alan
+        'step-by-step-container' // Adım adım çözümün yüklendiği alan
     ];
-    containerIds.forEach(id => {
+    dynamicContentIds.forEach(id => {
         if (elements[id]) {
             elements[id].innerHTML = '';
+        }
+    });
+
+    // 3. ANA KONTEYNERLARI SİLMEDEN SADECE GİZLE
+    const containerIdsToHide = [
+        'question-summary-container',
+        'top-action-buttons', // Butonları silme, sadece konteyneri gizle
+        'solving-workspace',
+        'result-container',
+        'goBackBtn'
+    ];
+    containerIdsToHide.forEach(id => {
+        if (elements[id]) {
             elements[id].classList.add('hidden');
         }
     });
-    console.log('✅ Ana konteynerlar temizlendi ve gizlendi.');
+    console.log('✅ Konteynerlar temizlendi ve gizlendi.');
 
+    // Durum mesajını temizle
     const statusMessage = document.getElementById('status-message');
     if (statusMessage) {
         statusMessage.innerHTML = '';
@@ -112,12 +124,11 @@ function resetForNewProblem() {
     }
     showLoading(false);
 
-    stateManager.reset(); // Bu fonksiyon, problem verisini de sıfırlar.
+    // State'i sıfırla (bu işlem view'i 'setup' olarak değiştirir ve UI'ı günceller)
+    stateManager.reset(); 
     console.log('✅ State Manager (UI & Problem) sıfırlandı.');
     console.log('✅ Sistem yeni bir problem için tamamen hazır.');
 }
-
-// js/pages/index.js dosyasına, resetForNewProblem'ın altına bu yeni fonksiyonu ekleyin.
 
 function resetToSummary() {
     console.log('🔄 ANA MENÜYE DÖNÜLÜYOR...');
@@ -674,8 +685,7 @@ function displayGuideCompletion() {
 
     if (newProblemBtn) {
         newProblemBtn.addEventListener('click', () => {
-            stateManager.reset();
-            smartGuide.reset();
+            resetForNewProblem(); // Kapsamlı sıfırlama fonksiyonunu çağır
             stateManager.setView('setup');
         });
     }
@@ -694,9 +704,46 @@ function displayGuideCompletion() {
     }
 }
 
-// js/pages/index.js dosyasındaki mevcut renderApp fonksiyonunu silip bu NİHAİ versiyonu yapıştırın.
 
-// js/pages/index.js dosyasındaki mevcut renderApp fonksiyonunu silip bu NİHAİ versiyonu yapıştırın.
+// --- PERFORMANS OPTİMİZASYONU: ÖN YÜKLEME (PRE-RENDERING) ---
+const preRenderedCache = new Map(); // Render edilmiş HTML'i hafızada tutmak için.
+
+async function preRenderSolutionViews(solution) {
+    if (!solution) return;
+
+    console.log('🚀 Performans Optimizasyonu: Arka planda render işlemleri başlatılıyor...');
+
+    // Eğer zaten cache'de varsa, tekrar render etme.
+    if (preRenderedCache.has('fullSolution') && preRenderedCache.has('interactive')) {
+        console.log('✅ Görünümler zaten önceden render edilmiş. Atlanıyor.');
+        return;
+    }
+
+    // 1. "Tüm Çözüm" görünümünü arka planda render et.
+    const fullSolutionPromise = (async () => {
+        const container = document.createElement('div'); // Gerçek DOM yerine hafızada bir element oluştur.
+        container.innerHTML = generateSolutionHTML(solution); // HTML'i oluştur.
+        await globalRenderManager.renderContainer(container); // İçeriği render et.
+        preRenderedCache.set('fullSolution', container.innerHTML); // Sonucu cache'e kaydet.
+        console.log('✅ Arka Plan: "Tüm Çözüm" render edildi ve cache\'lendi.');
+    })();
+
+    // 2. "İnteraktif Çözüm" görünümünü arka planda render et.
+    const interactivePromise = (async () => {
+        // İnteraktif çözüm için sadece ilk adımı hazırlamak yeterli.
+        interactiveSolutionManager.initializeInteractiveSolution(solution);
+        const firstStepData = interactiveSolutionManager.generateStepOptions(0);
+        
+        const container = document.createElement('div');
+        container.innerHTML = generateInteractiveHTML(firstStepData);
+        await globalRenderManager.renderContainer(container);
+        preRenderedCache.set('interactive', container.innerHTML);
+        console.log('✅ Arka Plan: "İnteraktif Çözüm" render edildi ve cache\'lendi.');
+    })();
+
+    // Her iki işlemi paralel olarak çalıştır ama hataların ana akışı durdurmasını engelle.
+    await Promise.allSettled([fullSolutionPromise, interactivePromise]);
+}
 
 async function renderApp(state) {
     const { user, ui, problem } = state;
@@ -722,7 +769,19 @@ async function renderApp(state) {
         if (elements[id]) elements[id].classList.add('hidden');
     });
     if (elements['question-setup-area']) {
-        elements['question-setup-area'].classList.toggle('disabled-area', ui.view !== 'setup');
+        const isSetupView = ui.view === 'setup';
+
+        // 'setup' görünümündeyse alan aktif olmalı.
+        if (isSetupView) {
+            elements['question-setup-area'].classList.remove('disabled-area');
+        } 
+        // Diğer tüm görünümlerde (özet, çözüm vb.) alan pasif (disabled) olmalı.
+        else {
+            elements['question-setup-area'].classList.add('disabled-area');
+        }
+        
+        // Kullanıcının isteği üzerine, bu alanın HER ZAMAN görünür olmasını sağla.
+        elements['question-setup-area'].classList.remove('hidden');
     }
 
     // 3. Mevcut Görünüme Göre Arayüzü Çiz
@@ -745,6 +804,7 @@ async function renderApp(state) {
                 elements['question-summary-container'].classList.remove('hidden');
                 elements['top-action-buttons'].classList.remove('hidden');
                 await displayQuestionSummary(problem.solution.problemOzeti);
+                preRenderSolutionViews(problem.solution); // <-- BU SATIRI EKLEYİN
                 break;
 
             case 'fullSolution':
@@ -807,34 +867,6 @@ function hideSolutionContainers() {
         elements['solution-output'].classList.add('hidden');
     }
 }
-function clearInputAreas() {
-    console.log('🧹 Clearing input areas...');
-    
-    // Klavye input'unu temizle
-    const keyboardInput = document.getElementById('keyboard-input');
-    if (keyboardInput) {
-        keyboardInput.value = '';
-    }
-    
-    // Fotoğraf preview'ını temizle
-    const imagePreview = document.getElementById('imagePreview');
-    const previewContainer = document.getElementById('preview-container');
-    const uploadSelection = document.getElementById('upload-selection');
-    const startFromPhotoBtn = document.getElementById('startFromPhotoBtn');
-    
-    if (imagePreview) imagePreview.src = '';
-    if (previewContainer) previewContainer.classList.add('hidden');
-    if (uploadSelection) uploadSelection.classList.remove('hidden');
-    if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
-    
-    // File input'ları temizle
-    const imageUploader = document.getElementById('imageUploader');
-    const cameraUploader = document.getElementById('cameraUploader');
-    if (imageUploader) imageUploader.value = '';
-    if (cameraUploader) cameraUploader.value = '';
-    
-    console.log('✅ All input areas cleared');
-}
 
 async function renderSetupView(inputMode, handwritingInputType) {
     const isPhoto = inputMode === 'photo';
@@ -888,31 +920,37 @@ async function renderSetupView(inputMode, handwritingInputType) {
     }
 }
 
-// RenderStateManager yoksa basit bir fallback
-if (!window.renderStateManager) {
-    window.renderStateManager = {
-        trackRender: async (id, fn) => {
-            console.log(`Rendering: ${id}`);
-            try {
-                return await fn();
-            } catch (error) {
-                console.error(`Render error in ${id}:`, error);
-                throw error;
-            }
-        },
-        cancelAllRenders: () => {
-            console.log('Cancel all renders called');
-        },
-        getStats: () => ({
-            activeCount: 0,
-            totalRenders: 0,
-            errorCount: 0,
-            successRate: 100
-        })
-    };
+
+
+// Input alanlarını temizleme fonksiyonu (gerekirse ekleyin)
+function clearInputAreas() {
+    console.log('🧹 Clearing input areas...');
+    
+    // Klavye input'unu temizle
+    const keyboardInput = document.getElementById('keyboard-input');
+    if (keyboardInput) {
+        keyboardInput.value = '';
+    }
+    
+    // Fotoğraf preview'ını temizle
+    const imagePreview = document.getElementById('imagePreview');
+    const previewContainer = document.getElementById('preview-container');
+    const uploadSelection = document.getElementById('upload-selection');
+    const startFromPhotoBtn = document.getElementById('startFromPhotoBtn');
+    
+    if (imagePreview) imagePreview.src = '';
+    if (previewContainer) previewContainer.classList.add('hidden');
+    if (uploadSelection) uploadSelection.classList.remove('hidden');
+    if (startFromPhotoBtn) startFromPhotoBtn.disabled = true;
+    
+    // File input'ları temizle
+    const imageUploader = document.getElementById('imageUploader');
+    const cameraUploader = document.getElementById('cameraUploader');
+    if (imageUploader) imageUploader.value = '';
+    if (cameraUploader) cameraUploader.value = '';
+    
+    console.log('✅ All input areas cleared');
 }
-
-
 
 
 
@@ -1733,7 +1771,9 @@ function isCanvasEmpty(canvasId) {
 
 
 
-// YENİ handleNewProblem fonksiyonu
+// js/pages/index.js dosyasındaki mevcut handleNewProblem fonksiyonunu
+// bu yeni ve senkronize versiyonla değiştirin.
+
 async function handleNewProblem(sourceType) {
     let problemContextForPrompt = "Görseldeki matematik problemini çöz.";
     let imageBase64 = null;
@@ -1755,14 +1795,16 @@ async function handleNewProblem(sourceType) {
             problemContextForPrompt = textInput;
         }
 
-        // 2. Matematik sorusu olup olmadığını doğrula
-        stateManager.setLoading(true, "İçerik analiz ediliyor...");
-        const validationResult = await mathApi.validateProblem(problemContextForPrompt, imageBase64);
+        // 2. İLK YÜKLEME MESAJINI GÖSTER
+        showLoading("İçerik analiz ediliyor, sorunun türü belirleniyor...");
+
+        // 3. Matematik sorusu olup olmadığını doğrula (1. API Çağrısı)
+        const validationResult = await validateMathProblem(problemContextForPrompt, imageBase64);
 
         if (!validationResult || !validationResult.isMathProblem) {
-            stateManager.setLoading(false);
+            showLoading(false); // Hata durumunda yüklemeyi durdur
             showError(
-                `Bu bir matematik sorusu olarak algılanmadı.\n\nSebep: ${validationResult?.reason || 'Analiz başarısız.'}\n\nÖneri: ${validationResult?.educationalMessage || 'Lütfen tekrar deneyin.'}`,
+                `Bu bir matematik sorusu olarak algılanmadı.\n\nSebep: ${validationResult?.reason || 'Analiz başarısız.'}`,
                 true,
                 () => {
                     stateManager.clearError();
@@ -1772,31 +1814,37 @@ async function handleNewProblem(sourceType) {
             return;
         }
 
-        // 3. Sorgu hakkını kontrol et ve düşür (Bu fonksiyonu daha sonra ekleyeceğiz)
-        // if (!await handleQueryDecrement()) return;
+        // 4. İKİNCİ YÜKLEME MESAJINI GÖSTER
+        showLoading("Yapay zeka hazırlanıyor ve çözüm adımları oluşturuluyor...");
 
-        // 4. TEK API ÇAĞRISI: Tüm çözüm verisini al
-        stateManager.setLoading(true, "Yapay zeka çözümü hazırlıyor...");
-        const unifiedSolution = await mathApi.getSolution(problemContextForPrompt, imageBase64);
+        // 5. TEK API ÇAĞRISI: Tüm çözüm verisini al (2. API Çağrısı)
+        // apiService'iniz, yeniden deneme durumunda mesajı güncelleyebilmek için 
+        // bir callback fonksiyonunu destekliyor. Bunu kullanalım.
+        const unifiedSolution = await getUnifiedSolution(problemContextForPrompt, imageBase64, (progressMessage) => {
+            showLoading(progressMessage); // API yeniden deneme yaparsa kullanıcıyı bilgilendir.
+        });
         
         if (unifiedSolution && unifiedSolution.problemOzeti && unifiedSolution.adimlar) {
-            // Başarılı: Tüm veriyi state'e kaydet ve özete geç
-            unifiedSolution._source = { context: problemContextForPrompt, image: imageBase64 }; // Orijinal soruyu sakla
+            unifiedSolution._source = { context: problemContextForPrompt, image: imageBase64 };
             stateManager.setSolution(unifiedSolution);
             stateManager.setView('summary');
-            stateManager.setLoading(false);
+            // Yükleme ekranı, bu başarı mesajıyla yer değiştirecek
             showSuccess(`✅ ${unifiedSolution.problemOzeti.konu || 'Matematik'} sorusu başarıyla yüklendi!`, true, 4000);
         } else {
-            // API'den beklenen formatta veri gelmedi
             throw new Error("API'den gelen çözüm verisi geçersiz veya eksik.");
         }
 
     } catch (error) {
-        stateManager.setLoading(false);
         errorHandler.handleError(error, {
             operation: 'handleNewProblem',
             fallbackMessage: 'Problem işlenirken bir hata oluştu. Lütfen tekrar deneyin.'
         });
+    } finally {
+        // Bu blok artık doğrudan showLoading(false) çağırmamalı,
+        // çünkü başarı veya hata durumları zaten kendi mesajlarını göstererek
+        // yükleme ekranını eziyor. Bu, sadece beklenmedik bir durumda 
+        // ekranın kilitli kalmasını önlemek için bir güvence olabilir.
+        // Şimdilik boş bırakmak daha güvenli.
     }
 }
 
@@ -1859,17 +1907,7 @@ function setQuestionCanvasTool(tool, buttonIds) {
 
 
 async function displayQuestionSummary(problemOzeti) {
-    if (!problemOzeti) {
-        console.warn('displayQuestionSummary: problemOzeti bulunamadı');
-        return;
-    }
-
-    // Element kontrolü
-    const questionElement = elements['question'];
-    if (!questionElement) {
-        console.error('displayQuestionSummary: question elementi bulunamadı');
-        return;
-    }
+    if (!problemOzeti) return;
 
     const { verilenler, istenen } = problemOzeti;
 
@@ -1889,16 +1927,12 @@ async function displayQuestionSummary(problemOzeti) {
     }
 
     summaryHTML += '</div>';
-    questionElement.innerHTML = summaryHTML;
+    elements['question'].innerHTML = summaryHTML;
 
-    // MathRenderer ile render et - GÜVENLI ŞEKILDE
-    try {
-        await mathRenderer.render(questionElement);
-    } catch (error) {
-        console.error('displayQuestionSummary render hatası:', error);
-        // Hata durumunda da içerik görünsün
-    }
+    // Global render manager kullan
+    await globalRenderManager.renderContainer(elements['question']);
 }
+
 
 // HTML oluşturma fonksiyonu - Full Solution için
 function generateSolutionHTML(solution) {
@@ -1987,62 +2021,23 @@ function generateSolutionHTML(solution) {
     return html;
 }
 
-// Güncellenmiş renderFullSolution fonksiyonu
 async function renderFullSolution(solution) {
-    console.log('renderFullSolution called with solution:', solution);
-    
     const container = elements['solution-output'];
-    if (!container) {
-        console.error('solution-output container bulunamadı');
+    if (!container) return;
+
+    // Cache'i kontrol et. Eğer önceden render edilmiş HTML varsa, onu anında kullan!
+    if (preRenderedCache.has('fullSolution')) {
+        console.log('⚡️ "Tüm Çözüm" cache\'den yüklendi!');
+        container.innerHTML = preRenderedCache.get('fullSolution');
+        setupFullSolutionEventListeners(); // Event listener'ları yine de bağlamamız gerekiyor.
         return;
     }
 
-    if (!solution) {
-        container.innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p>Çözüm verisi bulunamadı. Lütfen önce bir soru yükleyin.</p>
-            </div>
-        `;
-        return;
-    }
-
-    try {
-        // 1. Loading state göster
-        container.innerHTML = `
-            <div class="text-center p-8">
-                <div class="inline-block">
-                    <div class="loader w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                    <p class="text-gray-600">Çözüm hazırlanıyor...</p>
-                </div>
-            </div>
-        `;
-
-        // 2. HTML'i oluştur
-        const html = generateSolutionHTML(solution);
-        
-        // 3. Container'a HTML'i yerleştir
-        container.innerHTML = html;
-
-        // 4. Event listener'ları ekle
-        setupFullSolutionEventListeners();
-
-        // 5. Progressive render başlat
-        await renderSolutionProgressive(container, solution);
-
-        console.log('renderFullSolution completed successfully');
-
-    } catch (error) {
-        console.error('renderFullSolution error:', error);
-        container.innerHTML = `
-            <div class="p-4 bg-red-50 text-red-700 rounded-lg">
-                <p class="font-semibold mb-2">Çözüm Yükleme Hatası</p>
-                <p class="text-sm">${error.message}</p>
-                <button onclick="location.reload()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-                    Sayfayı Yenile
-                </button>
-            </div>
-        `;
-    }
+    // Eğer cache'de yoksa, normal render sürecini çalıştır.
+    console.log('⏳ "Tüm Çözüm" normal şekilde render ediliyor (cache boş)...');
+    container.innerHTML = generateSolutionHTML(solution);
+    setupFullSolutionEventListeners();
+    await globalRenderManager.renderContainer(container);
 }
 
 // Progressive render fonksiyonu
@@ -2187,39 +2182,56 @@ if (!document.getElementById('solution-animations')) {
 
 
 async function renderInteractiveSolution(solution) {
-    console.log('🔄 İnteraktif Çözüm Başlatılıyor');
+    const container = elements['solution-output'];
+    if (!container) return;
     showLoading("İnteraktif çözüm hazırlanıyor...");
 
-    try {
-        if (!solution || !solution.adimlar || solution.adimlar.length === 0) {
-            displayInteractiveError("İnteraktif çözüm için adımlar bulunamadı.");
-            return;
-        }
-        
-        // 1. InteractiveSolutionManager'ı çözüm verisiyle başlat (Bu senkron bir işlem)
+    // Cache'i kontrol et.
+    if (preRenderedCache.has('interactive')) {
+        console.log('⚡️ "İnteraktif Çözüm" cache\'den yüklendi!');
+        container.innerHTML = preRenderedCache.get('interactive');
+        // Yöneticiyi tekrar başlatmamız gerekebilir, çünkü state'i tutuyor.
         interactiveSolutionManager.initializeInteractiveSolution(solution);
-        
-        // 2. İlk adım için seçenekleri SENKRON olarak oluştur
+        const firstStepData = interactiveSolutionManager.generateStepOptions(0);
+        setupInteractiveEventListeners(firstStepData);
+    } else {
+        // Eğer cache'de yoksa, normal render süreci.
+        console.log('⏳ "İnteraktif Çözüm" normal şekilde render ediliyor (cache boş)...');
+        interactiveSolutionManager.initializeInteractiveSolution(solution);
         const stepOptionsToRender = interactiveSolutionManager.generateStepOptions(0);
-
-        // 3. Gelen sonucun geçerli olduğunu kontrol et (Artık .success kontrolü yok)
-        if (!stepOptionsToRender || !stepOptionsToRender.options) {
-            throw new Error("İlk adım seçenekleri oluşturulamadı. Veri yapısı bozuk olabilir.");
-        }
-
-        // 4. Adımı ekrana render et (Bu asenkron kalabilir, çünkü içinde render işlemleri var)
         await renderInteractiveStepSafe(stepOptionsToRender);
-
-    } catch (error) {
-        console.error('❌ İnteraktif çözüm başlatma hatası:', error);
-        displayInteractiveError(`İnteraktif çözüm başlatılamadı: ${error.message}`);
-    } finally {
-        showLoading(false);
     }
+    
+    showLoading(false);
 }
 
-
-
+function forceShowContainers() {
+    const containers = [
+        'result-container',
+        'solution-output'
+    ];
+    
+    containers.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.classList.remove('hidden');
+            element.style.display = 'block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            console.log(`✅ Force shown: ${id}`);
+        }
+    });
+}
+// Güvenli DOM hazırlık bekleme
+function waitForDOMReady() {
+    return new Promise(resolve => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', resolve);
+        } else {
+            setTimeout(resolve, 50); // Kısa gecikme
+        }
+    });
+}
 async function renderInteractiveStepSafe(stepData) {
     console.log('🔄 İnteraktif adım render başlıyor:', stepData);
     try {
@@ -2228,7 +2240,7 @@ async function renderInteractiveStepSafe(stepData) {
 
         solutionOutput.innerHTML = generateInteractiveHTML(stepData);
         setupInteractiveEventListeners(stepData);
-        await mathRenderer.render(solutionOutput);
+        await globalRenderManager.renderContainer(solutionOutput);
 
         console.log('✅ İnteraktif adım render tamamlandı');
     } catch (error) {
@@ -3108,8 +3120,7 @@ function setupInteractiveCompletionListeners() {
 
     if (newProblemBtn) {
         newProblemBtn.addEventListener('click', () => {
-            interactiveSolutionManager.reset();
-            stateManager.reset();
+            resetForNewProblem(); // Kapsamlı sıfırlama fonksiyonunu çağır
             stateManager.setView('setup');
         });
     }
@@ -3594,12 +3605,37 @@ window.renderMath = renderMath;
 window.renderInteractiveSolution = renderInteractiveSolution;
 window.handleInteractiveSubmissionSafe = handleInteractiveSubmissionSafe;
 window.setupInteractiveEventListeners = setupInteractiveEventListeners;
+window.forceShowContainers = forceShowContainers;
 window.handleInteractiveResetToSetup = handleInteractiveResetToSetup;
 window.clearInputAreas = clearInputAreas;
+window.globalRenderManager = globalRenderManager;
 
+// js/pages/index.js dosyasında, "// --- EXPORTS ---" satırının hemen üstüne ekleyin.
 
+/**
+ * Belirtilen ID'ye sahip bir elemanın DOM'da var olmasını ve görünür olmasını bekler.
+ * @param {string} elementId Beklenecek elemanın ID'si.
+ * @param {number} timeout Maksimum bekleme süresi (milisaniye).
+ * @returns {Promise<HTMLElement>} Eleman bulunduğunda resolve olan bir Promise.
+ */
+function waitForElement(elementId, timeout = 3000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+            const element = document.getElementById(elementId);
+            // Eleman hem var hem de görünür mü kontrol et (display: none değil)
+            if (element && element.offsetParent !== null) {
+                clearInterval(interval);
+                resolve(element);
+            } else if (Date.now() - startTime > timeout) {
+                clearInterval(interval);
+                reject(new Error(`waitForElement: '${elementId}' elemanı ${timeout}ms içinde bulunamadı veya görünür olmadı.`));
+            }
+        }, 50); // Her 50ms'de bir kontrol et
+    });
+}
 
 
 // --- EXPORTS ---
-export { canvasManager, errorHandler, stateManager, smartGuide,mathRenderer };
+export { canvasManager, errorHandler, stateManager, smartGuide };
 
