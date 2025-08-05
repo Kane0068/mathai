@@ -357,29 +357,42 @@ export class SmartGuideSystem {
         return false; // Son adıma ulaşıldı
     }
 
+    // Belirli bir adıma git
+    goToStep(stepIndex) {
+        if (stepIndex >= 0 && stepIndex < this.guidanceData.totalSteps) {
+            this.currentStep = stepIndex;
+            this.progressiveHints = [];
+            this.resetHintForCurrentStep();
+            this.currentStepAttempts = 0; // Bu adıma yeni gelindiği için denemeyi sıfırla
+            this.stepFailed = false;
+            console.log(`SmartGuide: Adım ${stepIndex + 1}'e atlandı.`);
+            return true;
+        }
+        return false;
+    }
+
     // Mevcut adım başarısız durumda mı?
     isCurrentStepFailed() {
         return this.stepFailed;
     }
 
-    // Genel istatistikler
+ 
+
     getAttemptStats() {
         let totalAttempts = 0;
-        let completedSteps = 0;
-        
-        this.attemptsPerStep.forEach((attempts, stepIndex) => {
+        // Map üzerindeki tüm deneme sayılarını topla
+        this.attemptsPerStep.forEach((attempts) => {
             totalAttempts += attempts;
-            if (stepIndex < this.currentStep || (stepIndex === this.currentStep && !this.stepFailed)) {
-                completedSteps++;
-            }
         });
-        
+
+        // Eğer hiç deneme yapılmadıysa ve şu an bir deneme yapılıyorsa, onu 1 olarak say.
+        if (totalAttempts === 0 && this.currentStepAttempts > 0) {
+            totalAttempts = this.currentStepAttempts;
+        }
+
         return {
-            totalAttempts,
-            completedSteps,
-            currentStep: this.currentStep + 1,
+            totalAttempts: totalAttempts,
             totalSteps: this.guidanceData?.totalSteps || 0,
-            averageAttemptsPerStep: completedSteps > 0 ? (totalAttempts / completedSteps).toFixed(1) : 0
         };
     }
 

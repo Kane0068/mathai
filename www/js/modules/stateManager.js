@@ -81,7 +81,9 @@ export class StateManager {
     problemReducer(state, action) {
         switch (action.type) {
             case 'SET_SOLUTION': return { ...state, solution: action.payload };
-            case 'RESET': return { solution: null };
+
+            case 'SET_PROBLEM_SOURCE': return { ...state, source: action.payload };
+            case 'RESET': return { solution: null, source: null }; // Reset durumunda source'u da temizle
             default: return state;
         }
     }
@@ -142,6 +144,8 @@ export class StateManager {
     setHandwritingInputType = (type) => this.dispatch({ type: 'SET_HANDWRITING_INPUT_TYPE', payload: type });
     setInteractiveStep = (step) => this.dispatch({ type: 'SET_INTERACTIVE_STEP', payload: step });
     nextInteractiveStep = () => this.dispatch({ type: 'NEXT_INTERACTIVE_STEP' });
+    setProblemSource = (sourceData) => this.dispatch({ type: 'SET_PROBLEM_SOURCE', payload: sourceData });
+
     reset = () => this.dispatch({ type: 'RESET' });
 }
 

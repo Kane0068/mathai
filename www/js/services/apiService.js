@@ -1,16 +1,19 @@
 // www/js/services/apiService.js - YENİ VE MERKEZİLEŞTİRİLMİŞ VERSİYON
 
+// www/js/services/apiService.js - YENİ VE GÜÇLENDİRİLMİŞ VERSİYON
+
 import {
     buildUnifiedSolutionPrompt,
     buildCorrectionPrompt,
-    buildMathValidationPrompt
+    buildMathValidationPrompt,
+    buildFlexibleStepValidationPrompt 
 } from './promptBuilder.js';
 
 // --- Sabitler ve Ayarlar ---
-// API Anahtarınızı buraya güvenli bir şekilde ekleyin. Bu sadece bir örnek.
-const GEMINI_API_KEY = "AIzaSyDHFrVt_EBJkb-pRhpSorA_RLxTdrxHuKo";
+const GEMINI_API_KEY = "AIzaSyCUHwxUUId-SKY-3-LZlWQPmLJyNgO8GpM";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-const MAX_RETRIES = 2; // Başarısız istek en fazla 2 kez daha denenecek (toplamda 3 deneme).
+const MAX_RETRIES = 3; // Başarısız istek en fazla 2 kez daha denenecek.
+const INITIAL_DELAY = 1500; // Yeniden deneme için başlangıç gecikmesi (ms)
 
 /**
  * API'den gelen metin içinde gömülü olan JSON verisini güvenli bir şekilde çıkarır.
@@ -19,23 +22,27 @@ const MAX_RETRIES = 2; // Başarısız istek en fazla 2 kez daha denenecek (topl
  * @returns {string|null} Ayıklanmış JSON dizesi veya bulunamazsa null.
  */
 function extractJson(text) {
-    if (!text) return null;
+    if (!text || typeof text !== 'string') return null;
 
-    // ```json veya ``` ile başlayıp ``` ile biten kod bloklarını ara
+    // 1. ```json veya ``` ile başlayıp ``` ile biten kod bloklarını ara (en güvenilir yöntem)
     const jsonRegex = /```(json)?\s*(\{[\s\S]*\})\s*```/;
     const match = text.match(jsonRegex);
 
     if (match && match[2]) {
+        console.log("JSON, markdown kod bloğu içinden başarıyla ayıklandı.");
         return match[2];
     }
 
-    // Eğer kod bloğu yoksa, metnin içindeki ilk { ve son } arasındaki kısmı almayı dene
+    // 2. Eğer kod bloğu yoksa, metnin içindeki ilk '{' ve son '}' arasındaki kısmı almayı dene.
+    // Bu, API'nin başına veya sonuna metin eklediği durumları çözer.
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
+        console.log("JSON, metin içindeki ilk ve son süslü parantezler arası alınarak ayıklandı.");
         return text.substring(firstBrace, lastBrace + 1);
     }
 
+    console.warn("Metin içinde geçerli bir JSON yapısı bulunamadı.");
     return null; // JSON bulunamadı
 }
 
@@ -50,39 +57,55 @@ function safeJsonParse(jsonString) {
     try {
         return JSON.parse(jsonString);
     } catch (error) {
-        console.error('JSON Parse hatası:', error.message);
-        console.log('Sorunlu JSON dizesi:', jsonString);
+        // Hata mesajını daha bilgilendirici hale getir
+        console.error('JSON Parse Hatası:', error.message);
+        // Sorunlu JSON'ın bir kısmını logla ki neyin yanlış gittiğini görebilelim
+        const errorPosition = error.message.match(/position (\d+)/);
+        if (errorPosition) {
+            const pos = parseInt(errorPosition[1]);
+            const context = jsonString.substring(Math.max(0, pos - 30), Math.min(jsonString.length, pos + 30));
+            console.error(`Hatanın olduğu bölge: ...${context}...`);
+        }
         return null;
     }
 }
 
 
-// js/services/apiService.js dosyasındaki mevcut callGeminiSmart fonksiyonunu silip bu versiyonu yapıştırın.
-
+/**
+ * Gemini API'sini akıllı ve dayanıklı bir şekilde çağırır.
+ * JSON hatalarını düzeltmeye çalışır ve ağ hatalarını yeniden dener.
+ * @param {string} initialPrompt - İlk gönderilecek prompt.
+ * @param {string|null} imageBase64 - Base64 formatında resim verisi.
+ * @param {function} onProgress - Yükleme durumu hakkında bilgi veren callback.
+ * @returns {Promise<object|null>} Başarılı olursa parse edilmiş JSON nesnesi, aksi takdirde null.
+ */
 async function callGeminiSmart(initialPrompt, imageBase64, onProgress) {
     let lastError = null;
     let lastFaultyResponse = '';
     let currentPrompt = initialPrompt;
+    let delay = INITIAL_DELAY;
 
-    // Exponential Backoff için başlangıç ayarları
-    const maxRetries = 4; // Toplamda 4 deneme
-    let delay = 1000; // Başlangıç gecikmesi 1 saniye
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        console.log(`API İsteği Deneme #${attempt}. Bekleme süresi: ${delay}ms`);
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`API İsteği Deneme #${attempt}.`);
         if (attempt > 1 && onProgress) {
-            const message = lastError && (lastError.includes('JSON') || lastError.includes('parse')) ?
-                'Yapay zeka yanıtı düzeltiyor, lütfen bekleyin...' :
-                `API Limiti Aşıldı. ${delay/1000} saniye sonra yeniden denenecek...`;
+            const message = lastError && (lastError.toLowerCase().includes('json')) ?
+                'Yapay zeka yanıt formatını düzeltiyor, lütfen bekleyin...' :
+                `Geçici bir sorun oluştu. ${delay / 1000} saniye sonra yeniden denenecek...`;
             onProgress(message);
         }
 
         const payloadParts = [{ text: currentPrompt }];
-        if (imageBase64 && attempt === 1) {
+        if (imageBase64 && attempt === 1) { // Resmi sadece ilk denemede gönder
             payloadParts.push({ inlineData: { mimeType: 'image/png', data: imageBase64 } });
         }
 
-        const payload = { contents: [{ role: "user", parts: payloadParts }] };
+        const payload = {
+            contents: [{ role: "user", parts: payloadParts }],
+            // YENİ: API'nin kesinlikle JSON döndürmesini sağlamak için ek ayar
+            generationConfig: {
+                responseMimeType: "application/json",
+            }
+        };
 
         try {
             const response = await fetch(GEMINI_API_URL, {
@@ -91,69 +114,70 @@ async function callGeminiSmart(initialPrompt, imageBase64, onProgress) {
                 body: JSON.stringify(payload)
             });
 
-            // 429 hatasını burada özel olarak yakala
-            if (response.status === 429) {
-                lastError = `API Rate Limit Aşıldı (429).`;
-                // Eğer son deneme değilse, döngünün bir sonraki adımına geçmeden önce bekle
-                if (attempt < maxRetries) {
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2; // Bekleme süresini ikiye katla
-                    continue; // Döngünün bir sonraki adımına geç
-                } else {
-                    // Son denemede de 429 hatası alınırsa, hata fırlat
-                    throw new Error(lastError);
-                }
-            }
-
             if (!response.ok) {
+                 // API'den gelen daha detaylı hata mesajını logla
+                const errorData = await response.json().catch(() => null);
+                console.error("API HTTP Hatası Detayları:", errorData);
                 throw new Error(`API HTTP Hatası: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
             const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            if (!rawText) throw new Error('API yanıtı boş veya geçersiz formatta.');
+            if (!rawText) {
+                throw new Error('API yanıtı boş veya geçersiz formatta.');
+            }
 
-            lastFaultyResponse = rawText;
-            const jsonString = extractJson(rawText);
+            // GÜÇLENDİRİLMİŞ PARSE MANTIĞI
+            lastFaultyResponse = rawText; // Düzeltme promptu için ham yanıtı sakla
+            const jsonString = extractJson(rawText); // Önce JSON'ı ayıkla
+            
+            if (!jsonString) {
+                // Eğer extractJson bile bir şey bulamadıysa, yanıt tamamen bozuk demektir.
+                throw new Error('Yanıt içinde JSON formatı bulunamadı.');
+            }
 
-            if (!jsonString) throw new Error('Yanıt içinde JSON formatı bulunamadı.');
+            const parsedJson = safeJsonParse(jsonString); // Sonra parse etmeyi dene
 
-            const parsedJson = safeJsonParse(jsonString);
+            if (!parsedJson) {
+                // Eğer parse yine de başarısız olursa, bu bir syntax hatasıdır.
+                throw new Error('JSON parse edilemedi (Syntax hatası).');
+            }
 
-            if (!parsedJson) throw new Error('JSON parse edilemedi.');
-
-            console.log(`Deneme #${attempt} başarılı!`);
-            return parsedJson; // Başarılı olursa döngüden çık ve sonucu döndür
+            console.log(`API isteği Deneme #${attempt} başarılı!`);
+            return parsedJson; // BAŞARILI! Döngüden çık ve sonucu döndür.
 
         } catch (error) {
             lastError = error.message;
             console.warn(`Deneme #${attempt} başarısız oldu: ${lastError}`);
 
-            // Eğer hata JSON ile ilgiliyse ve son deneme değilse, düzeltme prompt'u ile tekrar dene
-            if (lastError.toLowerCase().includes('json') || lastError.toLowerCase().includes('parse')) {
-                currentPrompt = buildCorrectionPrompt(initialPrompt, lastFaultyResponse, lastError);
+            // Eğer son deneme ise, daha fazla deneme yapma.
+            if (attempt >= MAX_RETRIES) {
+                break; 
             }
             
-            // Eğer son deneme ise, döngüyü sonlandır ve nihai hatayı göster
-            if (attempt >= maxRetries) {
-                 console.error("Tüm API denemeleri başarısız oldu.");
-                 window.dispatchEvent(new CustomEvent('show-error-message', {
-                     detail: { message: `API ile iletişim kurulamadı. Hata: ${lastError}`, isCritical: true }
-                 }));
-                 return null;
+            // Hata JSON ile ilgiliyse, düzeltme prompt'u ile tekrar dene.
+            if (lastError.toLowerCase().includes('json')) {
+                console.log("JSON hatası tespit edildi. Düzeltme prompt'u hazırlanıyor...");
+                currentPrompt = buildCorrectionPrompt(initialPrompt, lastFaultyResponse, lastError);
+                // JSON hatalarında bekleme süresini artırma, hemen düzeltmeyi denesin.
+                continue;
             }
 
-            // Eğer hata 429 değilse ve son deneme değilse, bir sonraki deneme için bekle
-            if (!lastError.includes('429')) {
-                await new Promise(resolve => setTimeout(resolve, delay));
-                delay *= 2; // Bekleme süresini ikiye katla
-            }
+            // Diğer hatalar (ağ, sunucu vb.) için bekleme süresini artırarak tekrar dene.
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2; // Exponential backoff
         }
     }
-    return null; // Döngü biterse null döndür
-}
 
+    // Tüm denemeler başarısız olduysa...
+    console.error("Tüm API denemeleri başarısız oldu. Son Hata:", lastError);
+    // Global bir event fırlatarak UI'ın hatayı göstermesini sağla
+     window.dispatchEvent(new CustomEvent('show-error-message', {
+         detail: { message: `API ile iletişim kurulamadı. Hata: ${lastError}`, isCritical: true }
+     }));
+    return null; // Nihai başarısızlık
+}
 // --- YENİ BİRLEŞİK SERVİS FONKSİYONLARI ---
 
 /**
@@ -204,43 +228,19 @@ export async function validateMathProblem(problemContext, imageBase64 = null, on
     }
 }
 
-// js/services/apiService.js dosyasındaki mevcut validateStudentStep fonksiyonunu silip bu DÜZELTİLMİŞ versiyonu yapıştırın.
 
+/**
+ * Öğrencinin adımını esnek bir şekilde doğrulamak için API'yi çağırır.
+ * @param {string} studentInput Öğrencinin girdiği cevap.
+ * @param {object} stepData Mevcut adım ve tüm çözümle ilgili veriler.
+ * @returns {Promise<object|null>} Değerlendirme sonucu nesnesi.
+ */
 export async function validateStudentStep(studentInput, stepData) {
-    // Problemin tam çözüm akışını string'e çevirirken 'correctAnswer' kullanılıyor.
-    const allStepsString = JSON.stringify(stepData.allSteps.map(s => s.correctAnswer));
+    // Yeni ve akıllı prompt'u oluştur
+    const promptText = buildFlexibleStepValidationPrompt(studentInput, stepData);
 
-    const validationPrompt = `
-        Sen, son derece anlayışlı, esnek ve teşvik edici bir matematik öğretmenisin. Görevin, öğrencinin cevabını, çözüm akışının tamamını göz önünde bulundurarak değerlendirmektir.
+    // API'yi çağır ve sonucu bekle
+    const result = await callGeminiSmart(promptText, null, () => {}); // onProgress callback'i şimdilik boş olabilir
 
-        **TEMEL KURAL: MATEMATİKSEL EŞDEĞERLİK VE ADIM ATLAMAYI ANLAMA**
-        Öğrencinin cevabı, beklenen adıma veya **gelecekteki herhangi bir adıma** matematiksel olarak eşdeğerse, cevabı DOĞRU kabul et.
-
-        **DEĞERLENDİRME BİLGİLERİ:**
-        - Problemin Tam Çözüm Akışı: ${allStepsString}
-        - Mevcut Adım Açıklaması: "${stepData.description}"
-        - Mevcut Adımda Beklenen Cevap (LaTeX): "${stepData.correctAnswer}"
-        - Öğrencinin Verdiği Cevap: "${studentInput}"
-        - Mevcut Adım Numarası: ${stepData.currentStepIndex + 1}
-
-        **DEĞERLENDİRME KURALLARI:**
-        1.  **Eşdeğerlik Kontrolü:** Öğrencinin cevabının, çözüm akışındaki adımlardan herhangi birine matematiksel olarak eşdeğer olup olmadığını kontrol et. (Örn: "2(x+5)" ile "2x+10" eşdeğerdir).
-        2.  **Adım Tespiti:** Eğer cevap doğruysa, çözüm akışında hangi adıma karşılık geldiğini bul (örneğin, 3. adıma).
-        3.  **Geri Bildirim Stili:** ASLA "Yanlış cevap", "Hatalı" gibi yargılayıcı ifadeler kullanma. Her zaman yapıcı, yol gösterici ve pozitif bir dil kullan. Öğrencinin yazdığı ifadeye doğrudan atıfta bulunarak geri bildirim ver.
-        4.  **Final Cevap Tespiti:** Eğer öğrenci doğrudan final cevabı verdiyse (genellikle son adım), bunu 'isFinalAnswer' olarak işaretle.
-
-        **İSTENEN JSON YANIT FORMATI (SADECE JSON):**
-        {
-          "isCorrect": boolean,
-          "matchedStepIndex": number,
-          "isFinalAnswer": boolean,
-          "feedbackMessage": "Kişiselleştirilmiş, sıcak ve eğitici geri bildirim mesajı. Öğrencinin cevabına atıfta bulunsun.",
-          "hintForNext": "Eğer cevap doğruysa bir sonraki adım için kısa bir ipucu veya yanlışsa mevcut adımı çözmek için bir yönlendirme."
-        }
-
-        Lütfen SADECE JSON formatında bir yanıt ver.
-    `;
-
-    const result = await callGeminiSmart(validationPrompt, null, () => {});
     return result;
 }

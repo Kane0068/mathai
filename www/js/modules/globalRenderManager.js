@@ -131,83 +131,81 @@ export class GlobalRenderManager {
     
     
     async renderElement(element, content, options = {}) {
-        if (!element || !content) return false;
+        if (!element) return false;
 
-        // Render işlemine başlamadan önce MathJax'in hazır olduğundan emin ol.
+        if (content === null || typeof content === 'undefined') {
+            element.innerHTML = '';
+            return true;
+        }
+
+        const normalizedContent = this.normalizeContent(String(content));
+        if (!normalizedContent) {
+            element.innerHTML = '';
+            return true;
+        }
+
         if (!this.mathJaxStatus.ready) {
             await this.initializeMathJax();
         }
 
-        const normalizedContent = this.normalizeContent(content);
-        if (!normalizedContent) {
-            element.textContent = content; // Eğer içerik boşsa, olduğu gibi bırak.
-            return true;
-        }
-        
-        const renderID = this.generateRenderID(element, normalizedContent);
-        if (this.pendingRenders.has(renderID)) {
-             return this.waitForRender(renderID); // Zaten devam eden bir render varsa bekle.
-        }
-
-        this.pendingRenders.add(renderID);
-        this.stats.pending++;
-        
-        // --- KADEMELİ FALLBACK MANTIĞI ---
         try {
-            // 1. Strateji: Karışık içerik mi? Önce onu handle et.
-            if (this.detectMixedContent(normalizedContent)) {
-                await this.renderMixedContent(element, normalizedContent, options);
-            } else {
-            // 2. Strateji: Saf matematik içeriği. En iyi motor olan MathJax ile render etmeyi dene.
-                await this.performRenderWithMathJax(element, normalizedContent, options);
-            }
+            // --- KUSURSUZ VE SADELEŞTİRİLMİŞ RENDER MANTIĞI ---
             
+            // Regex ile içerikte $, $$, \[, \( gibi herhangi bir LaTeX sınırlayıcısı olup olmadığını kontrol et.
+            const hasDelimiters = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/.test(normalizedContent);
+
+            // 1. ÖNCELİK: Blok matematik mi? (.latex-content'ten gelir)
+            // Bu, sınırlayıcı içermeyen saf LaTeX kodunu hatasız render eder.
+            if (options.displayMode) {
+                await this.performRenderWithMathJax(element, normalizedContent, { displayMode: true });
+            }
+            // 2. ÖNCELİK: İçinde matematik sınırlayıcıları olan karışık içerik mi?
+            // Prompt sayesinde artık tüm karışık içerikler bu koşula girecek.
+            else if (hasDelimiters) {
+                await this.renderMixedContent(element, normalizedContent, options);
+            }
+            // 3. FALLBACK: Hiç matematik yoksa, bu kesinlikle düz metindir.
+            else {
+                element.textContent = normalizedContent;
+            }
+
             this.stats.successful++;
-            this.pendingRenders.delete(renderID);
-            this.stats.pending--;
             return true;
 
         } catch (error) {
-            // 3. Strateji: MathJax başarısız oldu!
-            console.warn(`MathJax render hatası (${renderID}), fallback uygulanıyor.`, error);
-            
-            // Son çare olarak, içeriği fallback ile düz metin olarak göster.
+            console.warn(`Render hatası, fallback uygulanıyor.`, error);
             this.renderFallback(element, normalizedContent, error);
-
             this.stats.failed++;
-            this.pendingRenders.delete(renderID);
-            this.stats.pending--;
-            // Hata oluştuğu için false dönüyoruz ama kullanıcıya yine de bir şey gösterdik.
-            return false; 
+            return false;
         }
     }
 
     async performRenderWithMathJax(element, content, options) {
         const { displayMode = false } = options;
-        const mathContent = displayMode ? `\\[${content}\\]` : `\\(${content}\\)`;
-    
-        // 1. Geçici bir container oluştur. Bu container'ı sayfanın kendisine ekleyeceğiz.
+
+        // --- YENİ EKLENEN TEMİZLEME ADIMI ---
+        // Gelen içeriğin başındaki ve sonundaki olası '$' sınırlayıcılarını temizle.
+        // Bu, çift sarmalama sorununu kökünden çözer.
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith('$') && cleanContent.endsWith('$')) {
+            cleanContent = cleanContent.substring(1, cleanContent.length - 1).trim();
+        }
+        // --- TEMİZLEME ADIMI SONU ---
+
+        // MathJax'in beklediği formata temizlenmiş içeriği yerleştir.
+        const mathContent = displayMode ? `\\[${cleanContent}\\]` : `\\(${cleanContent}\\)`;
+
         const tempDiv = document.createElement('div');
-    
-        // 2. Kullanıcının görmemesi için onu ekranın dışına taşıyalım.
         tempDiv.style.visibility = 'hidden';
         tempDiv.style.position = 'absolute';
-        tempDiv.style.top = '-9999px';
-        tempDiv.style.left = '-9999px';
-    
         tempDiv.textContent = mathContent;
-        document.body.appendChild(tempDiv); // ÖLÇÜM İÇİN SAYFAYA EKLE
-    
+        document.body.appendChild(tempDiv);
+
         try {
-            // 3. MathJax'e bu geçici elementi işlemesini söyle. Artık doğru ölçüm yapabilir.
             await MathJax.typesetPromise([tempDiv]);
-    
-            // 4. Başarılı render sonucunu asıl hedef elementimizin içine kopyala.
             element.innerHTML = tempDiv.innerHTML;
             element.classList.add('math-rendered', 'mathjax-rendered');
-            
         } finally {
-            // 5. İşlem bittikten sonra geçici elementi sayfadan mutlaka kaldır.
             document.body.removeChild(tempDiv);
         }
         
@@ -224,34 +222,20 @@ export class GlobalRenderManager {
 
    
     
+        // www/js/modules/globalRenderManager.js dosyasında bu fonksiyonu güncelleyin
     detectMixedContent(content) {
-        // Bu yeni, daha akıllı versiyon, bir ifadenin "karışık" sayılması için daha katı kurallar uygular.
-        
-        // Kural 1: İçerikte Türkçe karakter var mı? (ğ, ü, ş, ı, ö, ç)
-        const hasTurkish = /[ğüşıöçĞÜŞİÖÇ]/.test(content);
-        
-        // Kural 2: İçerikte GERÇEK LaTeX komutları veya yapıları var mı?
-        // Sadece $...$ olması yeterli değil, içinde \frac, ^, _, \sqrt gibi komutlar olmalı.
-        const hasLatexCommands = /(\\[a-zA-Z]+|\^|_|\{|\})/.test(content);
-        
-        // Kural 3: İçerikte matematiksel sınırlayıcılar var mı? ($, \\(, \\[, $$)
+        // Kural 1: İçerikte Türkçe metin karakterleri var mı?
+        const hasText = /[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(content);
+
+        // Kural 2: İçerikte matematiksel sınırlayıcılar var mı? ($, \\(, \\[, $$)
         const hasLatexDelimiters = /\$.*?\$|\\\(.*?\\\)|\\\[.*?\\\]|\$\$.*?\$\$/.test(content);
-        
-        // Kural 4: Kelime sayısı.
-        const wordCount = content.split(/\s+/).length;
 
-        // Karar Anı: Bir içeriğin "karışık" olması için, hem Türkçe metin içermesi
-        // hem de içinde gerçek LaTeX komutları barındıran matematiksel bir bölümü olması gerekir.
-        // VEYA, 5'ten fazla kelime içerip matematiksel sınırlayıcılara sahipse de karışık kabul edilir.
-        // Bu, "Fiyatı $5" gibi ifadelerin yanlışlıkla LaTeX olarak algılanmasını önler.
-        if (hasTurkish && hasLatexCommands && hasLatexDelimiters) {
-            return true;
-        }
-        if (wordCount > 5 && hasLatexDelimiters) {
-            return true;
-        }
+        // Kural 3: Sınırlayıcıların içinde gerçek LaTeX komutları var mı?
+        const hasLatexCommands = /(\\[a-zA-Z]+|\^|_|\{|\})/.test(content);
 
-        return false;
+        // KARAR: Bir içeriğin "karışık" olması için, hem metin hem de LaTeX sınırlayıcıları içermesi gerekir.
+        // Bu, "Fiyat: $5" gibi ifadelerin yanlışlıkla render edilmesini önler.
+        return hasText && hasLatexDelimiters && hasLatexCommands;
     }
     
     async renderPureLatex(element, content, displayMode) {
@@ -329,10 +313,11 @@ export class GlobalRenderManager {
             return false;
         }
     }
-    
+    // www/js/modules/globalRenderManager.js dosyasındaki bu fonksiyonu güncelleyin.
+
     splitMixedContent(content) {
         const parts = [];
-        // Regex'i güncelledik: İç içe geçmiş durumları daha iyi handle eder ve daha spesifiktir.
+        // Bu regex, $...$, $$...$$, \(...\) ve \[...\] bloklarını yakalar.
         const regex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g;
         
         let lastIndex = 0;
@@ -342,31 +327,25 @@ export class GlobalRenderManager {
             // LaTeX bloğundan önceki metin parçasını al.
             if (match.index > lastIndex) {
                 const text = content.slice(lastIndex, match.index);
-                if (text.trim()) { // Sadece boşluklardan oluşmuyorsa ekle.
+                if (text.trim()) {
                     parts.push({ type: 'text', content: text });
                 }
             }
             
-            // Eşleşen LaTeX parçasını al.
+            // Eşleşen LaTeX parçasını al ve sınırlayıcılarını temizle.
             let latex = match[1];
             
-            // LaTeX sınırlayıcılarını (delimiters) temizle.
+            // --- GÜNCELLENMİŞ TEMİZLEME MANTIĞI ---
+            // Her tür sınırlayıcıyı ($, $$, \[, \(), \], \)) kaldır.
             latex = latex
-                .replace(/^\$\$|\$\$$/g, '')
-                .replace(/^\$|\$$/g, '')
-                .replace(/^\\\(|\\\)$/g, '')
-                .replace(/^\\\[|\\\]$/g, '');
+                .replace(/^\$\$|^\$|^\\\[|^\\\(/, '')
+                .replace(/\$\$?$|\\\]$|\\\)$/, '')
+                .trim();
             
-            // YENİ GÜVENLİK KONTROLÜ:
-            // Eğer temizlenmiş LaTeX parçası boş değilse VEYA matematiksel bir komut içeriyorsa ekle.
-            // Bu, "$ $" gibi boş veya anlamsız LaTeX bloklarının render kuyruğuna girmesini engeller.
-            if (latex.trim() || /(\\[a-zA-Z]+|\^|_)/.test(latex)) {
-                 parts.push({ type: 'latex', content: latex.trim() });
-            } else {
-                // Eğer parça render edilmeye değmezse (örn: "$ $"), onu metin olarak ekleyebiliriz.
-                parts.push({ type: 'text', content: match[1] });
+            if (latex) {
+                parts.push({ type: 'latex', content: latex });
             }
-           
+        
             lastIndex = match.index + match[0].length;
         }
         

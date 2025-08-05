@@ -536,3 +536,50 @@ body {
     animation: fadeIn 0.3s ease-out;
 }
 
+/* =================================================================== */
+/* === 10. OKUNURLUK VE TAŞMA SORUNU ÇÖZÜMLERİ                    === */
+/* =================================================================== */
+
+/* Render edilen tüm matematik içeriklerinin temel düzeni */
+.math-content, .latex-content, .smart-content {
+    line-height: 1.8; /* Satır yüksekliğini artırarak okunurluğu iyileştir */
+    word-wrap: break-word; /* Uzun metinlerin taşmasını engelle */
+    overflow-wrap: break-word;
+}
+
+/* Özellikle LaTeX blokları için bir sarmalayıcı (wrapper) */
+.math-container {
+    max-width: 100%;
+    overflow-x: auto; /* Yatayda taşan formüller için kaydırma çubuğu ekle */
+    overflow-y: hidden;
+    padding: 0.5rem 0.2rem; /* Kaydırma çubuğu için biraz boşluk */
+    -webkit-overflow-scrolling: touch; /* Mobilde akıcı kaydırma */
+    scrollbar-width: thin; /* Firefox için ince kaydırma çubuğu */
+    scrollbar-color: #a5b4fc #e0e7ff; /* Firefox için renkli kaydırma çubuğu */
+}
+
+/* Webkit tabanlı tarayıcılar için (Chrome, Safari) kaydırma çubuğu stili */
+.math-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.math-container::-webkit-scrollbar-track {
+    background: #e0e7ff; /* indigo-100 */
+    border-radius: 4px;
+}
+
+.math-container::-webkit-scrollbar-thumb {
+    background-color: #a5b4fc; /* indigo-300 */
+    border-radius: 4px;
+    border: 2px solid #e0e7ff;
+}
+
+.math-container::-webkit-scrollbar-thumb:hover {
+    background-color: #818cf8; /* indigo-400 */
+}
+
+/* Açıklama metinlerinin daha iyi görünmesi için */
+.step-description, .step-hint-content {
+    color: #374151; /* gray-700 */
+    font-size: 0.95rem;
+}
