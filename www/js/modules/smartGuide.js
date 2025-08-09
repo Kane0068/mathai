@@ -4,7 +4,6 @@
 // =================================================================================
 
 // makeApiCall fonksiyonu pages/index.js'de tanımlanmış, bu yüzden global olarak erişilecek
-import { showError, showSuccess, renderMath } from './ui.js';
 import { AdvancedErrorHandler } from './errorHandler.js';
 import { StateManager } from './stateManager.js';
 import { validateStudentStep } from '../services/apiService.js';
@@ -19,17 +18,24 @@ export class SmartGuideSystem {
         this.localValidationRules = this.initializeValidationRules();
         this.progressiveHints = [];
         this.isProcessing = false;
-        
+
         // İpucu sistemi
         this.hintCount = 0;
         this.usedHints = new Set();
         this.isHintVisible = false;
+
+        this.maxSessionAttempts = 8;     // Oturum başına toplam deneme hakkı
+        this.totalSessionAttempts = 0;   // Oturum boyunca yapılan toplam deneme sayısı
         
         // YENİ EKLEME: Deneme sistemi
         this.attemptsPerStep = new Map(); // Her adım için deneme sayısı
         this.maxAttemptsPerStep = 3; // Adım başına maksimum deneme
         this.currentStepAttempts = 0; // Mevcut adımdaki deneme sayısı
         this.stepFailed = false; // Adım başarısız oldu mu?
+
+        // YENİ EKLENEN DURUM DEĞİŞKENLERİ
+        this.isSessionActive = false; // Oturum aktif mi?
+        this.finalState = null; // Oturum nasıl bitti? { reason: 'completed' | 'failed', message: '...' }
         
         // Canvas için gerekli referanslar
         this.canvasManager = null;
@@ -43,15 +49,22 @@ export class SmartGuideSystem {
             maxConsecutiveFinalAnswers: 2, // Maksimum arka arkaya final cevap
             adaptiveDifficulty: true // Zorluk derecesine göre uyarlanır
         };
-        
+
         this.learningPath = {
             totalProblemsAttempted: 0,
             earlyFinalAnswerCount: 0,
             averageStepsCompleted: 0,
             learningScore: 100 // 100'den başlar, suistimal ederse düşer
         };
-    }
 
+         this.mistakeHistory = [];
+    }
+    addMistake(mistakeType) {
+        if (mistakeType && typeof mistakeType === 'string') {
+            this.mistakeHistory.push(mistakeType);
+            console.log('Yeni hata kaydedildi:', this.mistakeHistory);
+        }
+    }
     // Adım zorunluluğunu kontrol et
     checkStepEnforcement(currentStepIndex, totalSteps, studentInput, isLikelyFinalAnswer) {
         const progressPercentage = (currentStepIndex + 1) / totalSteps;
@@ -65,13 +78,13 @@ export class SmartGuideSystem {
 
         // Çok erken final cevap kontrolü
         if (isLikelyFinalAnswer && progressPercentage < this.stepEnforcementRules.finalAnswerEarlyThreshold) {
-            
+
             // Arka arkaya final cevap sayısını artır
             this.stepEnforcementRules.consecutiveFinalAnswers++;
-            
+
             // Eğitim puanını düşür
             this.learningPath.learningScore = Math.max(0, this.learningPath.learningScore - 10);
-            
+
             if (this.stepEnforcementRules.consecutiveFinalAnswers >= this.stepEnforcementRules.maxConsecutiveFinalAnswers) {
                 // Fazla suistimal - adım atlamayı engelle
                 enforcement.allowFinalAnswer = false;
@@ -84,7 +97,7 @@ export class SmartGuideSystem {
                 enforcement.warningMessage = `⚠️ Çok hızlı gidiyorsunuz! Öğrenmek için adımları tamamlamanız önerilir. (${this.stepEnforcementRules.maxConsecutiveFinalAnswers - this.stepEnforcementRules.consecutiveFinalAnswers} hak kaldı)`;
                 enforcement.educationalReason = "Her adımı çözerek matematik düşünce sürecinizi geliştirebilirsiniz.";
             }
-            
+
         } else {
             // Normal ilerleyiş - sayacı sıfırla
             this.stepEnforcementRules.consecutiveFinalAnswers = 0;
@@ -96,50 +109,50 @@ export class SmartGuideSystem {
     // Problem tipine göre zorunluluk seviyesini belirle
     calculateEnforcementLevel(problemData) {
         const { adimlar, problemOzeti } = problemData;
-        
+
         let enforcementLevel = 'normal'; // normal, strict, flexible
-        
+
         // Problem karmaşıklığını analiz et
         const complexity = this.analyzeProblemComplexity(problemData);
-        
+
         if (complexity.isSimple && adimlar.length <= 2) {
             enforcementLevel = 'flexible'; // Basit problemlerde esnek
         } else if (complexity.isComplex || adimlar.length >= 4) {
             enforcementLevel = 'strict'; // Karmaşık problemlerde sıkı
         }
-        
+
         // Öğrenci öğrenme puanına göre ayarla
         if (this.learningPath.learningScore < 70) {
             enforcementLevel = 'strict'; // Düşük puan = sıkı denetim
         }
-        
+
         return enforcementLevel;
     }
 
     // Problem karmaşıklığını analiz et
     analyzeProblemComplexity(problemData) {
         const { adimlar, problemOzeti } = problemData;
-        
+
         let complexityScore = 0;
-        
+
         // Adım sayısı faktörü
         complexityScore += adimlar.length * 10;
-        
+
         // Matematik operatörü analizi
         adimlar.forEach(step => {
             const latex = step.cozum_lateks || '';
-            
+
             // Karmaşık operatörler
             if (latex.includes('\\frac')) complexityScore += 15;
             if (latex.includes('\\sqrt')) complexityScore += 10;
             if (latex.includes('^')) complexityScore += 5;
             if (latex.includes('\\int') || latex.includes('\\sum')) complexityScore += 25;
             if (latex.includes('sin') || latex.includes('cos') || latex.includes('tan')) complexityScore += 15;
-            
+
             // Denklem sistemi
             if (latex.includes('=') && latex.split('=').length > 2) complexityScore += 20;
         });
-        
+
         return {
             score: complexityScore,
             isSimple: complexityScore < 30,
@@ -151,16 +164,16 @@ export class SmartGuideSystem {
     // Öğrenci davranışını takip et
     trackLearningBehavior(stepIndex, totalSteps, wasCorrect, wasFinalAnswer) {
         this.learningPath.totalProblemsAttempted++;
-        
+
         if (wasFinalAnswer && (stepIndex + 1) / totalSteps < 0.7) {
             this.learningPath.earlyFinalAnswerCount++;
         }
-        
+
         // Ortalama tamamlanan adım sayısını güncelle
         const completedSteps = stepIndex + 1;
-        this.learningPath.averageStepsCompleted = 
+        this.learningPath.averageStepsCompleted =
             (this.learningPath.averageStepsCompleted + completedSteps) / 2;
-        
+
         // Öğrenme puanını güncelle
         if (wasCorrect && !wasFinalAnswer) {
             // Normal adım çözümü ödüllendir
@@ -170,13 +183,13 @@ export class SmartGuideSystem {
 
     // Öğrenci performans raporu
     getLearningReport() {
-        const earlyAnswerRate = this.learningPath.totalProblemsAttempted > 0 ? 
+        const earlyAnswerRate = this.learningPath.totalProblemsAttempted > 0 ?
             (this.learningPath.earlyFinalAnswerCount / this.learningPath.totalProblemsAttempted) * 100 : 0;
-        
+
         let performance = 'excellent';
         if (earlyAnswerRate > 60) performance = 'needs_improvement';
         else if (earlyAnswerRate > 30) performance = 'good';
-        
+
         return {
             learningScore: this.learningPath.learningScore,
             earlyAnswerRate: Math.round(earlyAnswerRate),
@@ -193,7 +206,7 @@ export class SmartGuideSystem {
             good: "İyi ilerliyorsunuz. Bazı adımları atlamaya çalışıyorsunuz, her adımı çözmeye odaklanın.",
             needs_improvement: "Matematik öğrenmek için adım adım çözüm çok önemli. Final cevapları erken vermeye çalışmak yerine süreci takip edin."
         };
-        
+
         return recommendations[performance] || recommendations.needs_improvement;
     }
 
@@ -201,24 +214,37 @@ export class SmartGuideSystem {
 
     async initializeGuidance(solutionData) {
         if (!solutionData) {
-        throw new Error('Çözüm verisi bulunamadı');
-    }
+            throw new Error('Çözüm verisi bulunamadı');
+        }
 
-    try {
-        this.reset(); // Önceki durumdan kalan her şeyi temizle
-        this.guidanceData = this.processGuidanceData(solutionData);
-        console.log(`Rehberlik sistemi başlatıldı - Toplam adım: ${this.guidanceData.totalSteps}`);
-        return this.guidanceData;
-    } catch (error) {
-        this.errorHandler.handleError(error, { 
-            operation: 'initializeGuidance',
-            fallbackMessage: 'Rehberlik sistemi başlatılamadı'
-        });
-        throw error;
+        try {
+            this.reset(); 
+            
+            // YENİ: Oturum başlangıcında durumu aktif et
+            this.isSessionActive = true;
+            this.finalState = null;
+
+            const totalSteps = solutionData.adimlar ? solutionData.adimlar.length : 0;
+            
+            if (totalSteps < 3) {
+                this.maxAttemptsPerStep = 4;
+            } else {
+                this.maxAttemptsPerStep = 8;
+            }
+
+            this.guidanceData = this.processGuidanceData(solutionData);
+            console.log(`Rehberlik sistemi başlatıldı - Toplam adım: ${this.guidanceData.totalSteps}`);
+            return this.guidanceData;
+        } catch (error) {
+            this.errorHandler.handleError(error, {
+                operation: 'initializeGuidance',
+                fallbackMessage: 'Rehberlik sistemi başlatılamadı'
+            });
+            throw error;
         }
     }
 
-    
+
 
     // Belirli bir adıma git
     goToStep(stepIndex) {
@@ -234,12 +260,12 @@ export class SmartGuideSystem {
     toggleHint() {
         this.isHintVisible = !this.isHintVisible;
         this.isCanvasHintActive = this.isHintVisible;
-        
+
         if (this.isHintVisible && !this.usedHints.has(this.currentStep)) {
             this.hintCount++;
             this.usedHints.add(this.currentStep);
         }
-        
+
         return {
             isVisible: this.isHintVisible,
             isCanvasActive: this.isCanvasHintActive,
@@ -265,7 +291,7 @@ export class SmartGuideSystem {
         if (!this.guidanceData || this.currentStep >= this.guidanceData.totalSteps) {
             return null;
         }
-        
+
         const stepData = this.guidanceData.steps[this.currentStep];
         return {
             stepNumber: this.currentStep + 1,
@@ -276,41 +302,34 @@ export class SmartGuideSystem {
         };
     }
 
-        // Mevcut adımın deneme bilgilerini al
-    getCurrentStepAttemptInfo() {
-        const stepKey = this.currentStep;
-        const attempts = this.attemptsPerStep.get(stepKey) || 0;
-        const remaining = this.maxAttemptsPerStep - attempts;
-        
+    // Genel oturum deneme bilgilerini al
+    getSessionAttemptInfo() {
+        const remaining = this.maxSessionAttempts - this.totalSessionAttempts;
         return {
-            stepNumber: this.currentStep + 1,
-            attempts: attempts,
+            attempts: this.totalSessionAttempts,
             remaining: remaining,
-            maxAttempts: this.maxAttemptsPerStep,
+            maxAttempts: this.maxSessionAttempts,
             canAttempt: remaining > 0,
-            isFailed: this.stepFailed
+            isFailed: remaining <= 0
         };
     }
 
+    // Sadece mevcut adımdaki deneme sayısını alır (MC logiği için)
+    getCurrentStepAttemptCount() {
+        return this.attemptsPerStep.get(this.currentStep) || 0;
+    }
+
     // Deneme sayısını artır
-    incrementStepAttempt() {
-        const stepKey = this.currentStep;
-        const currentAttempts = this.attemptsPerStep.get(stepKey) || 0;
-        const newAttempts = currentAttempts + 1;
-        
-        this.attemptsPerStep.set(stepKey, newAttempts);
-        this.currentStepAttempts = newAttempts;
-        
-        // Son deneme miydi kontrol et
-        if (newAttempts >= this.maxAttemptsPerStep) {
-            this.stepFailed = true;
+    incrementAttempts() {
+        // 1. Genel oturum deneme hakkını artır
+        if (this.totalSessionAttempts < this.maxSessionAttempts) {
+            this.totalSessionAttempts++;
         }
-        
-        return {
-            attempts: newAttempts,
-            remaining: this.maxAttemptsPerStep - newAttempts,
-            isFinalAttempt: newAttempts >= this.maxAttemptsPerStep
-        };
+
+        // 2. Mevcut adımdaki deneme sayısını artır (MC logiği için)
+        const stepKey = this.currentStep;
+        const currentStepAttempts = this.attemptsPerStep.get(stepKey) || 0;
+        this.attemptsPerStep.set(stepKey, currentStepAttempts + 1);
     }
 
     // Adım başarılı olduğunda çağrılır
@@ -325,6 +344,17 @@ export class SmartGuideSystem {
         };
     }
 
+        /**
+     * Mevcut rehberlik oturumunu sonlandırır ve bitiş nedenini kaydeder.
+     * @param {'completed' | 'failed'} reason Oturumun bitme nedeni.
+     * @param {string} message Kullanıcıya gösterilecek son durum mesajı.
+     */
+    markSessionAsEnded(reason, message) {
+        this.isSessionActive = false;
+        this.finalState = { reason, message };
+        console.log(`Oturum sonlandırıldı. Neden: ${reason}`);
+    }
+
     // Tüm sistemi sıfırla (3 deneme bittikten sonra)
     resetAllAttempts() {
         this.attemptsPerStep.clear();
@@ -332,28 +362,28 @@ export class SmartGuideSystem {
         this.stepFailed = false;
         this.currentStep = 0;
         this.progressiveHints = [];
-        
+
         // İpucu sistemini de sıfırla
         this.hintCount = 0;
         this.usedHints = new Set();
         this.isHintVisible = false;
-        
+
         console.log('Tüm deneme sistemi sıfırlandı');
     }
 
     // Bir sonraki adıma geç (deneme sayısını sıfırla)
     proceedToNextStep() {
-         if (this.currentStep < this.guidanceData.totalSteps - 1) {
-        this.currentStep++;
-        this.progressiveHints = [];
-        this.resetHintForCurrentStep();
+        if (this.currentStep < this.guidanceData.totalSteps - 1) {
+            this.currentStep++;
+            this.progressiveHints = [];
+            this.resetHintForCurrentStep();
 
-        // YENİ ADIM İÇİN DENEMELERİ SIFIRLA
-        this.currentStepAttempts = 0;
-        this.stepFailed = false;
+            // YENİ ADIM İÇİN DENEMELERİ SIFIRLA
+            this.currentStepAttempts = 0;
+            this.stepFailed = false;
 
-        return true;
-     }
+            return true;
+        }
         return false; // Son adıma ulaşıldı
     }
 
@@ -371,12 +401,8 @@ export class SmartGuideSystem {
         return false;
     }
 
-    // Mevcut adım başarısız durumda mı?
-    isCurrentStepFailed() {
-        return this.stepFailed;
-    }
 
- 
+
 
     getAttemptStats() {
         let totalAttempts = 0;
@@ -413,7 +439,7 @@ export class SmartGuideSystem {
     // Çözüm verisini rehberlik formatına dönüştür
     processGuidanceData(solutionData) {
         const { adimlar, tamCozumLateks, problemOzeti } = solutionData;
-        
+
         if (!adimlar || !Array.isArray(adimlar)) {
             throw new Error('Adım bilgileri eksik');
         }
@@ -437,7 +463,7 @@ export class SmartGuideSystem {
     // Progresif ipuçları oluştur
     generateProgressiveHints(stepData) {
         const hints = [];
-        
+
         // Temel ipucu
         if (stepData.ipucu) {
             hints.push({
@@ -468,39 +494,47 @@ export class SmartGuideSystem {
 
     // smartGuide.js'de güncellenmiş reset fonksiyonu
 
-reset() {
-    this.currentStep = 0;
-    this.studentAttempts = [];
-    this.guidanceData = null;
-    this.progressiveHints = [];
-    this.isProcessing = false;
-    
-    // İpucu verilerini sıfırla
-    this.hintCount = 0;
-    this.usedHints = new Set();
-    this.isHintVisible = false;
-    
-    // Deneme verilerini sıfırla
-    this.attemptsPerStep.clear();
-    this.currentStepAttempts = 0;
-    this.stepFailed = false;
-    
-    // YENİ: Zorunluluk verilerini sıfırla (ama öğrenme verilerini koru)
-    this.resetEnforcement();
-    
-    console.log('SmartGuide sistemi tamamen sıfırlandı - yeni problem için hazır');
-}
+    reset() {
 
-// Sadece enforcement verilerini sıfırla (öğrenme verilerini koruyarak)
-resetEnforcement() {
-    this.stepEnforcementRules.consecutiveFinalAnswers = 0;
-    // learningPath verileri korunur - uzun vadeli öğrenme takibi için
-}
+        this.chatHistory = [];
+        this.currentStep = 0;
+        this.studentAttempts = [];
+        this.guidanceData = null;
+        this.progressiveHints = [];
+        this.isProcessing = false;
+        this.chatHistory = [];
+        // İpucu verilerini sıfırla
+        this.hintCount = 0;
+        this.usedHints = new Set();
+        this.isHintVisible = false;
+
+        this.totalSessionAttempts = 0; // Toplam deneme sayısını sıfırla
+
+        // Deneme verilerini sıfırla
+        this.attemptsPerStep.clear();
+        this.currentStepAttempts = 0;
+        this.stepFailed = false;
+
+        // YENİ: Zorunluluk verilerini sıfırla (ama öğrenme verilerini koru)
+        this.resetEnforcement();
+
+        // EKSİK OLAN EN KRİTİK KISIM BURASIYDI:
+        // Oturum durumunu da tamamen sıfırla ki yeni problem taze başlasın.
+        this.isSessionActive = false;
+        this.finalState = null;
+        this.mistakeHistory = [];
+        console.log('SmartGuide sistemi tamamen sıfırlandı - yeni problem için hazır');
+    }
+    // Sadece enforcement verilerini sıfırla (öğrenme verilerini koruyarak)
+    resetEnforcement() {
+        this.stepEnforcementRules.consecutiveFinalAnswers = 0;
+        // learningPath verileri korunur - uzun vadeli öğrenme takibi için
+    }
 
     // Validasyon anahtar kelimeleri çıkar
     extractValidationKeywords(latexString) {
         const keywords = [];
-        
+
         // Temel matematik operatörleri
         const operators = ['+', '-', '*', '/', '=', '^', '\\sqrt', '\\frac'];
         operators.forEach(op => {
@@ -521,15 +555,15 @@ resetEnforcement() {
     // Adım zorluğunu hesapla
     calculateStepDifficulty(stepData) {
         let difficulty = 1;
-        
+
         const latex = stepData.cozum_lateks || '';
-        
+
         // Karmaşık operatörler varsa zorluk artar
         if (latex.includes('\\frac')) difficulty += 2;
         if (latex.includes('\\sqrt')) difficulty += 2;
         if (latex.includes('^')) difficulty += 1;
         if (latex.includes('\\sum') || latex.includes('\\int')) difficulty += 3;
-        
+
         return Math.min(difficulty, 5); // Max 5 zorluk
     }
 
@@ -545,7 +579,7 @@ resetEnforcement() {
                 equals: /=/,
                 parentheses: /\(|\)/
             },
-            
+
             // Yaygın hatalar
             commonErrors: [
                 {
@@ -553,8 +587,8 @@ resetEnforcement() {
                     validator: (match) => {
                         const [, a, op, b, result] = match;
                         const numA = parseInt(a), numB = parseInt(b), numResult = parseInt(result);
-                        
-                        switch(op.trim()) {
+
+                        switch (op.trim()) {
                             case '+': return numA + numB === numResult;
                             case '-': return numA - numB === numResult;
                             case '*': return numA * numB === numResult;
@@ -564,14 +598,15 @@ resetEnforcement() {
                     }
                 }
             ],
-            
+
             // Matematik sembolleri
             mathSymbols: /[+\-*/=()^√∫∑]/
         };
     }
 
 
-    // MEVCUT evaluateStudentStep fonksiyonunu SİLİP BUNU EKLEYİN
+
+    // 🎯 YAPIŞTIRILACAK DÜZELTİLMİŞ KOD (js/modules/smartGuide.js)
 
     async evaluateStudentStep(studentInput, inputType = 'text') {
         if (this.isProcessing) {
@@ -579,577 +614,80 @@ resetEnforcement() {
             return;
         }
 
-        const attemptInfo = this.getCurrentStepAttemptInfo();
-        if (!attemptInfo.canAttempt) {
+        // DÜZELTME BURADA: Artık oturumun genel deneme hakkını kontrol ediyoruz.
+        const sessionAttemptInfo = this.getSessionAttemptInfo();
+        if (!sessionAttemptInfo.canAttempt) {
             return {
                 isCorrect: false,
-                message: "Bu adım için deneme hakkınız kalmadı.",
-                shouldReset: true,
-                finalAttempt: true
+                coach_response: "Tüm deneme hakların bitti. İstersen özete dönüp çözümü inceleyebilirsin.",
+                proceed_to_next_step: false,
+                is_game_over: true 
             };
         }
 
         this.isProcessing = true;
 
         try {
-            const attemptResult = this.incrementStepAttempt();
             const currentStepData = this.guidanceData.steps[this.currentStep];
-            
-            // API'ye daha zengin bir prompt göndereceğiz
+
             const validationResult = await validateStudentStep(studentInput, {
-                description: currentStepData.adimAciklamasi,
-                correctAnswer: currentStepData.cozum_lateks,
-            });
+                allSteps: this.guidanceData.steps,
+                currentStepIndex: this.currentStep,
+                correctAnswer: currentStepData.correctAnswer
+            }, this.mistakeHistory); 
 
-            if (!validationResult) {
-                throw new Error("API'den değerlendirme yanıtı alınamadı.");
+
+            if (!validationResult || !validationResult.feedbackMessage) {
+                throw new Error("API'den beklenen formatta bir değerlendirme yanıtı alınamadı.");
             }
 
-            if (validationResult.dogruMu) {
+            // DİKKAT: Deneme hakkı artırma işlemini bir önceki adımdaki gibi
+            // index.js dosyasındaki handleMentorSubmission fonksiyonu içinde yapacağız.
+            // Bu fonksiyon sadece değerlendirme yapıp sonuç döndürmeli.
+
+            // Eğer cevap doğruysa, başarılı olarak işaretle.
+            if (validationResult.isCorrect) {
                 this.markStepAsSuccess();
-                // Eğer kullanıcı sonuca ulaştıysa veya ileriki bir adımı çözdüyse, problemi tamamla
-                if (validationResult.isFinalAnswer || (this.currentStep + 1) >= this.guidanceData.totalSteps) {
-                     this.completeProblem();
-                     return {
-                        isCorrect: true,
-                        message: validationResult.geriBildirim || "Tebrikler! Problemi başarıyla çözdünüz!",
-                        finalAnswerGiven: true, // UI'ın tamamlama ekranını göstermesi için
-                        shouldComplete: true,
-                        attempts: attemptResult.attempts,
-                     };
-                }
-                
-                // Normal doğru adım
-                return {
-                    isCorrect: true,
-                    message: validationResult.geriBildirim || "Harika! Bu adım doğru.",
-                    shouldProceed: true,
-                    attempts: attemptResult.attempts,
-                    remaining: attemptResult.remaining
-                };
-            } else {
-                // Yanlış cevap senaryosu
-                if (attemptResult.isFinalAttempt) {
-                    return {
-                        isCorrect: false,
-                        message: validationResult.geriBildirim || "Maalesef bu son denemeydi.",
-                        hint: validationResult.neden || "Bu konuyu tekrar gözden geçirmelisin.",
-                        shouldReset: true, // 3 hata sonrası sistemi sıfırlama sinyali
-                        finalAttempt: true,
-                        attempts: attemptResult.attempts,
-                        remaining: 0
-                    };
-                } else {
-                    // Henüz deneme hakkı var
-                    return {
-                        isCorrect: false,
-                        message: validationResult.geriBildirim,
-                        hint: validationResult.ipucu || validationResult.neden,
-                        canRetry: true,
-                        attempts: attemptResult.attempts,
-                        remaining: attemptResult.remaining
-                    };
-                }
             }
+
+            this.trackLearningBehavior(
+                this.currentStep,
+                this.guidanceData.totalSteps,
+                validationResult.isCorrect,
+                validationResult.isFinalAnswer
+            );
+            
+            return {
+                isCorrect: validationResult.isCorrect,
+                coach_response: validationResult.feedbackMessage,
+                hint: validationResult.hintForNext,
+                proceed_to_next_step: validationResult.proceed_to_next_step || false,
+                isFinalAnswer: validationResult.isFinalAnswer || false,
+                isStepSkipped: validationResult.isStepSkipped || false,
+                mistake_type: validationResult.mistake_type || null
+            };
 
         } catch (error) {
             this.errorHandler.handleError(error, { operation: 'evaluateStudentStep' });
-            return { isCorrect: false, message: "Cevabınız değerlendirilirken bir hata oluştu.", error: true };
+            return {
+                isCorrect: false,
+                coach_response: "Cevabını değerlendirirken bir sorunla karşılaştım. Lütfen bir süre sonra tekrar dene.",
+                proceed_to_next_step: false
+            };
         } finally {
             this.isProcessing = false;
         }
     }
 
-        // Hızlı lokal doğrulama
-    quickValidateStep(studentInput, stepData) {
-        const normalized = this.normalizeExpression(studentInput);
-        const expected = this.normalizeExpression(stepData.correctAnswer);
-        
-        // Birebir eşleşme
-        if (normalized === expected) {
-            return {
-                isDefinitelyCorrect: true,
-                message: "Mükemmel! Tam olarak doğru."
-            };
-        }
-        
-        // Çok basit kontroller
-        if (!studentInput || studentInput.trim().length < 2) {
-            return {
-                isDefinitelyCorrect: false,
-                isDefinitelyWrong: true,
-                message: "Lütfen bir çözüm yazın."
-            };
-        }
-        
-        return {
-            isDefinitelyCorrect: false,
-            needsAPICheck: true
-        };
-    }
-    normalizeExpression(expr) {
-        if (!expr) return '';
-        
-        return expr
-            .replace(/\s+/g, '')  // Boşlukları kaldır
-            .replace(/\*/g, '×')  // Çarpma işaretini standartlaştır
-            .replace(/\\/g, '')   // Backslash'ları kaldır
-            .toLowerCase()
-            .trim();
-    }
 
-    async flexibleValidateWithAPI(studentInput, stepData, currentStepIndex, allSteps) {
-        const flexiblePrompt = `
-            Öğrencinin matematik adımını ESNEKLİKLE değerlendir.
-            
-            Problem çözüm akışı:
-            ${allSteps.map((s, i) => 
-                i === currentStepIndex ? 
-                `➤ MEVCUT ADIM ${i+1}: ${s.correctAnswer}` :
-                `  Adım ${i+1}: ${s.correctAnswer}`
-            ).join('\n')}
-            
-            Öğrenci cevabı: "${studentInput}"
-            Beklenen (Adım ${currentStepIndex + 1}): "${stepData.correctAnswer}"
-            
-            DEĞERLENDİRME KURALLARI:
-            1. Öğrenci mevcut adımı doğru yapmışsa KABUL ET
-            2. Öğrenci ileriki adımları da yapmışsa KABUL ET  
-            3. Öğrenci farklı ama doğru format kullanmışsa KABUL ET
-            4. Öğrenci son cevabı (x=... gibi) verdiyse KABUL ET ve final olarak işaretle
-            
-            ÖRNEKLER:
-            - Beklenen: "2x = 30", Öğrenci: "x = 15" → DOĞRU (ileriki adım)
-            - Beklenen: "2x - 10 = 20", Öğrenci: "2x = 30" → DOĞRU  
-            - Beklenen: "x + 5 = 10", Öğrenci: "x = 5" → DOĞRU
-            
-            JSON formatı:
-            {
-                "dogruMu": boolean,
-                "isFinalAnswer": boolean,
-                "geriBildirim": "Kısa Türkçe açıklama",
-                "neden": "Eğer yanlışsa neden",
-                "ipucu": "Sonraki adım için yönlendirme"
-            }
-            
-            SADECE JSON döndür.
-        `;
-        
-        try {
-            const response = await validateStudentStep(flexiblePrompt, {
-                correctAnswer: stepData.correctAnswer,
-                description: stepData.description
-            });
-            
-            return response || {
-                dogruMu: false,
-                geriBildirim: "Cevap değerlendirilemedi",
-                neden: "Tekrar deneyin"
-            };
-            
-        } catch (error) {
-            console.error('API doğrulama hatası:', error);
-            return {
-                dogruMu: false,
-                geriBildirim: "Değerlendirme hatası",
-                neden: "Tekrar deneyin"
-            };
-        }
-    }
 
-    // Lokal validasyon gerçekleştir
-    performLocalValidation(studentInput, stepData) {
-        const result = {
-            isValid: false,
-            needsApiCheck: false,
-            confidence: 0,
-            errorType: null,
-            suggestion: null
-        };
-
-        // Boş girdi kontrolü
-        if (!studentInput || studentInput.trim().length === 0) {
-            result.errorType = 'empty_input';
-            result.suggestion = 'Lütfen bir çözüm yazın';
-            return result;
-        }
-
-        // Temel format kontrolü
-        if (!this.localValidationRules.mathSymbols.test(studentInput)) {
-            result.errorType = 'no_math_symbols';
-            result.suggestion = 'Matematiksel semboller kullanın (+, -, *, /, = vb.)';
-            return result;
-        }
-
-        // Anahtar kelime kontrolü
-        const matchedKeywords = stepData.validationKeywords.filter(keyword => 
-            studentInput.includes(keyword)
-        );
-
-        if (matchedKeywords.length === 0) {
-            result.needsApiCheck = true;
-            result.confidence = 0.3;
-            return result;
-        }
-
-        // Yüksek eşleşme varsa doğru kabul et
-        const matchRatio = matchedKeywords.length / stepData.validationKeywords.length;
-        if (matchRatio >= 0.7) {
-            result.isValid = true;
-            result.confidence = matchRatio;
-            return result;
-        }
-
-        // Orta eşleşme - API kontrolü gerekli
-        result.needsApiCheck = true;
-        result.confidence = matchRatio;
-        return result;
-    }
-    // Final cevap kontrolü metodu
-    async checkForFinalAnswer(studentInput, attemptNumber, isFinalAttempt) {
-        if (!this.guidanceData || !this.guidanceData.steps) {
-            return { isFinalAnswer: false };
-        }
-        
-        // Son adımın doğru cevabını al (genellikle problemin final cevabıdır)
-        const lastStep = this.guidanceData.steps[this.guidanceData.steps.length - 1];
-        const finalAnswer = lastStep?.correctAnswer;
-        
-        if (!finalAnswer) {
-            return { isFinalAnswer: false };
-        }
-        
-        const finalAnswerPrompt = `
-        Öğrencinin verdiği cevabın problemin final cevabı olup olmadığını kontrol et:
-        
-        Problemin final doğru cevabı: ${finalAnswer}
-        Öğrenci cevabı: ${studentInput}
-        Mevcut adım: ${this.currentStep + 1}/${this.guidanceData.totalSteps}
-        
-        Yanıt formatı:
-        {
-            "isFinalAnswer": boolean,
-            "isCorrect": boolean,
-            "confidence": number (0-1),
-            "message": "string - Açıklama mesajı"
-        }
-        
-        KURALLAR:
-        - Eğer öğrenci problemin final cevabını doğru verdiyse isFinalAnswer: true
-        - Sadece ara adım cevabı verdiyse isFinalAnswer: false
-        - Matematiksel eşdeğerliği kontrol et (örn: 1/2 = 0.5)
-        - Türkçe yanıt ver
-        `;
-
-        try {
-            if (typeof window.makeApiCall !== 'function') {
-                // Fallback: Basit string karşılaştırması
-                const similarity = this.calculateSimilarity(studentInput, finalAnswer);
-                return {
-                    isFinalAnswer: similarity > 0.8,
-                    isCorrect: similarity > 0.8,
-                    confidence: similarity,
-                    message: similarity > 0.8 ? 
-                        'Final cevabı doğru verdiniz!' : 
-                        'Bu ara adım cevabı gibi görünüyor.'
-                };
-            }
-            
-            const response = await window.makeApiCall({
-                contents: [{
-                    role: "user",
-                    parts: [{ text: finalAnswerPrompt }]
-                }]
-            });
-
-            if (response && response.isFinalAnswer !== undefined) {
-                return {
-                    isFinalAnswer: response.isFinalAnswer && response.isCorrect,
-                    isCorrect: response.isCorrect,
-                    confidence: response.confidence || 0,
-                    message: response.message || 'Final cevap kontrolü tamamlandı'
-                };
-            } else {
-                // Fallback
-                const similarity = this.calculateSimilarity(studentInput, finalAnswer);
-                return {
-                    isFinalAnswer: similarity > 0.8,
-                    isCorrect: similarity > 0.8,
-                    confidence: similarity,
-                    message: similarity > 0.8 ? 
-                        'Final cevabı doğru verdiniz!' : 
-                        'Bu ara adım cevabı gibi görünüyor.'
-                };
-            }
-            
-        } catch (error) {
-            console.warn('Final cevap kontrolü başarısız, fallback kullanılıyor:', error);
-            
-            // Fallback: Basit karşılaştırma
-            const similarity = this.calculateSimilarity(studentInput, finalAnswer);
-            return {
-                isFinalAnswer: similarity > 0.8,
-                isCorrect: similarity > 0.8,
-                confidence: similarity,
-                message: similarity > 0.8 ? 
-                    'Final cevabı doğru verdiniz!' : 
-                    'Bu ara adım cevabı gibi görünüyor.'
-            };
-        }
-    }
-
-    // Tüm problemi tamamla (final cevap verildiğinde)
-    completeProblem() {
-        // Kalan tüm adımları başarılı olarak işaretle
-        for (let i = this.currentStep; i < this.guidanceData.totalSteps; i++) {
-            if (!this.attemptsPerStep.has(i)) {
-                this.attemptsPerStep.set(i, 1); // 1 deneme ile tamamlandı
-            }
-        }
-        
-        // Son adıma geç
-        this.currentStep = this.guidanceData.totalSteps - 1;
-        this.stepFailed = false;
-        
-        return {
-            totalStepsCompleted: this.guidanceData.totalSteps,
-            currentStep: this.currentStep + 1,
-            completedByFinalAnswer: true
-        };
-    }
-
-    // Detaylı API validasyonu - Kısa ve sözel feedback için optimize edilmiş
-    async performDetailedApiValidation(studentInput, stepData, attemptNumber, isFinalAttempt) {
-        const validationPrompt = `
-        Öğrencinin matematik adımını kısaca değerlendir ve JSON formatında yanıt ver:
-        
-        Beklenen çözüm: ${stepData.correctAnswer}
-        Öğrenci cevabı: ${studentInput}
-        Adım açıklaması: ${stepData.description}
-        Deneme sayısı: ${attemptNumber}/3
-        Son deneme: ${isFinalAttempt ? 'Evet' : 'Hayır'}
-        
-        Yanıt formatı:
-        {
-            "isCorrect": boolean,
-            "feedback": "string - KISA ve sözel geri bildirim (maksimum 2 cümle)",
-            "errorType": "string or null - Hata türü",
-            "improvement": "string - Kısa öneri (maksimum 1 cümle)",
-            "encouragement": "string - Kısa teşvik mesajı (maksimum 1 cümle)"
-        }
-        
-        ÖNEMLI KURALLAR:
-        - SADECE SÖZEL açıklama yap, LaTeX veya matematik sembolleri KULLANMA
-        - Çok kısa ve net ol, uzun açıklamalar yapma
-        - Ne yapması gerektiğini söyle, işlem gösterme
-        - Konu hatırlatması yap, formül verme
-        - Öğrenciyi cesaretlendir ama kısa tut
-        - Türkçe yanıt ver
-        
-        Örnek doğru yanıt:
-        {
-            "isCorrect": false,
-            "feedback": "Bu adımda toplama işlemini yanlış yaptınız. Ondalıklı sayılarla toplama yaparken virgül hizalaması önemlidir.",
-            "errorType": "calculation_error",
-            "improvement": "Virgülleri alt alta getirerek tekrar toplayın.",
-            "encouragement": "Dikkatli olursanız yapabilirsiniz!"
-        }
-        `;
-
-        try {
-            if (typeof window.makeApiCall !== 'function') {
-                console.warn('makeApiCall fonksiyonu tanımlı değil, fallback kullanılıyor');
-                return this.generateFallbackValidation(studentInput, stepData, attemptNumber, isFinalAttempt);
-            }
-            
-            const response = await window.makeApiCall({
-                contents: [{
-                    role: "user",
-                    parts: [{ text: validationPrompt }]
-                }]
-            });
-
-            if (response && response.isCorrect !== undefined) {
-                return {
-                    isCorrect: response.isCorrect,
-                    message: response.feedback || 'Değerlendirme tamamlandı',
-                    hint: response.improvement || 'Tekrar deneyin',
-                    errorType: response.errorType,
-                    encouragement: response.encouragement,
-                    accuracy: response.accuracy || 0
-                };
-            } else {
-                return this.generateFallbackValidation(studentInput, stepData, attemptNumber, isFinalAttempt);
-            }
-            
-        } catch (error) {
-            console.warn('API validasyonu başarısız, fallback kullanılıyor:', error);
-            return this.generateFallbackValidation(studentInput, stepData, attemptNumber, isFinalAttempt);
-        }
-    }
-
-    // Fallback validasyon - Kısa versiyonu
-    generateFallbackValidation(studentInput, stepData, attemptNumber, isFinalAttempt) {
-        const similarity = this.calculateSimilarity(studentInput, stepData.correctAnswer);
-        
-        if (similarity > 0.7) {
-            return {
-                isCorrect: true,
-                message: 'Bu adım doğru görünüyor!',
-                hint: 'Bir sonraki adıma geçebilirsiniz',
-                accuracy: similarity,
-                encouragement: 'Harika çalışma!'
-            };
-        } else {
-            const remainingAttempts = 3 - attemptNumber;
-            return {
-                isCorrect: false,
-                message: `Bu adımda bir hata var. Lütfen hesabınızı kontrol edin.`,
-                hint: isFinalAttempt ? 
-                    'Bu konuyu tekrar gözden geçirmenizi öneririm.' : 
-                    'Daha dikkatli hesap yapın.',
-                accuracy: similarity,
-                errorType: 'general_error',
-                encouragement: remainingAttempts > 0 ? 'Tekrar deneyin!' : 'Öğrenme sürecinin parçası.'
-            };
-        }
-    }
-
-    // API ile detaylı validasyon
-    async performApiValidation(studentInput, stepData) {
-        const validationPrompt = `
-        Öğrencinin matematik adımını değerlendir ve JSON formatında yanıt ver:
-        
-        Beklenen çözüm: ${stepData.correctAnswer}
-        Öğrenci cevabı: ${studentInput}
-        Adım açıklaması: ${stepData.description}
-        
-        Yanıt formatı:
-        {
-            "isCorrect": boolean,
-            "accuracy": number (0-1),
-            "feedback": "string",
-            "specificError": "string or null",
-            "improvement": "string"
-        }
-        `;
-
-        try {
-            // makeApiCall fonksiyonunun tanımlı olup olmadığını kontrol et
-            if (typeof window.makeApiCall !== 'function') {
-                console.warn('makeApiCall fonksiyonu tanımlı değil, fallback kullanılıyor');
-                return this.generateFallbackResponse(studentInput, stepData);
-            }
-            
-            const response = await window.makeApiCall({
-                contents: [{
-                    role: "user",
-                    parts: [{ text: validationPrompt }]
-                }]
-            });
-
-            if (response && response.isCorrect !== undefined) {
-                return {
-                    isCorrect: response.isCorrect,
-                    message: response.feedback || 'Değerlendirme tamamlandı',
-                    hint: response.improvement || 'Devam edebilirsiniz',
-                    shouldProceed: response.isCorrect,
-                    accuracy: response.accuracy || 0
-                };
-            } else {
-                // API'den geçerli yanıt alınamadı, fallback kullan
-                return this.generateFallbackResponse(studentInput, stepData);
-            }
-            
-        } catch (error) {
-            console.warn('API validasyonu başarısız, fallback kullanılıyor:', error);
-            return this.generateFallbackResponse(studentInput, stepData);
-        }
-    }
-
-    // Fallback yanıt oluştur
-    generateFallbackResponse(studentInput, stepData) {
-        // Temel benzerlik kontrolü
-        const similarity = this.calculateSimilarity(studentInput, stepData.correctAnswer);
-        
-        if (similarity > 0.6) {
-            return {
-                isCorrect: true,
-                message: 'Bu adım doğru görünüyor!',
-                hint: 'Bir sonraki adıma geçebilirsiniz',
-                shouldProceed: true,
-                accuracy: similarity
-            };
-        } else {
-            return {
-                isCorrect: false,
-                message: 'Bu adımda bir sorun var gibi görünüyor',
-                hint: this.getNextHint(),
-                shouldProceed: false,
-                accuracy: similarity
-            };
-        }
-    }
-
-    // Doğru cevabı işle
-    handleCorrectAnswer(validationResult) {
-        const stepData = this.guidanceData.steps[this.currentStep];
-        
-        return {
-            isCorrect: true,
-            message: `Tebrikler! ${this.currentStep + 1}. adımı doğru çözdünüz.`,
-            hint: this.currentStep < this.guidanceData.totalSteps - 1 ? 
-                'Bir sonraki adıma geçebilirsiniz' : 
-                'Tüm adımları tamamladınız!',
-            shouldProceed: true,
-            accuracy: validationResult.confidence || 1,
-            nextStep: this.currentStep + 1
-        };
-    }
-
-    // Yanlış cevabı işle
-    handleIncorrectAnswer(validationResult) {
-        const hint = this.getNextHint();
-        
-        return {
-            isCorrect: false,
-            message: validationResult.suggestion || 'Bu adımda bir hata var',
-            hint: hint.text,
-            shouldProceed: false,
-            accuracy: validationResult.confidence || 0,
-            errorType: validationResult.errorType
-        };
-    }
-
-    // Sonraki ipucunu al
-    getNextHint() {
-        const stepData = this.guidanceData.steps[this.currentStep];
-        const attemptCount = this.studentAttempts.filter(a => a.step === this.currentStep).length;
-        
-        // İpucu seviyesini attempt sayısına göre belirle
-        const hintLevel = Math.min(attemptCount, stepData.hints.length);
-        
-        if (hintLevel === 0) {
-            return {
-                text: 'Bu adımı dikkatle düşünün',
-                type: 'general'
-            };
-        }
-        
-        return stepData.hints[hintLevel - 1] || {
-            text: stepData.ipucu || 'Doğru cevap: ' + stepData.correctAnswer,
-            type: 'final'
-        };
-    }
-
-   
 
     // Mevcut adım bilgilerini al
     getCurrentStepInfo() {
         if (!this.guidanceData || this.currentStep >= this.guidanceData.totalSteps) {
             return null;
         }
-        
+
         const stepData = this.guidanceData.steps[this.currentStep];
         return {
             stepNumber: stepData.stepNumber,
@@ -1167,44 +705,12 @@ resetEnforcement() {
             currentStep: this.currentStep + 1,
             totalSteps: this.guidanceData?.totalSteps || 0,
             completedSteps: this.currentStep,
-            attempts: this.studentAttempts.length,
-            accuracy: this.calculateOverallAccuracy()
+            attempts: this.studentAttempts.length
         };
     }
 
-    // Genel doğruluk oranını hesapla
-    calculateOverallAccuracy() {
-        if (this.studentAttempts.length === 0) return 0;
-        
-        const correctAttempts = this.studentAttempts.filter(attempt => 
-            attempt.wasCorrect === true
-        ).length;
-        
-        return (correctAttempts / this.studentAttempts.length) * 100;
-    }
 
-    // Benzerlik hesapla (basit string benzerliği)
-    calculateSimilarity(str1, str2) {
-        if (!str1 || !str2) return 0;
-        
-        const len1 = str1.length;
-        const len2 = str2.length;
-        const maxLen = Math.max(len1, len2);
-        
-        if (maxLen === 0) return 1;
-        
-        // Levenshtein distance'a benzer basit algoritma
-        let matches = 0;
-        const minLen = Math.min(len1, len2);
-        
-        for (let i = 0; i < minLen; i++) {
-            if (str1[i] === str2[i]) matches++;
-        }
-        
-        return matches / maxLen;
-    }
 
-    
 
     // Bir sonraki adıma geç
     proceedToNextStep() {
@@ -1218,15 +724,15 @@ resetEnforcement() {
     }
 
     // Önceki adıma geç
-goToPreviousStep() {
-    if (this.currentStep > 0) {
-        this.currentStep--;
-        this.progressiveHints = [];
-        this.resetHintForCurrentStep(); // İpucuyu sıfırla
-        return true;
+    goToPreviousStep() {
+        if (this.currentStep > 0) {
+            this.currentStep--;
+            this.progressiveHints = [];
+            this.resetHintForCurrentStep(); // İpucuyu sıfırla
+            return true;
+        }
+        return false; // İlk adımda
     }
-    return false; // İlk adımda
-}
 
     // Canvas referansını ayarla
     setCanvasManager(canvasManager) {
@@ -1238,14 +744,7 @@ goToPreviousStep() {
         this.activeCanvasId = canvasId;
     }
 
-    // Canvas'dan metin al
-    async getCanvasText() {
-        if (!this.canvasManager || !this.activeCanvasId) {
-            throw new Error('Canvas manager veya canvas ID tanımlanmamış');
-        }
-        
-        return this.canvasManager.toDataURL(this.activeCanvasId);
-    }
+
 }
 
 // Singleton pattern için export

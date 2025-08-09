@@ -55,6 +55,8 @@ export class AdvancedErrorHandler {
     classifyError(error) {
         const message = error.message?.toLowerCase() || '';
         const status = error.status || 0;
+         // handleNewProblem içinde fırlattığımız özel hatayı burada yakalıyoruz.
+        if (message.includes('invalid_response_error')) return 'INVALID_RESPONSE_ERROR';
 
         if (!navigator.onLine) return 'NETWORK_ERROR';
         if (status === 429 || message.includes('rate limit')) return 'RATE_LIMIT_EXCEEDED';
@@ -67,6 +69,13 @@ export class AdvancedErrorHandler {
     }
     
     showUserError(errorType, errorInfo) {
+
+        const invalidResponseMessages = [
+            "Sorunuz tam olarak anlaşılamadı. Lütfen problemi daha net bir şekilde yazarak veya farklı bir fotoğraf çekerek tekrar deneyin.",
+            "Bu problem için bir çözüm yolu oluşturamadım. Lütfen soruyu kontrol edip tekrar gönderin.",
+            "Yapay zeka bir çözüm üretirken zorlandı. Bu genellikle sorunun belirsiz olmasından veya desteklenmeyen bir konudan kaynaklanır. Tekrar dener misiniz?",
+            "Üzgünüm, şu anda bu soruya bir yanıt oluşturamıyorum. Lütfen daha sonra tekrar deneyin."
+        ];
         const messages = {
             RATE_LIMIT_EXCEEDED: 'Günlük kullanım limitinize ulaştınız veya çok sık istek gönderiyorsunuz. Lütfen daha sonra tekrar deneyin.',
             NETWORK_ERROR: 'İnternet bağlantınız yok gibi görünüyor. Lütfen bağlantınızı kontrol edin.',
@@ -80,9 +89,15 @@ export class AdvancedErrorHandler {
         
         // Global showError fonksiyonunu çağır
         if (typeof window.showError === 'function') {
-            window.showError(message, true);
+            // Hata mesajını göster ve arayüzü sıfırlamak için bir "Tamam" butonu ekle.
+            // ui.js'deki showError fonksiyonu zaten reset butonu göstermeyi destekliyor.
+            window.showError(message, true, () => {
+                if(window.stateManager) {
+                    window.stateManager.reset();
+                }
+            });
         } else {
-            // Fallback: event yayınla
+            // Fallback
             window.dispatchEvent(new CustomEvent('show-error-message', {
                 detail: { message: message, isCritical: true }
             }));

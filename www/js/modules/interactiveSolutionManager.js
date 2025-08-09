@@ -1,6 +1,4 @@
-// =================================================================================
-//  İnteraktif Çözüm Yöneticisi - YENİ MİMARİ VERSİYONU (API ÇAĞRISI YOK)
-// =================================================================================
+import { generateWrongAnswer } from '../utils/mathUtils.js';
 
 export class InteractiveSolutionManager {
     constructor() {
@@ -12,33 +10,36 @@ export class InteractiveSolutionManager {
         this.maxAttempts = 3; // Başlangıç değeri, initialize'da güncellenebilir
         this.currentOptions = [];
         this.startTime = null;
+        this.isFailed = false;
         this.isCompleted = false;
         console.log('✅ InteractiveSolutionManager başlatıldı (Yeni Mimari)');
     }
 
     /**
      * İnteraktif çözümü, önceden alınmış olan tam çözüm verisiyle başlatır.
+     * Eğer zaten bir oturum devam ediyorsa, durumu korur.
      * @param {object} solutionData - getUnifiedSolution'dan gelen tam çözüm nesnesi.
      */
     initializeInteractiveSolution(solutionData) {
-        console.log('🔄 İnteraktif çözüm başlatılıyor...', solutionData);
+        // --- YENİ MANTIK: Eğer zaten bir çözüm verisi yüklüyse, sıfırlama. ---
+        if (this.solutionData) {
+            console.log('✅ Mevcut interaktif oturuma devam ediliyor.');
+            return;
+        }
+
+        console.log('🔄 YENİ interaktif çözüm başlatılıyor...', solutionData);
         if (!solutionData || !solutionData.adimlar || solutionData.adimlar.length === 0) {
             throw new Error('Geçersiz veya boş çözüm verisi.');
         }
 
-        this.reset();
+        this.reset(); // Sadece ilk başlatmada sıfırla
         this.solutionData = solutionData;
         this.totalSteps = solutionData.adimlar.length;
-        // Toplam deneme hakkını adım sayısına göre daha mantıklı bir şekilde ayarlayalım
         this.maxAttempts = Math.max(3, Math.floor(this.totalSteps * 1.5));
         this.startTime = Date.now();
     }
+    
 
-    /**
-     * Belirli bir adım için seçenekleri, mevcut çözüm verisinden hazırlar. API ÇAĞRISI YAPMAZ.
-     * @param {number} stepIndex - Seçenekleri hazırlanacak olan adımın indeksi.
-     * @returns {object} Arayüzde gösterilecek adım verisi.
-     */
     generateStepOptions(stepIndex) {
         if (!this.solutionData || stepIndex >= this.totalSteps || stepIndex < 0) {
             throw new Error("Geçersiz adım indeksi.");
@@ -48,40 +49,48 @@ export class InteractiveSolutionManager {
         const options = [];
 
         // 1. Doğru seçeneği ekle
-        options.push({
+        const correctOption = {
             latex: currentStepData.cozum_lateks,
             isCorrect: true,
             explanation: currentStepData.adimAciklamasi || "Bu adım, çözüm için doğru yaklaşımdır."
-        });
+        };
+        options.push(correctOption);
 
-        // 2. Önceden alınmış yanlış seçenekleri ekle
+        // 2. Önceden alınmış yanlış seçenekleri ekle (Eğer varsa ve kaliteliyse)
         if (currentStepData.yanlisSecenekler && currentStepData.yanlisSecenekler.length > 0) {
             currentStepData.yanlisSecenekler.slice(0, 2).forEach(opt => {
-                options.push({
-                    latex: opt.metin_lateks,
-                    isCorrect: false,
-                    explanation: opt.hataAciklamasi
-                });
+                // Kalite kontrolü: Çok bariz olanları ekleme
+                if (opt.metin_lateks && !opt.metin_lateks.includes('\\text{')) {
+                     options.push({
+                        latex: opt.metin_lateks,
+                        isCorrect: false,
+                        explanation: opt.hataAciklamasi
+                    });
+                }
             });
         }
 
-        // 3. Eğer yeterli yanlış seçenek yoksa, genel bir tane ekle
+        // 3. YENİ VE AKILLI FALLBACK: Eğer yeterli seçenek yoksa, kendimiz üretelim
         while (options.length < 3) {
+            const wrongLatex = generateWrongAnswer(correctOption.latex, options.length - 1);
             options.push({
-                latex: `\\text{Hatalı Yaklaşım ${options.length}}`,
+                latex: wrongLatex,
                 isCorrect: false,
-                explanation: "Bu yöntem veya hesaplama bu adım için doğru değil."
+                explanation: `Bu ifade, doğru cevabın küçük bir hata (örneğin, bir işaret veya hesaplama hatası) içeren halidir. Dikkatli inceleyerek doğruya ulaşabilirsin.`
             });
         }
 
-        this.currentOptions = this.shuffleAndAssignIds(options);
+        // Seçenekleri 3 ile sınırla ve karıştır
+        this.currentOptions = this.shuffleAndAssignIds(options.slice(0, 3));
 
         return {
             stepNumber: stepIndex + 1,
             totalSteps: this.totalSteps,
             stepDescription: currentStepData.adimAciklamasi || `Adım ${stepIndex + 1} için doğru işlemi seçin.`,
             options: this.currentOptions,
-            remainingAttempts: this.maxAttempts - this.totalAttempts
+            remainingAttempts: this.maxAttempts - this.totalAttempts,
+            maxAttempts: this.maxAttempts,
+            attempts: this.totalAttempts
         };
     }
 
@@ -94,6 +103,8 @@ export class InteractiveSolutionManager {
         const shuffled = [...options].sort(() => Math.random() - 0.5);
         return shuffled.map((option, index) => ({ ...option, displayId: index }));
     }
+
+    // js/modules/interactiveSolutionManager.js
 
     evaluateSelection(selectedDisplayId) {
         if (this.isCompleted || this.totalAttempts >= this.maxAttempts) {
@@ -111,31 +122,51 @@ export class InteractiveSolutionManager {
             explanation: selectedOption.explanation,
             selectedOption,
             correctOption,
-            remainingAttempts: this.maxAttempts - this.totalAttempts
+            // Kalan hakkı burada hesaplama, çünkü henüz deneme sayısını artırmadık.
         };
 
         if (result.isCorrect) {
             this.currentStep++;
+            result.currentStep = this.currentStep;
+            result.totalSteps = this.totalSteps;
+
             if (this.currentStep >= this.totalSteps) {
                 this.isCompleted = true;
                 result.isCompleted = true;
                 result.completionStats = this.getCompletionStats();
             } else {
-                // *** DÜZELTME BURADA: Bir sonraki adımın verisini doğrudan sonuç nesnesine ekliyoruz.
                 result.nextStepData = this.generateStepOptions(this.currentStep);
             }
         } else {
+            // --- YANLIŞ CEVAP MANTIĞI ---
             this.totalAttempts++;
-            result.remainingAttempts--;
+            result.remainingAttempts = this.maxAttempts - this.totalAttempts; // Kalan hakkı burada hesapla
+
             if (result.remainingAttempts <= 0) {
+                // Deneme hakkı bitti
+                this.isFailed = true;
                 result.forceReset = true;
                 result.message = "Tüm deneme haklarınız bitti.";
             } else {
-                this.currentStep = 0; // Yanlış cevapta başa dön
-                result.restartFromBeginning = true;
-                result.message = `Yanlış cevap! Baştan başlıyorsunuz. Kalan deneme hakkınız: ${result.remainingAttempts}`;
+                // =============================================================
+                // 🎯 DÜZELTME 2: Kurallara göre adımı tekrarla veya baştan başla
+                // =============================================================
+                if (this.currentStep === 0) {
+                    // KURAL: İlk adımda yanlış yaparsa, adımı tekrarlar.
+                    // this.currentStep değişmez.
+                    result.restartCurrentStep = true;
+                    result.message = `Yanlış cevap! Bu adımı tekrar deneyelim. Kalan deneme hakkınız: ${result.remainingAttempts}`;
+                } else {
+                    // KURAL: Diğer adımlarda yanlış yaparsa, en başa döner.
+                    this.currentStep = 0;
+                    result.restartFromBeginning = true;
+                    result.message = `Yanlış cevap! Baştan başlıyorsunuz. Kalan deneme hakkınız: ${result.remainingAttempts}`;
+                }
             }
         }
+        
+        // Kalan deneme hakkını her durumda result nesnesine ekleyelim
+        result.remainingAttempts = this.maxAttempts - this.totalAttempts;
         return result;
     }
 
@@ -179,6 +210,7 @@ export class InteractiveSolutionManager {
         this.totalAttempts = 0;
         this.currentOptions = [];
         this.startTime = null;
+        this.isFailed = false;
         this.isCompleted = false;
         this.isProcessing = false;
         console.log('✅ İnteraktif çözüm sistemi sıfırlandı.');

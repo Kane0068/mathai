@@ -28,3 +28,10 @@ form.addEventListener('submit', (e) => {
             loginButton.textContent = 'Giriş Yap';
         });
 });
+
+const googleLoginBtn = document.getElementById('google-login-btn');
+if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => {
+        AuthManager.signInWithGoogle();
+    });
+}

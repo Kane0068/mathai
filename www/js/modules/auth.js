@@ -2,10 +2,10 @@
 
 // DÜZELTME: Tüm import linkleri temiz ve doğru formatta.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { FirestoreManager } from "./firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+//import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyB7ltgEuxgDz4Fjy4WTs65Fio--vbrCgMM",
@@ -22,6 +22,36 @@ export const db = getFirestore(app);
 //export const functions = getFunctions(app, 'europe-west1'); // Bölgeyi doğru belirttiğinden emin ol
 
 export const AuthManager = {
+    // Google ile giriş fonksiyonu
+    signInWithGoogle: async function() {
+        const provider = new GoogleAuthProvider();
+        try {
+            const result = await signInWithPopup(auth, provider);
+            const user = result.user;
+            // Google ile giriş yapan kullanıcının verisini Firestore'da oluştur/kontrol et
+            await FirestoreManager.createUserData(user);
+            window.location.href = 'index.html'; // Giriş sonrası ana sayfaya yönlendir
+        } catch (error) {
+            console.error("Google ile giriş hatası:", error);
+            // Kullanıcıya bir hata mesajı gösterebilirsiniz.
+            alert("Google ile giriş yapılamadı. Lütfen tekrar deneyin.");
+        }
+    },
+
+    // Şifre sıfırlama fonksiyonu
+    sendPasswordReset: async function(email) {
+        try {
+            await sendPasswordResetEmail(auth, email);
+            return { success: true, message: 'Sıfırlama linki e-posta adresinize gönderildi!' };
+        } catch (error) {
+            console.error("Şifre sıfırlama hatası:", error);
+            if (error.code === 'auth/user-not-found') {
+                return { success: false, message: 'Bu e-posta adresi ile kayıtlı bir kullanıcı bulunamadı.' };
+            }
+            return { success: false, message: 'Bir hata oluştu. Lütfen tekrar deneyin.' };
+        }
+    },
+
     initProtectedPage: function(onSuccess) {
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
@@ -34,6 +64,7 @@ export const AuthManager = {
             }
         });
     },
+
     initPublicPage: function() {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             unsubscribe();
@@ -42,6 +73,7 @@ export const AuthManager = {
             }
         });
     },
+
     logout: function() {
         signOut(auth).then(() => {
             window.location.href = "login.html";

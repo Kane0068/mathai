@@ -230,8 +230,84 @@ export async function renderLatexContent(container) {
         }
     }
 }
+// ui.js
 
+/**
+ * Ekranda kısa süreli, animasyonlu ve potansiyel olarak değişen metinli bir geri bildirim mesajı gösterir.
+ * Eğer bir mesaj dizisi verilirse, metinler sırayla gösterilir.
+ * @param {string|string[]} messages Gösterilecek mesaj veya mesajlar dizisi.
+ * @param {string} icon Mesajın yanındaki emoji veya SVG ikonu.
+ * @param {number} duration Her bir mesajın ekranda kalma süresi (ms).
+ * @returns {Promise<void>} Animasyon bittiğinde resolve olan bir Promise.
+ */
+export function showTemporaryMessage(messages, icon = '🚀', duration = 2000) {
+    return new Promise(resolve => {
+        // Hem tek bir string hem de string dizisi ile çalışabilmesi için:
+        const messageArray = Array.isArray(messages) ? messages : [messages];
+        let currentIndex = 0;
+        
+        // Önceki mesajı temizle
+        const existingMessage = document.getElementById('temporary-message-overlay');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
 
+        const overlay = document.createElement('div');
+        overlay.id = 'temporary-message-overlay';
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity duration-300 animate-fade-in';
+        
+        overlay.innerHTML = `
+            <div class="flex flex-col items-center gap-4 bg-white rounded-2xl shadow-xl p-8 transform animate-scale-in w-72">
+                <div class="text-6xl">${icon}</div>
+                <p id="dynamic-message-p" class="text-lg font-semibold text-gray-800 text-center h-14 flex items-center justify-center transition-opacity duration-300"></p>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const pElement = document.getElementById('dynamic-message-p');
+
+        const updateMessage = () => {
+            if (!pElement) return;
+            // Metni değiştirmeden önce yumuşak bir geçiş için soluklaştır
+            pElement.style.opacity = '0';
+            setTimeout(() => {
+                pElement.textContent = messageArray[currentIndex];
+                // Yeni metni göster
+                pElement.style.opacity = '1';
+            }, 200); // 0.2 saniyelik geçiş animasyonu
+        };
+
+        // İlk mesajı hemen göster
+        updateMessage();
+        
+        // Eğer birden fazla mesaj varsa, aralarında dönmek için bir interval başlat
+        let messageInterval;
+        if (messageArray.length > 1) {
+            messageInterval = setInterval(() => {
+                currentIndex = (currentIndex + 1) % messageArray.length; // Başa dönmeyi sağlar
+                updateMessage();
+            }, duration); // Her mesaj 'duration' süresi kadar kalır
+        }
+
+        // Toplam gösterim süresi
+        const totalDuration = (messageArray.length > 1) 
+            ? duration * messageArray.length + 1000 // Birden fazla mesaj varsa, sonuncusunun da görünmesi için ek süre
+            : duration;
+
+        setTimeout(() => {
+            if (messageInterval) clearInterval(messageInterval); // Interval'ı temizle
+            
+            overlay.classList.remove('animate-fade-in');
+            overlay.classList.add('animate-fade-out');
+            
+            setTimeout(() => {
+                if (overlay.parentNode) {
+                    overlay.remove();
+                }
+                resolve(); // Her şey bittiğinde Promise'i çöz.
+            }, 300);
+        }, totalDuration);
+    });
+}
 
 export function escapeHtml(text) {
     const div = document.createElement('div');
@@ -252,3 +328,5 @@ if (typeof window !== 'undefined') {
         globalRenderManager // Sadece ana render yöneticimiz kalsın
     };
 }
+
+

@@ -93,3 +93,9 @@ form.addEventListener('submit', async (e) => {
         registerButton.textContent = 'Hesap Oluştur';
     }
 });
+const googleLoginBtn = document.getElementById('google-login-btn');
+if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => {
+        AuthManager.signInWithGoogle();
+    });
+}

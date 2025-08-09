@@ -130,6 +130,7 @@ export class GlobalRenderManager {
     }
     
     
+
     async renderElement(element, content, options = {}) {
         if (!element) return false;
 
@@ -149,22 +150,27 @@ export class GlobalRenderManager {
         }
 
         try {
-            // --- KUSURSUZ VE SADELEŞTİRİLMİŞ RENDER MANTIĞI ---
-            
-            // Regex ile içerikte $, $$, \[, \( gibi herhangi bir LaTeX sınırlayıcısı olup olmadığını kontrol et.
-            const hasDelimiters = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/.test(normalizedContent);
+            // --- YENİ VE DAHA AKILLI RENDER MANTIĞI ---
 
-            // 1. ÖNCELİK: Blok matematik mi? (.latex-content'ten gelir)
-            // Bu, sınırlayıcı içermeyen saf LaTeX kodunu hatasız render eder.
+            // Kontrol 1: İçerikte LaTeX sınırlayıcıları var mı?
+            const hasDelimiters = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/.test(normalizedContent);
+            
+            // Kontrol 2: İçerik, sınırlayıcı olmasa bile LaTeX gibi görünüyor mu? (örn: \frac, ^, _)
+            const looksLikeLatex = /(\\[a-zA-Z]+|\^|_|\{|\})/.test(normalizedContent);
+
+            // ÖNCELİK 1: .latex-content gibi blok modunda render zorlandı mı?
             if (options.displayMode) {
                 await this.performRenderWithMathJax(element, normalizedContent, { displayMode: true });
             }
-            // 2. ÖNCELİK: İçinde matematik sınırlayıcıları olan karışık içerik mi?
-            // Prompt sayesinde artık tüm karışık içerikler bu koşula girecek.
+            // ÖNCELİK 2: İçinde $...$ gibi sınırlayıcılar olan karışık metin mi?
             else if (hasDelimiters) {
                 await this.renderMixedContent(element, normalizedContent, options);
             }
-            // 3. FALLBACK: Hiç matematik yoksa, bu kesinlikle düz metindir.
+            // ÖNCELİK 3 (YENİ VE KRİTİK): Sınırlayıcı yok ama LaTeX komutları var mı? (İNTERAKTİF SEÇENEKLER BU DURUMA GİRECEK)
+            else if (looksLikeLatex) {
+                await this.performRenderWithMathJax(element, normalizedContent, { displayMode: false });
+            }
+            // SON ÇARE: Hiçbiri değilse, bu kesinlikle düz metindir.
             else {
                 element.textContent = normalizedContent;
             }
@@ -413,16 +419,16 @@ export class GlobalRenderManager {
             }
         });
         
-        container.querySelectorAll('.option-text').forEach(el => {
-            const content = el.textContent;
-            if (content && content.trim()) {
-                elements.push({
-                    element: el,
-                    content: content,
-                    isDisplay: false
-                });
-            }
-        });
+        //container.querySelectorAll('.option-text').forEach(el => {
+            //const content = el.textContent;
+            //if (content && content.trim()) {
+               // elements.push({
+                   // element: el,
+                  // content: content,
+                  //  isDisplay: false
+               // });
+           // }
+       // });
         
         return elements;
     }
